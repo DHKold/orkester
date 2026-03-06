@@ -43,30 +43,42 @@ Orkester is an ultra-fast, resilient, and secure workflow platform for orchestra
 
 ## Getting Started
 
-Orkester targets Linux. The recommended development workflow uses **Podman** (WSL/Ubuntu) to avoid native toolchain issues on Windows.
+Orkester targets Linux. The recommended workflow uses **Podman** (or Docker) to build and run on Linux from any host OS.
 
-#### Prerequisites
-- [Podman](https://podman.io/) ≥ 4.9 (`podman version`)
-- [`docker compose`](https://docs.docker.com/compose/) ≥ v2.26 used against the Podman socket (`docker compose version`)
-
-#### Day-to-day development (source mounted, incremental builds)
+#### Build the dev image (once)
 ```bash
-# Check the code
-podman compose run --rm dev cargo check
-
-# Run all tests
-podman compose run --rm dev cargo test
-
-# Run the binary with a config file
-podman compose run --rm dev cargo run -- --config-file /orkester/config.yaml
+podman build --target dev -t orkester-dev -f docker/Dockerfile .
 ```
 
-> Build artefacts are cached in named volumes (`build-cache`, `cargo-registry`, `cargo-git`) so re-runs only recompile what changed.
+#### Day-to-day development
+Start the dev container once. It mounts the project source and keeps a build cache volume so recompilation is incremental.
+
+```bash
+# Start the container (if not running) and open a shell — or re-attach if already running
+./docker/dev.sh
+
+# From inside the container — all standard Cargo commands work:
+cargo check
+cargo build
+cargo test
+cargo run -- --config-file config.yaml
+```
+
+You can also run a single command directly without entering the shell:
+```bash
+./docker/dev.sh cargo check
+./docker/dev.sh cargo test
+```
+
+To stop the dev container when you're done for the day:
+```bash
+podman stop orkester-dev
+```
 
 #### Build & run the release image
 ```bash
-# Build the multi-stage image and start the service
-podman compose up release
+podman build -t orkester -f docker/Dockerfile .
+podman run --rm -p 8080:8080 -v ./plugins:/orkester/plugins:ro,z orkester
 ```
 
 #### CLI reference
@@ -79,7 +91,7 @@ Options:
   -V, --version              Print version
 ```
 
-#### Minimal config example (`orkester.yaml`)
+#### Minimal config example (`config.yaml`)
 ```yaml
 plugins:
   dir: ./plugins      # directory to scan for .so plugin files

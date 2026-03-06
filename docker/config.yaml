@@ -1,0 +1,3 @@
+plugins:
+  dir: ./docker/plugins        # directory to scan for .so plugin files
+  recursive: false             # scan sub-directories?

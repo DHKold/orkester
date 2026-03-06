@@ -8,25 +8,9 @@ target/
 # Cargo.lock
 
 # ── Plugins (compiled .so/.dll/.dylib files) ──────────────────────────────────
-/plugins/
-
-# ── Config files with secrets ─────────────────────────────────────────────────
-*.local.yaml
-*.local.yml
-*.local.toml
-*.local.json
+/docker/plugins/
 
 # ── IDE / Editor ──────────────────────────────────────────────────────────────
 .vscode/settings.json
 .idea/
 *.iml
-
-# ── OS ────────────────────────────────────────────────────────────────────────
-.DS_Store
-Thumbs.db
-
-# ── Container / Podman ────────────────────────────────────────────────────────
-# Named volumes are managed by Podman; nothing to ignore here.
-# Ignore any local override compose files:
-podman-compose.override.yml
-docker-compose.override.yml
