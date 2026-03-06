@@ -6,10 +6,10 @@ use axum::extract::RawPathParams;
 use axum::http::{HeaderName, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use serde_json::Value;
-use tokio::net::TcpListener;
 use tracing::info;
+use orkester_common::servers::ServerContext;
 use orkester_common::servers::rest::{
-    ApiContributor, ApiRequest, ApiResponse, HttpMethod, RestError, RestHandle, RestServer,
+    ApiContributor, ApiRequest, ApiResponse, HttpMethod, RestError, RestServer,
     RestServerDeps, RestServerFactory, RouteHandler,
 };
 
@@ -91,7 +91,13 @@ fn to_axum_response(api_resp: ApiResponse) -> axum::response::Response {
 // ── Router assembly ───────────────────────────────────────────────────────────
 
 fn build_router(contributors: &[Arc<dyn ApiContributor>], api_base: &str) -> axum::Router {
-    let mut router = axum::Router::new();
+    // Built-in health endpoint: GET {api_base}/health
+    let health_path = normalise_path(&format!("{}/health", api_base));
+    info!("  GET {} (built-in)", health_path);
+    let mut router = axum::Router::new()
+        .route(&health_path, axum::routing::get(|| async {
+            axum::Json(serde_json::json!({ "status": "ok" }))
+        }));
 
     for contributor in contributors {
         for handler_box in contributor.routes() {
@@ -167,24 +173,11 @@ fn normalise_path(p: &str) -> String {
     s
 }
 
-// ── Handle ────────────────────────────────────────────────────────────────────
-
-pub struct AxumRestHandle {
-    bound_addr: String,
-}
-
-impl RestHandle for AxumRestHandle {
-    fn bound_addr(&self) -> &str {
-        &self.bound_addr
-    }
-}
-
 // ── Server ────────────────────────────────────────────────────────────────────
 
 pub struct AxumRestServer {
-    addr: String,
+    config: Value,
     router: axum::Router,
-    handle: Arc<AxumRestHandle>,
 }
 
 #[async_trait]
@@ -193,41 +186,35 @@ impl RestServer for AxumRestServer {
         "axum-rest-server"
     }
 
-    fn handle(&self) -> Arc<dyn RestHandle> {
-        self.handle.clone()
-    }
+    fn run(self: Box<Self>) -> ServerContext<(), ()> {
+        let config = self.config.clone();
+        let hd = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
 
-    async fn run(self: Box<Self>) {
-        // Spin up a dedicated OS thread with its own single-threaded tokio runtime.
-        // This keeps the plugin's reactor completely isolated from the host's — no
-        // handle-sharing, no cross-cdylib thread-local confusion.
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("failed to build REST runtime");
             rt.block_on(async move {
-                info!("AxumRestServer listening on {}", self.addr);
-                let listener = TcpListener::bind(&self.addr)
-                    .await
-                    .expect("failed to bind REST listener");
-                axum::serve(listener, self.router)
-                    .await
-                    .expect("axum server error");
+                // Get configuration with defaults.
+                let bind_host = config.get("hostname").and_then(|v| v.as_str()).unwrap_or("localhost");
+                let bind_port = config.get("port").and_then(|v| v.as_u64()).unwrap_or(8080);
+                let bind_addr = format!("{}:{}", bind_host, bind_port);
+
+                // Start the server (this will block until shutdown)
+                info!("Starting AxumRestServer on {}", bind_addr);
+                let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
+                axum::serve(listener, self.router).await.unwrap();
+                info!("AxumRestServer on {} has shut down", bind_addr);
             });
-            let _ = tx.send(());
+            
         });
-        // The host task stays alive until the server thread exits.
-        rx.await.ok();
+        ServerContext {
+            receiver: Option::None,     // No messages received from the server in this implementation
+            sender: Option::None,       // No messages sent to the server in this implementation
+            handle: hd,
+        }
     }
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 
-/// Configuration keys (all optional):
-/// - `bind`     : `"<address>:<port>"` — default `"0.0.0.0:8080"`
-/// - `api_base` : global path prefix   — default `"/api/v1"`
 pub struct AxumRestServerFactory;
 
 impl RestServerFactory for AxumRestServerFactory {
@@ -236,28 +223,19 @@ impl RestServerFactory for AxumRestServerFactory {
     }
 
     fn build(&self, config: Value, deps: RestServerDeps) -> Result<Box<dyn RestServer>, RestError> {
-        let bind_addr = config
-            .get("bind")
-            .and_then(|v| v.as_str())
-            .unwrap_or("0.0.0.0:8080");
+        // Build the router
+        info!("Building AxumRestServer");
+        let api_base = config.get("base_path").and_then(|v| v.as_str()).unwrap_or("/api").to_string();
 
-        let api_base = config
-            .get("api_base")
-            .and_then(|v| v.as_str())
-            .unwrap_or("/api/v1")
-            .to_string();
-
-        info!("Building AxumRestServer with API base path '{}'", api_base);
         for c in &deps.contributors {
             info!("  contributor: {} (prefix={})", c.name(), c.prefix());
         }
-
         let router = build_router(&deps.contributors, &api_base);
 
+        // Create the server instance
         Ok(Box::new(AxumRestServer {
-            addr: bind_addr.to_string(),
+            config,
             router,
-            handle: Arc::new(AxumRestHandle { bound_addr: bind_addr.to_string() }),
         }))
     }
 }

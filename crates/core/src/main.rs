@@ -86,22 +86,21 @@ async fn main() {
         }
     };
 
-    let rest_bind = built.rest.handle().bound_addr().to_string();
     tracing::info!(
         state    = built.state.name(),
         workflow = built.workflow.name(),
         metrics  = built.metrics.name(),
-        rest     = %rest_bind,
+        rest     = built.rest.name(),
         "All servers built — starting"
     );
 
     // 7. Run all servers concurrently; each runs until shutdown
-    tokio::join!(
-        built.state.run(),
-        built.workflow.run(),
-        built.metrics.run(),
-        built.rest.run(),
-    );
+    std::thread::scope(|s: &std::thread::Scope| {
+        s.spawn(|| built.state.run());
+        s.spawn(|| built.workflow.run());
+        s.spawn(|| built.metrics.run());
+        s.spawn(|| built.rest.run());
+    });
 
     // `loaded` is dropped here — after all servers have stopped
     drop(loaded);

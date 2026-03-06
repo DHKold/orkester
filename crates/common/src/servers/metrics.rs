@@ -2,6 +2,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 use thiserror::Error;
+use crate::servers::ServerContext;
 
 #[derive(Debug, Error)]
 pub enum MetricsError {
@@ -39,7 +40,7 @@ pub trait MetricsHandle: Send + Sync {
 pub trait MetricsServer: Send + Sync {
     fn name(&self) -> &str;
     fn handle(&self) -> Arc<dyn MetricsHandle>;
-    async fn run(self: Box<Self>);
+    fn run(self: Box<Self>) -> ServerContext<(), ()>;
 }
 
 /// Plugin factory for creating a MetricsServer from configuration.

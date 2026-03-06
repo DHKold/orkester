@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
 use async_trait::async_trait;
 use serde_json::Value;
 use tracing::info;
+use orkester_common::servers::ServerContext;
 use orkester_common::servers::metrics::{MetricsError, MetricsHandle, MetricsServer, MetricsServerFactory};
 use orkester_common::servers::rest::{ApiContributor, ApiRequest, ApiResponse, HttpMethod, RouteHandler};
 
@@ -93,9 +94,21 @@ impl MetricsServer for NoMetricsServer {
         Arc::new(self.handle.clone())
     }
 
-    async fn run(self: Box<Self>) {
-        info!("NoMetricsServer running (no-op)");
-        std::future::pending::<()>().await;
+    fn run(self: Box<Self>) -> ServerContext<(), ()> {
+        let (h2s_sender, h2s_receiver) = mpsc::channel();
+        let (s2h_sender, s2h_receiver) = mpsc::channel();
+        let hd = std::thread::spawn(move || {
+            // This server does nothing and runs indefinitely until shutdown.
+            info!("NoMetricsServer is running (does nothing)");
+            h2s_receiver.recv().ok();
+            s2h_sender.send(()).ok();
+            info!("NoMetricsServer has shut down");
+        });
+        ServerContext {
+            receiver: Some(s2h_receiver),
+            sender: Some(h2s_sender),
+            handle: hd,
+        }
     }
 }
 

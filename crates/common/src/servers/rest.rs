@@ -3,6 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 use thiserror::Error;
+use crate::servers::ServerContext;
 
 #[derive(Debug, Error)]
 pub enum RestError {
@@ -100,19 +101,11 @@ pub struct RestServerDeps {
     pub contributors: Vec<Arc<dyn ApiContributor>>,
 }
 
-/// Interface for the REST server (primarily used for lifecycle control).
-#[async_trait]
-pub trait RestHandle: Send + Sync {
-    /// Returns the address the server is bound to (e.g. "0.0.0.0:8080").
-    fn bound_addr(&self) -> &str;
-}
-
 /// A running REST server.
 #[async_trait]
 pub trait RestServer: Send + Sync {
     fn name(&self) -> &str;
-    fn handle(&self) -> Arc<dyn RestHandle>;
-    async fn run(self: Box<Self>);
+    fn run(self: Box<Self>) -> ServerContext<(), ()>;
 }
 
 /// Plugin factory for creating a RestServer from configuration and injected dependencies.

@@ -1,13 +1,14 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
 use std::sync::atomic::{AtomicU64, Ordering};
 use async_trait::async_trait;
 use serde_json::Value;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock};
 use tracing::{info, warn};
 use orkester_common::domain::{
     ExecutionId, TaskExecution, TaskExecutionStatus, WorkExecution, WorkExecutionStatus,
 };
+use orkester_common::servers::ServerContext;
 use orkester_common::servers::workflow::{
     ExecutionRequest, WorkflowError, WorkflowHandle, WorkflowServer, WorkflowServerFactory,
 };
@@ -24,7 +25,6 @@ fn next_exec_id() -> ExecutionId {
 
 #[derive(Clone)]
 pub struct BasicWorkflowHandle {
-    tx: mpsc::Sender<ExecutionRequest>,
     executions: Arc<RwLock<HashMap<ExecutionId, WorkExecution>>>,
 }
 
@@ -57,10 +57,6 @@ impl WorkflowHandle for BasicWorkflowHandle {
             .write()
             .await
             .insert(id.clone(), execution);
-        self.tx
-            .send(request)
-            .await
-            .map_err(|e| WorkflowError::Internal(format!("channel closed: {e}")))?;
         Ok(id)
     }
 
@@ -106,7 +102,6 @@ impl WorkflowHandle for BasicWorkflowHandle {
 
 pub struct BasicWorkflowServer {
     handle: BasicWorkflowHandle,
-    rx: mpsc::Receiver<ExecutionRequest>,
 }
 
 #[async_trait]
@@ -119,16 +114,30 @@ impl WorkflowServer for BasicWorkflowServer {
         Arc::new(self.handle.clone())
     }
 
-    async fn run(mut self: Box<Self>) {
-        info!("BasicWorkflowServer running");
-        while let Some(request) = self.rx.recv().await {
-            let executions = self.handle.executions.clone();
-            // Spawn a task so the loop remains responsive to new submissions.
-            tokio::spawn(async move {
-                run_execution(executions, request).await;
+    fn run(self: Box<Self>) -> ServerContext<ExecutionRequest, ()> {
+        let (h2s_sender, h2s_receiver) = mpsc::channel();
+        let (s2h_sender, s2h_receiver) = mpsc::channel();
+        let hd = std::thread::spawn(move || {
+            info!("BasicWorkflowServer running");
+            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+
+            rt.block_on(async move {
+                while let Some(request) = h2s_receiver.recv().ok() {
+                    let executions = self.handle.executions.clone();
+                    // Spawn a task so the loop remains responsive to new submissions.
+                    tokio::spawn(async move {
+                        run_execution(executions, request).await;
+                    });
+                    s2h_sender.send(()).ok();
+                }
             });
+            info!("BasicWorkflowServer channel closed — shutting down");
+        });
+        ServerContext {
+            receiver: Some(s2h_receiver),
+            sender: Some(h2s_sender),
+            handle: hd,
         }
-        info!("BasicWorkflowServer channel closed — shutting down");
     }
 }
 
@@ -221,9 +230,6 @@ fn now_str() -> String {
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 
-/// Channel buffer size for pending execution requests.
-const CHANNEL_CAPACITY: usize = 256;
-
 pub struct BasicWorkflowServerFactory;
 
 impl WorkflowServerFactory for BasicWorkflowServerFactory {
@@ -232,9 +238,8 @@ impl WorkflowServerFactory for BasicWorkflowServerFactory {
     }
 
     fn build(&self, _config: Value) -> Result<Box<dyn WorkflowServer>, WorkflowError> {
-        let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
         let executions = Arc::new(RwLock::new(HashMap::new()));
-        let handle = BasicWorkflowHandle { tx, executions };
-        Ok(Box::new(BasicWorkflowServer { handle, rx }))
+        let handle = BasicWorkflowHandle { executions };
+        Ok(Box::new(BasicWorkflowServer { handle }))
     }
 }

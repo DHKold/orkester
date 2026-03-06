@@ -20,10 +20,6 @@ pub enum ConfigError {
 pub struct AppConfig(Value);
 
 impl AppConfig {
-    pub fn empty() -> Self {
-        Self(Value::Object(Default::default()))
-    }
-
     /// Parse a config file into the generic tree.
     /// The format is inferred from the file extension.
     pub fn from_file(path: &PathBuf) -> Result<Self, ConfigError> {

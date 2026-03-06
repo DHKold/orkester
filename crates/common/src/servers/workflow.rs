@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use thiserror::Error;
 use crate::domain::{WorkExecution, WorkExecutionStatus, ExecutionId, Work};
+use crate::servers::ServerContext;
 
 #[derive(Debug, Error)]
 pub enum WorkflowError {
@@ -44,7 +45,7 @@ pub trait WorkflowHandle: Send + Sync {
 pub trait WorkflowServer: Send + Sync {
     fn name(&self) -> &str;
     fn handle(&self) -> Arc<dyn WorkflowHandle>;
-    async fn run(self: Box<Self>);
+    fn run(self: Box<Self>) -> ServerContext<ExecutionRequest, ()>;
 }
 
 /// Plugin factory for creating a WorkflowServer from configuration.

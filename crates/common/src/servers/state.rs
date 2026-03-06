@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use thiserror::Error;
 use crate::domain::{Workspace, WorkspaceId, Work, WorkId};
+use crate::servers::ServerContext;
 
 #[derive(Debug, Error)]
 pub enum StateError {
@@ -38,7 +39,7 @@ pub trait StateServer: Send + Sync {
     /// Returns the handle for use by other components.
     fn handle(&self) -> Arc<dyn StateHandle>;
     /// Drive the server. Resolves when the server shuts down.
-    async fn run(self: Box<Self>);
+    fn run(self: Box<Self>) -> ServerContext<(), ()>;
 }
 
 /// Plugin factory for creating a StateServer from configuration.

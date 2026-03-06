@@ -1,10 +1,11 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
 use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::RwLock;
 use tracing::info;
 use orkester_common::domain::{Workspace, WorkspaceId, Work, WorkId};
+use orkester_common::servers::ServerContext;
 use orkester_common::servers::state::{StateError, StateHandle, StateServer, StateServerFactory};
 
 // ── Inner state ───────────────────────────────────────────────────────────────
@@ -123,10 +124,20 @@ impl StateServer for BasicStateServer {
         Arc::new(self.handle.clone())
     }
 
-    async fn run(self: Box<Self>) {
-        info!("BasicStateServer running (in-memory)");
-        // Pure in-memory: no background work needed — just keep alive.
-        std::future::pending::<()>().await;
+    fn run(self: Box<Self>) -> ServerContext<(), ()> {
+        let (h2s_sender, h2s_receiver) = mpsc::channel();
+        let (s2h_sender, s2h_receiver) = mpsc::channel();
+        let hd = std::thread::spawn(move || {
+            // Pure in-memory: no background work needed — just keep alive.
+            info!("BasicStateServer running (in-memory)");
+            h2s_receiver.recv().ok();
+            s2h_sender.send(()).ok();
+        });
+        ServerContext {
+            receiver: Some(s2h_receiver),
+            sender: Some(h2s_sender),
+            handle: hd,
+        }
     }
 }
 
