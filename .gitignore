@@ -1,0 +1,32 @@
+# ── Rust ──────────────────────────────────────────────────────────────────────
+target/
+**/*.rs.bk
+
+# Cargo lock is committed for binaries, ignored for libraries.
+# Orkester is a binary workspace, so Cargo.lock is intentionally tracked.
+# (remove the next line if you want to ignore it)
+# Cargo.lock
+
+# ── Plugins (compiled .so/.dll/.dylib files) ──────────────────────────────────
+/plugins/
+
+# ── Config files with secrets ─────────────────────────────────────────────────
+*.local.yaml
+*.local.yml
+*.local.toml
+*.local.json
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.iml
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Container / Podman ────────────────────────────────────────────────────────
+# Named volumes are managed by Podman; nothing to ignore here.
+# Ignore any local override compose files:
+podman-compose.override.yml
+docker-compose.override.yml

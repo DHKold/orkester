@@ -1,0 +1,30 @@
+[package]
+name = "orkester"
+version = "0.1.0"
+edition = "2021"
+description = "Orkester – ultra-fast, resilient and secure workflow platform"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "orkester"
+path = "src/main.rs"
+
+[dependencies]
+orkester-common = { workspace = true }
+async-trait    = { workspace = true }
+serde          = { workspace = true }
+serde_json     = { workspace = true }
+thiserror      = { workspace = true }
+tokio          = { version = "1", features = ["full"] }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Config deserialization
+serde_yaml = "0.9"
+toml       = "0.8"
+
+# Dynamic plugin loading
+libloading = "0.8"
