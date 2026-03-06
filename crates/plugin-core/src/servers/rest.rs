@@ -182,7 +182,7 @@ impl RestHandle for AxumRestHandle {
 // ── Server ────────────────────────────────────────────────────────────────────
 
 pub struct AxumRestServer {
-    listener: TcpListener,
+    addr: String,
     router: axum::Router,
     handle: Arc<AxumRestHandle>,
 }
@@ -198,13 +198,28 @@ impl RestServer for AxumRestServer {
     }
 
     async fn run(self: Box<Self>) {
-        info!(
-            "AxumRestServer listening on {}",
-            self.handle.bound_addr()
-        );
-        axum::serve(self.listener, self.router)
-            .await
-            .expect("axum server error");
+        // Spin up a dedicated OS thread with its own single-threaded tokio runtime.
+        // This keeps the plugin's reactor completely isolated from the host's — no
+        // handle-sharing, no cross-cdylib thread-local confusion.
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("failed to build REST runtime");
+            rt.block_on(async move {
+                info!("AxumRestServer listening on {}", self.addr);
+                let listener = TcpListener::bind(&self.addr)
+                    .await
+                    .expect("failed to bind REST listener");
+                axum::serve(listener, self.router)
+                    .await
+                    .expect("axum server error");
+            });
+            let _ = tx.send(());
+        });
+        // The host task stays alive until the server thread exits.
+        rx.await.ok();
     }
 }
 
@@ -221,11 +236,10 @@ impl RestServerFactory for AxumRestServerFactory {
     }
 
     fn build(&self, config: Value, deps: RestServerDeps) -> Result<Box<dyn RestServer>, RestError> {
-        let bind = config
+        let bind_addr = config
             .get("bind")
             .and_then(|v| v.as_str())
-            .unwrap_or("0.0.0.0:8080")
-            .to_string();
+            .unwrap_or("0.0.0.0:8080");
 
         let api_base = config
             .get("api_base")
@@ -233,26 +247,17 @@ impl RestServerFactory for AxumRestServerFactory {
             .unwrap_or("/api/v1")
             .to_string();
 
-        info!("Building AxumRestServer — bind={bind}, api_base={api_base}");
+        info!("Building AxumRestServer with API base path '{}'", api_base);
         for c in &deps.contributors {
             info!("  contributor: {} (prefix={})", c.name(), c.prefix());
         }
 
         let router = build_router(&deps.contributors, &api_base);
 
-        let listener = tokio::runtime::Handle::current()
-            .block_on(TcpListener::bind(&bind))
-            .map_err(|e| RestError::Bind(format!("{bind}: {e}")))?;
-
-        let actual_addr = listener
-            .local_addr()
-            .map(|a| a.to_string())
-            .unwrap_or(bind.clone());
-
         Ok(Box::new(AxumRestServer {
-            listener,
+            addr: bind_addr.to_string(),
             router,
-            handle: Arc::new(AxumRestHandle { bound_addr: actual_addr }),
+            handle: Arc::new(AxumRestHandle { bound_addr: bind_addr.to_string() }),
         }))
     }
 }

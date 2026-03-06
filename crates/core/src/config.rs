@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use serde::Deserialize;
+use serde_json::Value;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -16,43 +16,16 @@ pub enum ConfigError {
     Parse { path: PathBuf, message: String },
 }
 
-/// Configuration for plugin discovery.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct PluginsConfig {
-    /// Directory to scan for plugin shared libraries.
-    #[serde(default = "default_plugins_dir")]
-    pub dir: PathBuf,
-    /// Whether to scan the directory recursively.
-    #[serde(default)]
-    pub recursive: bool,
-}
-
-impl Default for PluginsConfig {
-    fn default() -> Self {
-        Self {
-            dir: default_plugins_dir(),
-            recursive: false,
-        }
-    }
-}
-
-fn default_plugins_dir() -> PathBuf {
-    PathBuf::from("./plugins")
-}
-
-/// Top-level application configuration.
-/// Can be supplied as a JSON, YAML or TOML file via the `-c / --config-file` CLI flag.
-#[derive(Debug, Clone, Deserialize, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct AppConfig {
-    #[serde(default)]
-    pub plugins: PluginsConfig,
-}
+#[derive(Debug, Clone, Default)]
+pub struct AppConfig(Value);
 
 impl AppConfig {
-    /// Load configuration from `path`.
-    /// The format is determined by the file extension.
+    pub fn empty() -> Self {
+        Self(Value::Object(Default::default()))
+    }
+
+    /// Parse a config file into the generic tree.
+    /// The format is inferred from the file extension.
     pub fn from_file(path: &PathBuf) -> Result<Self, ConfigError> {
         let ext = path
             .extension()
@@ -65,7 +38,9 @@ impl AppConfig {
             source,
         })?;
 
-        let config: AppConfig = match ext.as_str() {
+        // Parse each format directly into serde_json::Value so the rest of the
+        // application sees one unified tree regardless of the source format.
+        let value: Value = match ext.as_str() {
             "json" => serde_json::from_str(&raw).map_err(|e| ConfigError::Parse {
                 path: path.clone(),
                 message: e.to_string(),
@@ -74,13 +49,50 @@ impl AppConfig {
                 path: path.clone(),
                 message: e.to_string(),
             })?,
-            "toml" => toml::from_str(&raw).map_err(|e| ConfigError::Parse {
-                path: path.clone(),
-                message: e.to_string(),
-            })?,
+            "toml" => {
+                let toml_val: toml::Value =
+                    toml::from_str(&raw).map_err(|e| ConfigError::Parse {
+                        path: path.clone(),
+                        message: e.to_string(),
+                    })?;
+                // Convert via JSON round-trip (both use serde)
+                serde_json::to_value(toml_val).map_err(|e| ConfigError::Parse {
+                    path: path.clone(),
+                    message: e.to_string(),
+                })?
+            }
             other => return Err(ConfigError::UnsupportedFormat(format!(".{}", other))),
         };
 
-        Ok(config)
+        Ok(Self(value))
     }
+
+    /// Look up a value by a dot-separated path (e.g. `"plugins.dir"`).
+    /// Returns `None` if any segment is absent.
+    pub fn get(&self, path: &str) -> Option<&Value> {
+        get_path(&self.0, path)
+    }
+
+    /// Convenience: string value at `path`, or `default` if absent / not a string.
+    pub fn get_str<'a>(&'a self, path: &str, default: &'static str) -> &'a str {
+        self.get(path).and_then(|v| v.as_str()).unwrap_or(default)
+    }
+
+    /// Convenience: bool value at `path`, or `default` if absent / not a bool.
+    pub fn get_bool(&self, path: &str, default: bool) -> bool {
+        self.get(path).and_then(|v| v.as_bool()).unwrap_or(default)
+    }
+
+    /// Raw inner value (e.g. to pass a sub-tree to a plugin factory).
+    pub fn value(&self) -> &Value {
+        &self.0
+    }
+}
+
+/// Walk a dot-separated path through a `Value` tree.
+fn get_path<'a>(mut cur: &'a Value, path: &str) -> Option<&'a Value> {
+    for segment in path.split('.') {
+        cur = cur.get(segment)?;
+    }
+    Some(cur)
 }
