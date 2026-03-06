@@ -5,6 +5,12 @@ use crate::providers::{
     persistence::PersistenceBuilder,
     registry::RegistryBuilder,
 };
+use crate::servers::{
+    state::StateServerFactory,
+    workflow::WorkflowServerFactory,
+    metrics::MetricsServerFactory,
+    rest::{ApiContributor, RestServerFactory},
+};
 
 /// Metadata describing a plugin.
 #[derive(Debug, Clone)]
@@ -24,11 +30,24 @@ pub struct PluginMetadata {
 /// A component provided by a plugin, represented as a named builder.
 /// Each variant corresponds to an extensibility point in orkester.
 pub enum PluginComponent {
+    // ── Providers ──────────────────────────────────────────────────────────
     Authentication(Box<dyn AuthProviderBuilder>),
     Authorization(Box<dyn AuthzProviderBuilder>),
     WorkflowRegistry(Box<dyn RegistryBuilder>),
     Persistence(Box<dyn PersistenceBuilder>),
     TaskExecutor(Box<dyn ExecutorBuilder>),
+
+    // ── Servers ────────────────────────────────────────────────────────────
+    StateServer(Box<dyn StateServerFactory>),
+    WorkflowServer(Box<dyn WorkflowServerFactory>),
+    MetricsServer(Box<dyn MetricsServerFactory>),
+    RestServer(Box<dyn RestServerFactory>),
+
+    // ── API route contributions ────────────────────────────────────────────
+    /// Contributes HTTP routes to the REST server.
+    /// The REST server collects all contributors from all loaded plugins,
+    /// applies prefixes, and assembles the final router.
+    ApiContributor(Box<dyn ApiContributor>),
 }
 
 /// The root structure that every Orkester plugin must provide.
