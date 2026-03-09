@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use serde_json::Value;
 use orkester_common::providers::authz::{
-    AuthzError, AuthzProviderBuilder, AuthzRequest, AuthorizationProvider,
+    AuthorizationProvider, AuthzError, AuthzProviderBuilder, AuthzRequest,
 };
+use serde_json::Value;
 
 /// A basic authorization provider that allows or denies access based on a
 /// static configuration. The default (no config) is to allow everything.

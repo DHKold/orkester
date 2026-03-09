@@ -1,12 +1,12 @@
-use std::collections::HashMap;
-use std::sync::{Arc, mpsc};
 use async_trait::async_trait;
+use orkester_common::domain::{Work, WorkId, Workspace, WorkspaceId};
+use orkester_common::servers::state::{StateError, StateHandle, StateServer, StateServerFactory};
+use orkester_common::servers::ServerContext;
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::{mpsc, Arc};
 use tokio::sync::RwLock;
 use tracing::info;
-use orkester_common::domain::{Workspace, WorkspaceId, Work, WorkId};
-use orkester_common::servers::ServerContext;
-use orkester_common::servers::state::{StateError, StateHandle, StateServer, StateServerFactory};
 
 // ── Inner state ───────────────────────────────────────────────────────────────
 
@@ -89,7 +89,8 @@ impl StateHandle for BasicStateHandle {
 
     async fn put_work(&self, work: Work) -> Result<(), StateError> {
         let mut g = self.0.write().await;
-        g.works.insert((work.workspace_id.clone(), work.id.clone()), work);
+        g.works
+            .insert((work.workspace_id.clone(), work.id.clone()), work);
         Ok(())
     }
 

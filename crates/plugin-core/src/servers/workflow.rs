@@ -1,24 +1,27 @@
-use std::collections::HashMap;
-use std::sync::{Arc, mpsc};
-use std::sync::atomic::{AtomicU64, Ordering};
 use async_trait::async_trait;
-use serde_json::Value;
-use tokio::sync::{RwLock};
-use tracing::{info, warn};
 use orkester_common::domain::{
     ExecutionId, TaskExecution, TaskExecutionStatus, WorkExecution, WorkExecutionStatus,
 };
-use orkester_common::servers::ServerContext;
 use orkester_common::servers::workflow::{
     ExecutionRequest, WorkflowError, WorkflowHandle, WorkflowServer, WorkflowServerFactory,
 };
+use orkester_common::servers::ServerContext;
+use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{mpsc, Arc};
+use tokio::sync::RwLock;
+use tracing::{info, warn};
 
 // ── ID generation ─────────────────────────────────────────────────────────────
 
 static EXEC_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 fn next_exec_id() -> ExecutionId {
-    ExecutionId(format!("exec-{}", EXEC_COUNTER.fetch_add(1, Ordering::Relaxed)))
+    ExecutionId(format!(
+        "exec-{}",
+        EXEC_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ))
 }
 
 // ── Handle ────────────────────────────────────────────────────────────────────
@@ -53,10 +56,7 @@ impl WorkflowHandle for BasicWorkflowHandle {
                 })
                 .collect(),
         };
-        self.executions
-            .write()
-            .await
-            .insert(id.clone(), execution);
+        self.executions.write().await.insert(id.clone(), execution);
         Ok(id)
     }
 
@@ -119,7 +119,10 @@ impl WorkflowServer for BasicWorkflowServer {
         let (s2h_sender, s2h_receiver) = mpsc::channel();
         let hd = std::thread::spawn(move || {
             info!("BasicWorkflowServer running");
-            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
 
             rt.block_on(async move {
                 while let Some(request) = h2s_receiver.recv().ok() {

@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use crate::servers::ServerContext;
 use async_trait::async_trait;
 use serde_json::Value;
+use std::sync::Arc;
 use thiserror::Error;
-use crate::servers::ServerContext;
 
 #[derive(Debug, Error)]
 pub enum MetricsError {

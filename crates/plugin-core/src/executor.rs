@@ -1,8 +1,9 @@
 use async_trait::async_trait;
-use serde_json::{Value, json};
 use orkester_common::providers::executor::{
-    ExecutorBuilder, ExecutorError, ExecutionRequest, ExecutionResult, ExecutionStatus, TaskExecutor,
+    ExecutionRequest, ExecutionResult, ExecutionStatus, ExecutorBuilder, ExecutorError,
+    TaskExecutor,
 };
+use serde_json::{json, Value};
 
 /// A dummy task executor that logs the task and immediately returns success.
 /// Useful for testing workflows without real execution backends.

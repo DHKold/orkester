@@ -1,6 +1,8 @@
 use async_trait::async_trait;
-use serde_json::{Value, json};
-use orkester_common::providers::auth::{AuthError, AuthProviderBuilder, AuthenticationProvider, Identity};
+use orkester_common::providers::auth::{
+    AuthError, AuthProviderBuilder, AuthenticationProvider, Identity,
+};
+use serde_json::{json, Value};
 
 /// A no-op authentication provider that accepts any credentials and returns
 /// an anonymous identity. Suitable for development and open/internal deployments.

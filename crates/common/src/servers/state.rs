@@ -1,9 +1,9 @@
-use std::sync::Arc;
+use crate::domain::{Work, WorkId, Workspace, WorkspaceId};
+use crate::servers::ServerContext;
 use async_trait::async_trait;
 use serde_json::Value;
+use std::sync::Arc;
 use thiserror::Error;
-use crate::domain::{Workspace, WorkspaceId, Work, WorkId};
-use crate::servers::ServerContext;
 
 #[derive(Debug, Error)]
 pub enum StateError {
@@ -27,9 +27,17 @@ pub trait StateHandle: Send + Sync {
 
     // ── Works ──────────────────────────────────────────────────────────────
     async fn list_works(&self, workspace_id: &WorkspaceId) -> Result<Vec<Work>, StateError>;
-    async fn get_work(&self, workspace_id: &WorkspaceId, work_id: &WorkId) -> Result<Work, StateError>;
+    async fn get_work(
+        &self,
+        workspace_id: &WorkspaceId,
+        work_id: &WorkId,
+    ) -> Result<Work, StateError>;
     async fn put_work(&self, work: Work) -> Result<(), StateError>;
-    async fn delete_work(&self, workspace_id: &WorkspaceId, work_id: &WorkId) -> Result<(), StateError>;
+    async fn delete_work(
+        &self,
+        workspace_id: &WorkspaceId,
+        work_id: &WorkId,
+    ) -> Result<(), StateError>;
 }
 
 /// A running State server. `run()` drives the server until shutdown.

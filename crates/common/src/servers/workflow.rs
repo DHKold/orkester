@@ -1,9 +1,9 @@
-use std::sync::Arc;
+use crate::domain::{ExecutionId, Work, WorkExecution, WorkExecutionStatus};
+use crate::servers::ServerContext;
 use async_trait::async_trait;
 use serde_json::Value;
+use std::sync::Arc;
 use thiserror::Error;
-use crate::domain::{WorkExecution, WorkExecutionStatus, ExecutionId, Work};
-use crate::servers::ServerContext;
 
 #[derive(Debug, Error)]
 pub enum WorkflowError {
@@ -37,7 +37,10 @@ pub trait WorkflowHandle: Send + Sync {
     async fn status(&self, id: &ExecutionId) -> Result<WorkExecution, WorkflowError>;
 
     /// List all executions (optionally filtered by status).
-    async fn list(&self, status_filter: Option<WorkExecutionStatus>) -> Result<Vec<WorkExecution>, WorkflowError>;
+    async fn list(
+        &self,
+        status_filter: Option<WorkExecutionStatus>,
+    ) -> Result<Vec<WorkExecution>, WorkflowError>;
 }
 
 /// A running Workflow (execution engine) server.

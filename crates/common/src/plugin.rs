@@ -1,15 +1,12 @@
 use crate::providers::{
-    auth::AuthProviderBuilder,
-    authz::AuthzProviderBuilder,
-    executor::ExecutorBuilder,
-    persistence::PersistenceBuilder,
-    registry::RegistryBuilder,
+    auth::AuthProviderBuilder, authz::AuthzProviderBuilder, executor::ExecutorBuilder,
+    persistence::PersistenceBuilder, registry::RegistryBuilder,
 };
 use crate::servers::{
-    state::StateServerFactory,
-    workflow::WorkflowServerFactory,
     metrics::MetricsServerFactory,
     rest::{ApiContributor, RestServerFactory},
+    state::StateServerFactory,
+    workflow::WorkflowServerFactory,
 };
 
 /// Metadata describing a plugin.

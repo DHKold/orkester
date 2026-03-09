@@ -32,7 +32,11 @@ pub trait WorkflowRegistry: Send + Sync {
     async fn get_workflow(&self, id: &str) -> Result<WorkflowDefinition, RegistryError>;
 
     /// Store or update a workflow definition.
-    async fn put_workflow(&self, id: &str, definition: WorkflowDefinition) -> Result<(), RegistryError>;
+    async fn put_workflow(
+        &self,
+        id: &str,
+        definition: WorkflowDefinition,
+    ) -> Result<(), RegistryError>;
 
     /// Delete a workflow by ID.
     async fn delete_workflow(&self, id: &str) -> Result<(), RegistryError>;

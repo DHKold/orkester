@@ -1,11 +1,11 @@
-use std::collections::HashMap;
 use async_trait::async_trait;
-use serde_json::Value;
-use tokio::sync::RwLock;
-use std::sync::Arc;
 use orkester_common::providers::registry::{
     RegistryBuilder, RegistryError, WorkflowDefinition, WorkflowRegistry,
 };
+use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// An in-memory workflow registry. Workflows can be loaded from a local directory
 /// at startup (if `path` is provided in config) or managed purely via API.
@@ -40,7 +40,11 @@ impl WorkflowRegistry for LocalWorkflowRegistry {
             .ok_or_else(|| RegistryError::NotFound(id.to_string()))
     }
 
-    async fn put_workflow(&self, id: &str, definition: WorkflowDefinition) -> Result<(), RegistryError> {
+    async fn put_workflow(
+        &self,
+        id: &str,
+        definition: WorkflowDefinition,
+    ) -> Result<(), RegistryError> {
         let mut store = self.store.write().await;
         tracing::debug!(id = %id, "LocalWorkflowRegistry: put_workflow");
         store.insert(id.to_string(), definition);

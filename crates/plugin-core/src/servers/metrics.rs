@@ -1,10 +1,14 @@
-use std::sync::{Arc, mpsc};
 use async_trait::async_trait;
-use serde_json::Value;
-use tracing::info;
+use orkester_common::servers::metrics::{
+    MetricsError, MetricsHandle, MetricsServer, MetricsServerFactory,
+};
+use orkester_common::servers::rest::{
+    ApiContributor, ApiRequest, ApiResponse, HttpMethod, RouteHandler,
+};
 use orkester_common::servers::ServerContext;
-use orkester_common::servers::metrics::{MetricsError, MetricsHandle, MetricsServer, MetricsServerFactory};
-use orkester_common::servers::rest::{ApiContributor, ApiRequest, ApiResponse, HttpMethod, RouteHandler};
+use serde_json::Value;
+use std::sync::{mpsc, Arc};
+use tracing::info;
 
 // ── No-op Handle ──────────────────────────────────────────────────────────────
 

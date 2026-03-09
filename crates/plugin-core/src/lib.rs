@@ -5,7 +5,6 @@ pub mod persistence;
 pub mod registry;
 pub mod servers;
 
-use orkester_common::plugin::{Plugin, PluginComponent, PluginMetadata};
 use crate::{
     auth::NoAuthProviderBuilder,
     authz::BasicAuthzProviderBuilder,
@@ -19,6 +18,7 @@ use crate::{
         workflow::BasicWorkflowServerFactory,
     },
 };
+use orkester_common::plugin::{Plugin, PluginComponent, PluginMetadata};
 
 /// Constructs the core plugin, bundling all built-in provider and server implementations.
 pub fn core_plugin() -> Plugin {

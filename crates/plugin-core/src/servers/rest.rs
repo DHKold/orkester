@@ -1,17 +1,17 @@
-use std::collections::HashMap;
-use std::sync::Arc;
 use async_trait::async_trait;
 use axum::body::Body;
 use axum::extract::RawPathParams;
 use axum::http::{HeaderName, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
-use serde_json::Value;
-use tracing::info;
-use orkester_common::servers::ServerContext;
 use orkester_common::servers::rest::{
-    ApiContributor, ApiRequest, ApiResponse, HttpMethod, RestError, RestServer,
-    RestServerDeps, RestServerFactory, RouteHandler,
+    ApiContributor, ApiRequest, ApiResponse, HttpMethod, RestError, RestServer, RestServerDeps,
+    RestServerFactory, RouteHandler,
 };
+use orkester_common::servers::ServerContext;
+use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tracing::info;
 
 // ── Request / response conversion ─────────────────────────────────────────────
 
@@ -47,12 +47,7 @@ async fn to_api_request(
     let headers: HashMap<String, String> = req
         .headers()
         .iter()
-        .filter_map(|(k, v)| {
-            Some((
-                k.as_str().to_string(),
-                v.to_str().ok()?.to_string(),
-            ))
-        })
+        .filter_map(|(k, v)| Some((k.as_str().to_string(), v.to_str().ok()?.to_string())))
         .collect();
 
     let body = axum::body::to_bytes(req.into_body(), usize::MAX)
@@ -94,20 +89,16 @@ fn build_router(contributors: &[Arc<dyn ApiContributor>], api_base: &str) -> axu
     // Built-in health endpoint: GET {api_base}/health
     let health_path = normalise_path(&format!("{}/health", api_base));
     info!("  GET {} (built-in)", health_path);
-    let mut router = axum::Router::new()
-        .route(&health_path, axum::routing::get(|| async {
-            axum::Json(serde_json::json!({ "status": "ok" }))
-        }));
+    let mut router = axum::Router::new().route(
+        &health_path,
+        axum::routing::get(|| async { axum::Json(serde_json::json!({ "status": "ok" })) }),
+    );
 
     for contributor in contributors {
         for handler_box in contributor.routes() {
             let handler: Arc<dyn RouteHandler> = Arc::from(handler_box);
             let method = handler.method();
-            let full_path = format!(
-                "{}{}{}", api_base,
-                contributor.prefix(),
-                handler.path()
-            );
+            let full_path = format!("{}{}{}", api_base, contributor.prefix(), handler.path());
             // Normalise duplicate slashes (e.g. "/api/v1/metrics/")
             let full_path = normalise_path(&full_path);
 
@@ -189,11 +180,17 @@ impl RestServer for AxumRestServer {
     fn run(self: Box<Self>) -> ServerContext<(), ()> {
         let config = self.config.clone();
         let hd = std::thread::spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
 
             rt.block_on(async move {
                 // Get configuration with defaults.
-                let bind_host = config.get("hostname").and_then(|v| v.as_str()).unwrap_or("localhost");
+                let bind_host = config
+                    .get("hostname")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("localhost");
                 let bind_port = config.get("port").and_then(|v| v.as_u64()).unwrap_or(8080);
                 let bind_addr = format!("{}:{}", bind_host, bind_port);
 
@@ -203,11 +200,10 @@ impl RestServer for AxumRestServer {
                 axum::serve(listener, self.router).await.unwrap();
                 info!("AxumRestServer on {} has shut down", bind_addr);
             });
-            
         });
         ServerContext {
-            receiver: Option::None,     // No messages received from the server in this implementation
-            sender: Option::None,       // No messages sent to the server in this implementation
+            receiver: Option::None, // No messages received from the server in this implementation
+            sender: Option::None,   // No messages sent to the server in this implementation
             handle: hd,
         }
     }
@@ -225,7 +221,11 @@ impl RestServerFactory for AxumRestServerFactory {
     fn build(&self, config: Value, deps: RestServerDeps) -> Result<Box<dyn RestServer>, RestError> {
         // Build the router
         info!("Building AxumRestServer");
-        let api_base = config.get("base_path").and_then(|v| v.as_str()).unwrap_or("/api").to_string();
+        let api_base = config
+            .get("base_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("/api")
+            .to_string();
 
         for c in &deps.contributors {
             info!("  contributor: {} (prefix={})", c.name(), c.prefix());
@@ -233,9 +233,6 @@ impl RestServerFactory for AxumRestServerFactory {
         let router = build_router(&deps.contributors, &api_base);
 
         // Create the server instance
-        Ok(Box::new(AxumRestServer {
-            config,
-            router,
-        }))
+        Ok(Box::new(AxumRestServer { config, router }))
     }
 }

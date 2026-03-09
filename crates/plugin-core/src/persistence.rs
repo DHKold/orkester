@@ -1,11 +1,11 @@
-use std::collections::HashMap;
 use async_trait::async_trait;
-use serde_json::Value;
-use tokio::sync::RwLock;
-use std::sync::Arc;
 use orkester_common::providers::persistence::{
     EntityKey, PersistenceBuilder, PersistenceError, PersistenceProvider,
 };
+use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// An in-memory persistence provider backed by a `HashMap`.
 /// All data is lost when the process exits. Suitable for development and testing.

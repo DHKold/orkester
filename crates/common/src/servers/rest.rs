@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use crate::servers::ServerContext;
 use async_trait::async_trait;
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
 use thiserror::Error;
-use crate::servers::ServerContext;
 
 #[derive(Debug, Error)]
 pub enum RestError {
@@ -46,13 +46,21 @@ pub struct ApiResponse {
 
 impl ApiResponse {
     pub fn ok(body: impl Into<Vec<u8>>) -> Self {
-        Self { status: 200, headers: HashMap::new(), body: body.into() }
+        Self {
+            status: 200,
+            headers: HashMap::new(),
+            body: body.into(),
+        }
     }
     pub fn json(status: u16, value: &Value) -> Self {
         let body = value.to_string().into_bytes();
         let mut headers = HashMap::new();
         headers.insert("content-type".to_string(), "application/json".to_string());
-        Self { status, headers, body }
+        Self {
+            status,
+            headers,
+            body,
+        }
     }
     pub fn error(status: u16, message: &str) -> Self {
         Self::json(status, &serde_json::json!({ "error": message }))
