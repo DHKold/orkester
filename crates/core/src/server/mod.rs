@@ -1,18 +1,27 @@
-//! Server lifecycle management — parse config, resolve startup order, build and run.
+//! Server lifecycle management — parse config, build and start all enabled servers.
+
+mod config;
+mod runner;
+
+pub use runner::RunningServer;
 
 use crate::config::ConfigTree;
 use crate::logging::Logger;
 use crate::registry::Registry;
 
-/// Represents a running server instance, allowing for later shutdown.
-pub struct RunningServer;
-
-/// Start all servers defined in the config, using the provided plugin registry to construct them.
-pub fn start_servers(config: &ConfigTree, registry: &Registry) -> Result<Vec<RunningServer>, Box<dyn std::error::Error>> {
-    Ok(Vec::new()) // TODO: implement server startup logic
+/// Parse server config, build and start all enabled servers.
+pub fn start_servers(
+    config: &ConfigTree,
+    registry: &Registry,
+) -> Result<Vec<RunningServer>, Box<dyn std::error::Error>> {
+    let entries = config::parse(config);
+    if entries.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(runner::start(&entries, registry))
 }
 
-/// Clean up all running servers on shutdown.
+/// Stop all running servers.
 pub fn cleanup_servers(servers: &[RunningServer]) -> Result<(), String> {
-    Ok(())
+    runner::cleanup(servers)
 }
