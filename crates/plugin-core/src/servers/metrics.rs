@@ -1,11 +1,9 @@
 use async_trait::async_trait;
-use orkester_common::servers::metrics::{
-    MetricsError, MetricsHandle, MetricsServer, MetricsServerFactory,
+use orkester_common::plugin::servers::{
+    metrics::{MetricsError, MetricsHandle, MetricsServer},
+    rest::{ApiContributor, ApiRequest, ApiResponse, HttpMethod, RouteHandler},
+    AnyServer, ServerBuildError, ServerContext, ServerFactory,
 };
-use orkester_common::servers::rest::{
-    ApiContributor, ApiRequest, ApiResponse, HttpMethod, RouteHandler,
-};
-use orkester_common::servers::ServerContext;
 use serde_json::Value;
 use std::sync::{mpsc, Arc};
 use tracing::info;
@@ -62,26 +60,6 @@ impl RouteHandler for MetricsGetHandler {
     }
 }
 
-pub struct NoMetricsContributor {
-    handle: NoMetricsHandle,
-}
-
-impl ApiContributor for NoMetricsContributor {
-    fn name(&self) -> &str {
-        "metrics"
-    }
-
-    fn prefix(&self) -> &str {
-        "/metrics"
-    }
-
-    fn routes(&self) -> Vec<Box<dyn RouteHandler>> {
-        vec![Box::new(MetricsGetHandler {
-            handle: self.handle.clone(),
-        })]
-    }
-}
-
 // ── Server ────────────────────────────────────────────────────────────────────
 
 pub struct NoMetricsServer {
@@ -116,25 +94,60 @@ impl MetricsServer for NoMetricsServer {
     }
 }
 
-// ── Factory ───────────────────────────────────────────────────────────────────
+// ── AnyServer ─────────────────────────────────────────────────────────────────
 
-pub struct NoMetricsServerFactory;
-
-impl MetricsServerFactory for NoMetricsServerFactory {
+/// `NoMetricsServer` also implements `ApiContributor` so Orkester's core can
+/// discover and inject the /metrics route into the REST server via `as_any()`.
+impl AnyServer for NoMetricsServer {
     fn name(&self) -> &str {
         "no-metrics-server"
     }
 
-    fn build(&self, _config: Value) -> Result<Box<dyn MetricsServer>, MetricsError> {
-        Ok(Box::new(NoMetricsServer {
-            handle: NoMetricsHandle,
-        }))
+    fn server_type(&self) -> &str {
+        "metrics"
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
-/// Returns a ready-to-register `ApiContributor` for the metrics endpoint.
-pub fn metrics_api_contributor() -> NoMetricsContributor {
-    NoMetricsContributor {
-        handle: NoMetricsHandle,
+impl ApiContributor for NoMetricsServer {
+    fn name(&self) -> &str {
+        "metrics"
+    }
+
+    fn prefix(&self) -> &str {
+        "/metrics"
+    }
+
+    fn routes(&self) -> Vec<Box<dyn RouteHandler>> {
+        vec![Box::new(MetricsGetHandler {
+            handle: self.handle.clone(),
+        })]
+    }
+}
+
+// ── Factory ───────────────────────────────────────────────────────────────────
+
+pub struct NoMetricsServerFactory;
+
+impl ServerFactory for NoMetricsServerFactory {
+    fn server_type(&self) -> &str {
+        "metrics"
+    }
+
+    fn name(&self) -> &str {
+        "no-metrics-server"
+    }
+
+    fn build(&self, _config: Value) -> Result<Box<dyn AnyServer>, ServerBuildError> {
+        Ok(Box::new(NoMetricsServer {
+            handle: NoMetricsHandle,
+        }))
     }
 }

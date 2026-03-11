@@ -3,11 +3,10 @@ use axum::body::Body;
 use axum::extract::RawPathParams;
 use axum::http::{HeaderName, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
-use orkester_common::servers::rest::{
-    ApiContributor, ApiRequest, ApiResponse, HttpMethod, RestError, RestServer, RestServerDeps,
-    RestServerFactory, RouteHandler,
+use orkester_common::plugin::servers::{
+    rest::{ApiContributor, ApiRequest, ApiResponse, HttpMethod, RestServer, RouteHandler},
+    AnyServer, ServerBuildError, ServerContext, ServerFactory,
 };
-use orkester_common::servers::ServerContext;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -209,17 +208,40 @@ impl RestServer for AxumRestServer {
     }
 }
 
-// ── Factory ───────────────────────────────────────────────────────────────────
+// ── AnyServer ─────────────────────────────────────────────────────────────────
 
-pub struct AxumRestServerFactory;
-
-impl RestServerFactory for AxumRestServerFactory {
+impl AnyServer for AxumRestServer {
     fn name(&self) -> &str {
         "axum-rest-server"
     }
 
-    fn build(&self, config: Value, deps: RestServerDeps) -> Result<Box<dyn RestServer>, RestError> {
-        // Build the router
+    fn server_type(&self) -> &str {
+        "rest"
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+// ── Factory ───────────────────────────────────────────────────────────────────
+
+pub struct AxumRestServerFactory;
+
+impl ServerFactory for AxumRestServerFactory {
+    fn server_type(&self) -> &str {
+        "rest"
+    }
+
+    fn name(&self) -> &str {
+        "axum-rest-server"
+    }
+
+    fn build(&self, config: Value) -> Result<Box<dyn AnyServer>, ServerBuildError> {
         info!("Building AxumRestServer");
         let api_base = config
             .get("base_path")
@@ -227,12 +249,9 @@ impl RestServerFactory for AxumRestServerFactory {
             .unwrap_or("/api")
             .to_string();
 
-        for c in &deps.contributors {
-            info!("  contributor: {} (prefix={})", c.name(), c.prefix());
-        }
-        let router = build_router(&deps.contributors, &api_base);
+        // Contributors are injected by Orkester core at runtime via AnyServer downcasting.
+        let router = build_router(&[], &api_base);
 
-        // Create the server instance
         Ok(Box::new(AxumRestServer { config, router }))
     }
 }

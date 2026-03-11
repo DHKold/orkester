@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use orkester_common::plugin::providers::authz::{
-    AuthorizationProvider, AuthzError, AuthzProviderBuilder, AuthzRequest,
+    AuthorizationError, AuthorizationProvider, AuthorizationProviderBuilder, AuthzRequest,
 };
 use serde_json::Value;
 
@@ -23,7 +23,7 @@ impl AuthorizationProvider for BasicAuthorizationProvider {
         "basic-authz"
     }
 
-    async fn authorize(&self, request: &AuthzRequest) -> Result<(), AuthzError> {
+    async fn authorize(&self, request: &AuthzRequest) -> Result<(), AuthorizationError> {
         if self.deny_all {
             tracing::warn!(
                 subject = %request.identity.subject,
@@ -31,7 +31,7 @@ impl AuthorizationProvider for BasicAuthorizationProvider {
                 action  = %request.action,
                 "BasicAuthorizationProvider: DENY (deny_all mode)"
             );
-            return Err(AuthzError::Forbidden(format!(
+            return Err(AuthorizationError::Forbidden(format!(
                 "Access denied for '{}' on '{}' (deny_all mode)",
                 request.identity.subject, request.resource
             )));
@@ -48,12 +48,12 @@ impl AuthorizationProvider for BasicAuthorizationProvider {
 
 pub struct BasicAuthzProviderBuilder;
 
-impl AuthzProviderBuilder for BasicAuthzProviderBuilder {
+impl AuthorizationProviderBuilder for BasicAuthzProviderBuilder {
     fn name(&self) -> &str {
         "basic-authz"
     }
 
-    fn build(&self, config: Value) -> Result<Box<dyn AuthorizationProvider>, AuthzError> {
+    fn build(&self, config: Value) -> Result<Box<dyn AuthorizationProvider>, AuthorizationError> {
         let deny_all = config
             .get("mode")
             .and_then(Value::as_str)

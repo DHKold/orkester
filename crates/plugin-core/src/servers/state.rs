@@ -1,7 +1,9 @@
 use async_trait::async_trait;
 use orkester_common::domain::{Work, WorkId, Workspace, WorkspaceId};
-use orkester_common::servers::state::{StateError, StateHandle, StateServer, StateServerFactory};
-use orkester_common::servers::ServerContext;
+use orkester_common::plugin::servers::{
+    state::{StateError, StateHandle, StateServer},
+    AnyServer, ServerBuildError, ServerContext, ServerFactory,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{mpsc, Arc};
@@ -142,16 +144,40 @@ impl StateServer for BasicStateServer {
     }
 }
 
-// ── Factory ───────────────────────────────────────────────────────────────────
+// ── AnyServer ─────────────────────────────────────────────────────────────────
 
-pub struct BasicStateServerFactory;
-
-impl StateServerFactory for BasicStateServerFactory {
+impl AnyServer for BasicStateServer {
     fn name(&self) -> &str {
         "basic-state-server"
     }
 
-    fn build(&self, _config: Value) -> Result<Box<dyn StateServer>, StateError> {
+    fn server_type(&self) -> &str {
+        "state"
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+// ── Factory ───────────────────────────────────────────────────────────────────
+
+pub struct BasicStateServerFactory;
+
+impl ServerFactory for BasicStateServerFactory {
+    fn server_type(&self) -> &str {
+        "state"
+    }
+
+    fn name(&self) -> &str {
+        "basic-state-server"
+    }
+
+    fn build(&self, _config: Value) -> Result<Box<dyn AnyServer>, ServerBuildError> {
         Ok(Box::new(BasicStateServer {
             handle: BasicStateHandle(Arc::new(RwLock::new(Inner::new()))),
         }))

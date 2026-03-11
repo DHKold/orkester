@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use orkester_common::domain::{
     ExecutionId, TaskExecution, TaskExecutionStatus, WorkExecution, WorkExecutionStatus,
 };
-use orkester_common::servers::workflow::{
-    ExecutionRequest, WorkflowError, WorkflowHandle, WorkflowServer, WorkflowServerFactory,
+use orkester_common::plugin::servers::{
+    workflow::{ExecutionRequest, WorkflowError, WorkflowHandle, WorkflowServer},
+    AnyServer, ServerBuildError, ServerContext, ServerFactory,
 };
-use orkester_common::servers::ServerContext;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -231,16 +231,44 @@ fn now_str() -> String {
     format!("{secs}")
 }
 
-// ── Factory ───────────────────────────────────────────────────────────────────
+// ── AnyServer ─────────────────────────────────────────────────────────────────
 
-pub struct BasicWorkflowServerFactory;
-
-impl WorkflowServerFactory for BasicWorkflowServerFactory {
+impl AnyServer for BasicWorkflowServer {
     fn name(&self) -> &str {
         "basic-workflow-server"
     }
 
-    fn build(&self, _config: Value) -> Result<Box<dyn WorkflowServer>, WorkflowError> {
+    fn server_type(&self) -> &str {
+        "workflow"
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+// ── Factory ───────────────────────────────────────────────────────────────────
+
+pub struct BasicWorkflowServerFactory;
+
+impl ServerFactory for BasicWorkflowServerFactory {
+    fn server_type(&self) -> &str {
+        "workflow"
+    }
+
+    fn name(&self) -> &str {
+        "basic-workflow-server"
+    }
+
+    fn dependencies(&self) -> Vec<String> {
+        vec!["state".into()]
+    }
+
+    fn build(&self, _config: Value) -> Result<Box<dyn AnyServer>, ServerBuildError> {
         let executions = Arc::new(RwLock::new(HashMap::new()));
         let handle = BasicWorkflowHandle { executions };
         Ok(Box::new(BasicWorkflowServer { handle }))

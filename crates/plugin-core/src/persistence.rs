@@ -1,7 +1,6 @@
 use async_trait::async_trait;
-use orkester_common::providers::persistence::{
-    EntityKey, PersistenceBuilder, PersistenceError, PersistenceProvider,
-};
+use orkester_common::plugin::providers::persistence::
+    {EntityKey, PersistenceBuilder, PersistenceError, PersistenceProvider};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;

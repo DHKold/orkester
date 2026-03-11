@@ -28,10 +28,6 @@ impl AuthenticationProvider for NoAuthenticationProvider {
 pub struct NoAuthProviderBuilder;
 
 impl AuthenticationProviderBuilder for NoAuthProviderBuilder {
-    fn name(&self) -> &str {
-        "no-auth"
-    }
-
     fn build(&self, _config: Value) -> Result<Box<dyn AuthenticationProvider>, AuthenticationError> {
         Ok(Box::new(NoAuthenticationProvider))
     }
