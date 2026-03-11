@@ -3,6 +3,7 @@
 use serde_json::Value;
 use std::path::Path;
 
+use super::access::ConfigTree;
 use super::interface::ConfigLoader;
 use super::json_loader::JsonConfigLoader;
 use super::toml_loader::TomlConfigLoader;
@@ -10,8 +11,8 @@ use super::yaml_loader::YamlConfigLoader;
 use crate::logging::Logger;
 
 /// Load and merge a list of config files, applying CLI overrides last.
-/// Returns a merged config tree.
-pub fn load_config_files(paths: &[&str], overrides: &[&str]) -> Value {
+/// Returns a merged [`ConfigTree`].
+pub fn load_config_files(paths: &[&str], overrides: &[&str]) -> ConfigTree {
     let mut merged = Value::Object(serde_json::Map::new());
     for path in paths {
         let ext = Path::new(path)
@@ -41,7 +42,7 @@ pub fn load_config_files(paths: &[&str], overrides: &[&str]) -> Value {
             Logger::warn(format!("Invalid override '{}', expected key=value", ov));
         }
     }
-    merged
+    ConfigTree(merged)
 }
 
 /// Merge `src` into `dst`, overriding existing values (deep merge for objects)

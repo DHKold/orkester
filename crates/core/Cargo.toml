@@ -11,25 +11,17 @@ path = "src/main.rs"
 
 [dependencies]
 orkester-common = { workspace = true }
-async-trait    = { workspace = true }
-chrono         = { workspace = true }
-serde          = { workspace = true }
-serde_json     = { workspace = true }
-thiserror      = { workspace = true }
-tokio          = { version = "1", features = ["full"] }
-tracing            = { workspace = true }
-
-# Enable json feature for tracing-subscriber
-tracing-subscriber = { workspace = true, features = ["json"] }
-# For Ctrl+C signal handling
-ctrlc = "3"
-
-# CLI
-clap = { version = "4", features = ["derive"] }
-
-# Config deserialization
-serde_yaml = "0.9"
-toml       = "0.8"
+async-trait     = { workspace = true }
+chrono          = { workspace = true }
+serde           = { workspace = true }
+serde_json      = { workspace = true }
+thiserror       = { workspace = true }
+tokio           = { version = "1", features = ["full"] }
+tracing         = { workspace = true }
+ctrlc           = "3"
+clap            = { version = "4", features = ["derive"] }
+serde_yaml      = "0.9"
+toml            = "0.8"
 
 # Dynamic plugin loading
 libloading = "0.8"

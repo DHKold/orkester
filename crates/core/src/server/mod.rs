@@ -1,12 +1,9 @@
 //! Server management
 
-// TODO: Define server trait and lifecycle
-// TODO: Implement server startup from config
-// TODO: Integrate with messaging for communication
-// TODO: Monitor and restart servers as needed
+use crate::config::ConfigTree;
 
 /// Stub: Start servers
-pub fn start_servers(_config: &serde_json::Value) -> Vec<()> {
+pub fn start_servers(_config: &ConfigTree) -> Vec<()> {
     // TODO: Implement real server startup
     vec![]
 }

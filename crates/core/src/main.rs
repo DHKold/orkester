@@ -3,6 +3,7 @@
 
 mod config;
 mod logging;
+mod main_logging;
 mod messaging;
 mod plugin;
 mod registry;
@@ -16,7 +17,7 @@ use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Register a console consumer so logs are visible from the start.
-    logging::Logger::add_consumer(logging::consumers::ConsoleConsumer);
+    main_logging::init_logging();
     logging::Logger::info("Starting orkester...");
 
     // Parse CLI arguments
@@ -52,6 +53,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let config_path_refs: Vec<&str> = config_paths.iter().map(|s| s.as_str()).collect();
     let override_refs: Vec<&str> = overrides.iter().map(|s| s.as_str()).collect();
     let config_tree = config::load_config_files(&config_path_refs, &override_refs);
+
+    // Add any additional consumers based on config (e.g. file consumer)
+    main_logging::load_logging_config(&config_tree);
 
     // Load plugins and register components/servers
     let plugins = plugin::load_plugins();
