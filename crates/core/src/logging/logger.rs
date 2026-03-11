@@ -155,3 +155,125 @@ impl<'a> ScopedLogger<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use super::*;
+    use crate::logging::{consumer::LogConsumer, level::Level, log::Log};
+
+    /// Collects every received [`Log`] into a shared `Vec` for inspection.
+    struct VecConsumer(Arc<Mutex<Vec<Log>>>);
+
+    impl LogConsumer for VecConsumer {
+        fn consume(&self, log: &Log) {
+            self.0.lock().unwrap().push(log.clone());
+        }
+    }
+
+    fn captured() -> (VecConsumer, Arc<Mutex<Vec<Log>>>) {
+        let store = Arc::new(Mutex::new(Vec::new()));
+        (VecConsumer(Arc::clone(&store)), store)
+    }
+
+    #[test]
+    fn no_consumer_does_not_panic() {
+        let logger = Logger::new("test");
+        // should complete silently – no consumer means early return
+        logger.emit(Level::INFO, "no consumer");
+    }
+
+    #[test]
+    fn single_consumer_receives_log() {
+        let logger = Logger::new("my-service");
+        let (consumer, store) = captured();
+        logger.register(Box::new(consumer));
+        logger.emit(Level::INFO, "hello");
+
+        let logs = store.lock().unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].message, "hello");
+        assert_eq!(logs[0].level, Level::INFO);
+        assert_eq!(logs[0].source, "my-service");
+    }
+
+    #[test]
+    fn multiple_consumers_all_receive_every_log() {
+        let logger = Logger::new("test");
+        let (c1, s1) = captured();
+        let (c2, s2) = captured();
+        logger.register(Box::new(c1));
+        logger.register(Box::new(c2));
+        logger.emit(Level::WARN, "broadcast");
+
+        assert_eq!(s1.lock().unwrap().len(), 1);
+        assert_eq!(s2.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn multiple_emissions_are_ordered() {
+        let logger = Logger::new("test");
+        let (consumer, store) = captured();
+        logger.register(Box::new(consumer));
+        logger.emit(Level::TRACE, "first");
+        logger.emit(Level::ERROR, "second");
+
+        let logs = store.lock().unwrap();
+        assert_eq!(logs.len(), 2);
+        assert_eq!(logs[0].message, "first");
+        assert_eq!(logs[1].message, "second");
+    }
+
+    #[test]
+    fn scoped_overrides_source() {
+        let logger = Logger::new("root");
+        let (consumer, store) = captured();
+        logger.register(Box::new(consumer));
+        logger.scoped("sub-module").log(Level::INFO, "scoped message");
+
+        let logs = store.lock().unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].source, "sub-module");
+        assert_eq!(logs[0].message, "scoped message");
+    }
+
+    #[test]
+    fn scoped_with_tags_attached() {
+        let logger = Logger::new("root");
+        let (consumer, store) = captured();
+        logger.register(Box::new(consumer));
+        logger
+            .scoped("auth")
+            .with_tag("req-id:abc")
+            .with_tag("user:alice")
+            .log(Level::INFO, "authenticated");
+
+        let logs = store.lock().unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].tags, vec!["req-id:abc", "user:alice"]);
+        assert_eq!(logs[0].source, "auth");
+    }
+
+    #[test]
+    fn custom_numeric_level_is_forwarded() {
+        let logger = Logger::new("test");
+        let (consumer, store) = captured();
+        logger.register(Box::new(consumer));
+        logger.emit(Level(99), "critical-custom");
+
+        let logs = store.lock().unwrap();
+        assert_eq!(logs[0].level, Level(99));
+    }
+
+    #[test]
+    fn scoped_with_no_tags_has_empty_tags() {
+        let logger = Logger::new("root");
+        let (consumer, store) = captured();
+        logger.register(Box::new(consumer));
+        logger.scoped("svc").log(Level::DEBUG, "no tags");
+
+        let logs = store.lock().unwrap();
+        assert!(logs[0].tags.is_empty());
+    }
+}

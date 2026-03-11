@@ -47,3 +47,61 @@ impl std::fmt::Display for Level {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn named_constants_have_correct_values() {
+        assert_eq!(Level::TRACE.0, 0);
+        assert_eq!(Level::DEBUG.0, 10);
+        assert_eq!(Level::INFO.0, 20);
+        assert_eq!(Level::WARN.0, 30);
+        assert_eq!(Level::ERROR.0, 40);
+    }
+
+    #[test]
+    fn ordering_is_numeric() {
+        assert!(Level::TRACE < Level::DEBUG);
+        assert!(Level::DEBUG < Level::INFO);
+        assert!(Level::INFO < Level::WARN);
+        assert!(Level::WARN < Level::ERROR);
+        assert!(Level(25) > Level::INFO);
+        assert!(Level(25) < Level::WARN);
+    }
+
+    #[test]
+    fn display_named_levels() {
+        assert_eq!(Level::TRACE.to_string(), "TRACE");
+        assert_eq!(Level::DEBUG.to_string(), "DEBUG");
+        assert_eq!(Level::INFO.to_string(), "INFO");
+        assert_eq!(Level::WARN.to_string(), "WARN");
+        assert_eq!(Level::ERROR.to_string(), "ERROR");
+    }
+
+    #[test]
+    fn display_custom_level() {
+        assert_eq!(Level(25).to_string(), "LEVEL(25)");
+        assert_eq!(Level(-1).to_string(), "LEVEL(-1)");
+    }
+
+    #[test]
+    fn from_i32_round_trips() {
+        assert_eq!(Level::from(20), Level::INFO);
+        assert_eq!(Level::from(99), Level(99));
+    }
+
+    #[test]
+    fn into_i32_round_trips() {
+        let n: i32 = Level::WARN.into();
+        assert_eq!(n, 30);
+    }
+
+    #[test]
+    fn custom_level_sits_between_named_ones() {
+        let between = Level(15);
+        assert!(between > Level::DEBUG);
+        assert!(between < Level::INFO);
+    }
+}
