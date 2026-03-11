@@ -1,9 +1,9 @@
 //! YAML config loader
 
-use serde_json::Value;
-use std::fs;
-use std::error::Error;
 use super::interface::ConfigLoader;
+use serde_json::Value;
+use std::error::Error;
+use std::fs;
 
 pub struct YamlConfigLoader;
 

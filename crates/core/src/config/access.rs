@@ -21,6 +21,7 @@ impl ConfigTree {
 
     /// Get a typed value by path, deserializing to T
     pub fn get_typed<T: serde::de::DeserializeOwned>(&self, path: &str) -> Option<T> {
-        self.get(path).and_then(|v| serde_json::from_value(v.clone()).ok())
+        self.get(path)
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 }

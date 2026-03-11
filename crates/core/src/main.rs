@@ -7,7 +7,6 @@ mod messaging;
 mod plugin;
 mod registry;
 mod server;
-mod types;
 
 use std::error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,9 +15,9 @@ use std::thread;
 use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Initialize logging early with default config (to capture all logs)
-    let mut logging_handle = logging::init::init(&logging::LoggingConfig::default());
-    tracing::info!("Starting orkester...");
+    // Register a console consumer so logs are visible from the start.
+    logging::Logger::add_consumer(logging::consumers::ConsoleConsumer);
+    logging::Logger::info("Starting orkester...");
 
     // Parse CLI arguments
     let matches = clap::Command::new("orkester")
@@ -28,34 +27,31 @@ fn main() -> Result<(), Box<dyn Error>> {
             clap::Arg::new("config")
                 .short('c')
                 .long("config-file")
-                .takes_value(true)
-                .multiple_occurrences(true)
+                .num_args(1..)
                 .help("Path to configuration file (can be used multiple times)"),
         )
         .arg(
             clap::Arg::new("set")
                 .long("set")
-                .takes_value(true)
-                .multiple_occurrences(true)
+                .num_args(1..)
                 .help("Override config property: key=value"),
         )
         .get_matches();
 
     // Collect all config files
-    let config_paths: Vec<&str> = matches
-        .values_of("config")
-        .map_or(Vec::new(), |vals| vals.collect());
-    let overrides: Vec<&str> = matches
-        .values_of("set")
-        .map_or(Vec::new(), |vals| vals.collect());
+    let config_paths: Vec<String> = matches
+        .get_many::<String>("config")
+        .map(|vals| vals.cloned().collect())
+        .unwrap_or_else(Vec::new);
+    let overrides: Vec<String> = matches
+        .get_many::<String>("set")
+        .map(|vals| vals.cloned().collect())
+        .unwrap_or_else(Vec::new);
 
     // Load configuration(s)
-    let config_tree = config::load_config_files(&config_paths, &overrides);
-
-    // Update logging config if specified in config_tree
-    if let Some(cfg) = config::extract_logging_config(&config_tree) {
-        logging_handle.update(&cfg);
-    }
+    let config_path_refs: Vec<&str> = config_paths.iter().map(|s| s.as_str()).collect();
+    let override_refs: Vec<&str> = overrides.iter().map(|s| s.as_str()).collect();
+    let config_tree = config::load_config_files(&config_path_refs, &override_refs);
 
     // Load plugins and register components/servers
     let plugins = plugin::load_plugins();
@@ -69,7 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     {
         let running = running.clone();
         ctrlc::set_handler(move || {
-            log::info!("Shutdown signal received");
+            logging::Logger::info("Shutdown signal received");
             running.store(false, Ordering::SeqCst);
         })?;
     }
@@ -77,18 +73,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Monitor servers and handle inter-server communication
     while running.load(Ordering::SeqCst) {
         match messaging::monitor_and_handle(&servers) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
-                log::error!("Server monitoring error: {}", e);
-                // Optionally, trigger shutdown or escalate error
+                logging::Logger::error(&format!("Server monitoring error: {}", e));
             }
         }
         thread::sleep(Duration::from_secs(1));
     }
 
-    log::info!("Shutting down orkester...");
+    logging::Logger::info("Shutting down orkester...");
     if let Err(e) = server::cleanup_servers(&servers) {
-        log::error!("Error during server cleanup: {}", e);
+        logging::Logger::error(&format!("Error during server cleanup: {}", e));
     }
     Ok(())
 }

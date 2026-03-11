@@ -1,0 +1,157 @@
+use std::sync::{OnceLock, RwLock};
+
+use super::consumer::LogConsumer;
+use super::level::Level;
+use super::log::Log;
+
+static GLOBAL: OnceLock<Logger> = OnceLock::new();
+
+fn global() -> &'static Logger {
+    GLOBAL.get_or_init(|| Logger::new("orkester"))
+}
+
+// ── Logger ───────────────────────────────────────────────────────────────────
+
+/// Holds a list of [`LogConsumer`]s and dispatches [`Log`] entries to them.
+///
+/// # Global logger
+/// A process-wide instance is created lazily the first time it is accessed.
+/// Use the static methods [`Logger::log`], [`Logger::add_consumer`], etc. to
+/// interact with it without holding an explicit handle.
+///
+/// # Instance logger
+/// Use [`Logger::new`] to create an independent logger (e.g. for a subsystem
+/// or a test) with its own consumer list and source name.
+pub struct Logger {
+    source: String,
+    consumers: RwLock<Vec<Box<dyn LogConsumer>>>,
+}
+
+impl Logger {
+    /// Creates a new logger with the given default source and no consumers.
+    pub fn new(source: impl Into<String>) -> Self {
+        Self {
+            source: source.into(),
+            consumers: RwLock::new(Vec::new()),
+        }
+    }
+
+    // ── Static API (global logger) ──────────────────────────────────────────
+
+    /// Returns the global logger, creating it if necessary.
+    pub fn global() -> &'static Logger {
+        global()
+    }
+
+    /// Registers `consumer` with the global logger.
+    pub fn add_consumer(consumer: impl LogConsumer + 'static) {
+        global().register(Box::new(consumer));
+    }
+
+    /// Emits a log entry through the global logger.
+    pub fn log(level: impl Into<Level>, message: impl Into<String>) {
+        global().emit(level.into(), message.into());
+    }
+
+    /// Convenience shorthand for [`Logger::log`] at [`Level::TRACE`].
+    pub fn trace(message: impl Into<String>) {
+        Self::log(Level::TRACE, message);
+    }
+
+    /// Convenience shorthand for [`Logger::log`] at [`Level::DEBUG`].
+    pub fn debug(message: impl Into<String>) {
+        Self::log(Level::DEBUG, message);
+    }
+
+    /// Convenience shorthand for [`Logger::log`] at [`Level::INFO`].
+    pub fn info(message: impl Into<String>) {
+        Self::log(Level::INFO, message);
+    }
+
+    /// Convenience shorthand for [`Logger::log`] at [`Level::WARN`].
+    pub fn warn(message: impl Into<String>) {
+        Self::log(Level::WARN, message);
+    }
+
+    /// Convenience shorthand for [`Logger::log`] at [`Level::ERROR`].
+    pub fn error(message: impl Into<String>) {
+        Self::log(Level::ERROR, message);
+    }
+
+    // ── Instance API ────────────────────────────────────────────────────────
+
+    /// Adds a consumer to this logger instance.
+    pub fn register(&self, consumer: Box<dyn LogConsumer>) {
+        self.consumers
+            .write()
+            .expect("logging consumer list poisoned")
+            .push(consumer);
+    }
+
+    /// Emits a log entry through this logger instance using its own source.
+    pub fn emit(&self, level: impl Into<Level>, message: impl Into<String>) {
+        let consumers = self
+            .consumers
+            .read()
+            .expect("logging consumer list poisoned");
+        if consumers.is_empty() {
+            return;
+        }
+        let entry = Log::new(level.into(), &self.source, Vec::new(), message.into());
+        for consumer in consumers.iter() {
+            consumer.consume(&entry);
+        }
+    }
+
+    /// Returns a [`ScopedLogger`] that overrides the source (and optionally tags)
+    /// for a subset of log calls, while reusing this logger's consumer list.
+    pub fn scoped(&self, source: impl Into<String>) -> ScopedLogger<'_> {
+        ScopedLogger {
+            inner: self,
+            source: source.into(),
+            tags: Vec::new(),
+        }
+    }
+}
+
+// ── ScopedLogger ────────────────────────────────────────────────────────────
+
+/// A temporary view over a [`Logger`] with an overridden `source` and optional
+/// `tags`. Useful for attaching context without creating a new logger.
+///
+/// # Example
+/// ```
+/// Logger::global()
+///     .scoped("auth")
+///     .with_tag("request-id:abc123")
+///     .log(Level::INFO, "user authenticated");
+/// ```
+pub struct ScopedLogger<'a> {
+    inner: &'a Logger,
+    source: String,
+    tags: Vec<String>,
+}
+
+impl<'a> ScopedLogger<'a> {
+    /// Adds a tag to this scoped view (builder-style, consumes self).
+    pub fn with_tag(mut self, tag: impl Into<String>) -> Self {
+        self.tags.push(tag.into());
+        self
+    }
+
+    /// Emits a log entry with this scope's source and tags.
+    pub fn log(&self, level: impl Into<Level>, message: impl Into<String>) {
+        let consumers = self
+            .inner
+            .consumers
+            .read()
+            .expect("logging consumer list poisoned");
+        if consumers.is_empty() {
+            return;
+        }
+        let entry = Log::new(level.into(), &self.source, self.tags.clone(), message.into());
+        for consumer in consumers.iter() {
+            consumer.consume(&entry);
+        }
+    }
+}
