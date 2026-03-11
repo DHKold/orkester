@@ -61,7 +61,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let registry = registry::register_plugins(plugins);
 
     // Start servers as defined in config
-    let servers = server::start_servers(&config_tree, &registry)?;
+    let (servers, hub_sides) = server::start_servers(&config_tree, &registry)?;
+
+    // Build the message hub and register all server channels.
+    let mut hub = messaging::Hub::new();
+    for hub_side in hub_sides {
+        hub.register(hub_side);
+    }
+    logging::Logger::info("Message hub ready.");
 
     // Setup graceful shutdown
     let running = Arc::new(AtomicBool::new(true));
@@ -73,15 +80,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         })?;
     }
 
-    // Monitor servers and handle inter-server communication
+    // Main loop: drive the message hub.
     while running.load(Ordering::SeqCst) {
-        match messaging::monitor_and_handle(&servers) {
-            Ok(_) => {}
-            Err(e) => {
-                logging::Logger::error(&format!("Server monitoring error: {}", e));
-            }
-        }
-        thread::sleep(Duration::from_secs(1));
+        hub.poll();
+        thread::sleep(Duration::from_millis(10));
     }
 
     logging::Logger::info("Shutting down orkester...");

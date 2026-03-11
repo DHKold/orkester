@@ -1,11 +1,7 @@
-//! Messaging system for inter-server communication
+//! Messaging system — bi-directional channels between the hub and each server.
 
-// TODO: Implement message queue abstraction
-// TODO: Define message types and handlers
-// TODO: Provide API for sending/receiving messages
+mod channel;
+mod hub;
 
-/// Stub: Monitor servers and handle communication
-pub fn monitor_and_handle(_servers: &[crate::server::RunningServer]) -> Result<(), String> {
-    // TODO: Implement real monitoring/communication
-    Ok(())
-}
+pub use channel::{create, HubSide, ServerSide};
+pub use hub::Hub;

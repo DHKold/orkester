@@ -1,6 +1,7 @@
 //! Build, start, and stop server instances.
 
 use crate::logging::Logger;
+use crate::messaging::{self, HubSide};
 use crate::registry::Registry;
 use orkester_common::plugin::servers::Server;
 
@@ -10,8 +11,8 @@ use super::config::ServerEntry;
 
 /// A server that has been built and started.
 ///
-/// **Drop order**: `server` before `_` — the `Box<dyn Server>` is dropped first,
-/// which triggers `stop()` via `Drop` if the implementation uses it internally.
+/// **Drop order**: `server` before `channel` — the server is stopped before
+/// the channel (and its underlying pipe) is torn down.
 pub struct RunningServer {
     /// Instance name as declared in config (e.g. `"rest_api"`).
     pub instance_name: String,
@@ -24,10 +25,14 @@ pub struct RunningServer {
 
 /// Build and start every entry using the registered builders.
 ///
+/// Returns `(running_servers, hub_sides)` — the caller must register every
+/// `HubSide` with the [`Hub`](crate::messaging::Hub) before the main loop.
+///
 /// Entries for which no matching builder is found are logged as errors and
 /// skipped — they do **not** abort startup of subsequent servers.
-pub fn start(entries: &[ServerEntry], registry: &Registry) -> Vec<RunningServer> {
+pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer>, Vec<HubSide>) {
     let mut running = Vec::with_capacity(entries.len());
+    let mut hub_sides = Vec::with_capacity(entries.len());
 
     for entry in entries {
         let component_key = format!("{}:{}", entry.plugin_id, entry.server_id);
@@ -77,7 +82,14 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> Vec<RunningServer>
             }
         };
 
-        if let Err(e) = server.start() {
+        // Create the bi-directional channel before starting the server.
+        let (hub_side, server_side) = messaging::create(&entry.instance_name);
+        Logger::debug(format!(
+            "Channel created for server '{}'.",
+            entry.instance_name
+        ));
+
+        if let Err(e) = server.start(server_side) {
             Logger::error(format!(
                 "Server '{}' failed to start: {}",
                 entry.instance_name, e
@@ -87,6 +99,7 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> Vec<RunningServer>
 
         Logger::info(format!("Server '{}' started.", entry.instance_name));
 
+        hub_sides.push(hub_side);
         running.push(RunningServer {
             instance_name: entry.instance_name.clone(),
             component_key,
@@ -108,7 +121,7 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> Vec<RunningServer>
         ));
     }
 
-    running
+    (running, hub_sides)
 }
 
 // ── Cleanup ───────────────────────────────────────────────────────────────────

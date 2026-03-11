@@ -1,6 +1,8 @@
 use serde_json::Value;
 use thiserror::Error;
 
+use crate::messaging::ServerSide;
+
 /// Error type for server failures, e.g. due to invalid config.
 #[derive(Debug, Error)]
 pub enum ServerError {
@@ -12,7 +14,7 @@ pub enum ServerError {
 
 /// Server 
 pub trait Server: Send + Sync {
-    fn start(&self) -> Result<(), ServerError>;
+    fn start(&self, channel: ServerSide) -> Result<(), ServerError>;
     fn stop(&self) -> Result<(), ServerError>;
 }
 

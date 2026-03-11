@@ -1,10 +1,11 @@
+use orkester_common::messaging::ServerSide;
 use orkester_common::plugin::servers::{Server, ServerError, ServerBuilder};
 use serde_json::Value;
 
 pub struct NoMetricsServer;
 
 impl Server for NoMetricsServer {
-    fn start(&self) -> Result<(), ServerError> {
+    fn start(&self, _channel: ServerSide) -> Result<(), ServerError> {
         Ok(())
     }
 
