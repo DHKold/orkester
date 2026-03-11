@@ -7,7 +7,7 @@ use super::log::Log;
 static GLOBAL: OnceLock<Logger> = OnceLock::new();
 
 fn global() -> &'static Logger {
-    GLOBAL.get_or_init(|| Logger::new("orkester"))
+    GLOBAL.get_or_init(|| Logger::new(env!("CARGO_PKG_NAME")))
 }
 
 // ── Logger ───────────────────────────────────────────────────────────────────
