@@ -11,5 +11,5 @@ pub struct LoadedPlugin {
     /// The plugin definition returned by its registration function.
     pub plugin: Box<Plugin>,
     /// Owning handle for the shared library (`None` for statically-linked plugins).
-    pub(super) _lib: Option<Library>,
+    pub(crate) _lib: Option<Library>,
 }

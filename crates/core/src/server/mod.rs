@@ -1,15 +1,22 @@
 //! Server management
 
 use crate::config::ConfigTree;
+use crate::registry::Registry;
 
-/// Stub: Start servers
-pub fn start_servers(_config: &ConfigTree) -> Vec<()> {
-    // TODO: Implement real server startup
-    vec![]
+/// A running server handle (placeholder until server startup is implemented).
+pub struct RunningServer;
+
+/// Start all servers whose factories are registered in `registry`.
+pub fn start_servers(
+    _config: &ConfigTree,
+    _registry: &Registry,
+) -> Result<Vec<RunningServer>, Box<dyn std::error::Error>> {
+    // TODO: Topological sort of server_factories by dependencies, build, and run each.
+    Ok(vec![])
 }
 
-/// Stub: Cleanup servers
-pub fn cleanup_servers(_servers: &Vec<()>) -> Result<(), String> {
+/// Shut down all running servers cleanly.
+pub fn cleanup_servers(_servers: &[RunningServer]) -> Result<(), String> {
     // TODO: Implement real cleanup
     Ok(())
 }

@@ -60,10 +60,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Load plugins and register components/servers
     let plugins = plugin::load_plugins(&config_tree);
-    registry::register_plugins(&plugins);
+    let registry = registry::register_plugins(plugins);
 
     // Start servers as defined in config
-    let servers = server::start_servers(&config_tree);
+    let servers = server::start_servers(&config_tree, &registry)?;
 
     // Setup graceful shutdown
     let running = Arc::new(AtomicBool::new(true));
