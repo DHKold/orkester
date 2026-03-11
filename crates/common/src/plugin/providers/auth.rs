@@ -3,7 +3,7 @@ use serde_json::Value;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum AuthError {
+pub enum AuthenticationError {
     #[error("Authentication failed: {0}")]
     Unauthorized(String),
     #[error("Configuration error: {0}")]
@@ -32,14 +32,11 @@ pub trait AuthenticationProvider: Send + Sync {
     fn name(&self) -> &str;
 
     /// Validate the raw credentials/token and return an Identity on success.
-    async fn authenticate(&self, credentials: &Value) -> Result<Identity, AuthError>;
+    async fn authenticate(&self, credentials: &Value) -> Result<Identity, AuthenticationError>;
 }
 
 /// Builder that creates an [`AuthenticationProvider`] from a JSON configuration.
-pub trait AuthProviderBuilder: Send + Sync {
-    /// Name of the provider this builder creates.
-    fn name(&self) -> &str;
-
+pub trait AuthenticationProviderBuilder: Send + Sync {
     /// Instantiate the provider with the given configuration.
-    fn build(&self, config: Value) -> Result<Box<dyn AuthenticationProvider>, AuthError>;
+    fn build(&self, config: Value) -> Result<Box<dyn AuthenticationProvider>, AuthenticationError>;
 }

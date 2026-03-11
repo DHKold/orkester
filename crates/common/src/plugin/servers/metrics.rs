@@ -1,6 +1,5 @@
-use crate::servers::ServerContext;
+use crate::plugin::servers::ServerContext;
 use async_trait::async_trait;
-use serde_json::Value;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -41,10 +40,4 @@ pub trait MetricsServer: Send + Sync {
     fn name(&self) -> &str;
     fn handle(&self) -> Arc<dyn MetricsHandle>;
     fn run(self: Box<Self>) -> ServerContext<(), ()>;
-}
-
-/// Plugin factory for creating a MetricsServer from configuration.
-pub trait MetricsServerFactory: Send + Sync {
-    fn name(&self) -> &str;
-    fn build(&self, config: Value) -> Result<Box<dyn MetricsServer>, MetricsError>;
 }

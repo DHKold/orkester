@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use orkester_common::providers::authz::{
+use orkester_common::plugin::providers::authz::{
     AuthorizationProvider, AuthzError, AuthzProviderBuilder, AuthzRequest,
 };
 use serde_json::Value;

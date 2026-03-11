@@ -1,8 +1,7 @@
-use crate::servers::ServerContext;
+use crate::plugin::servers::ServerContext;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -103,21 +102,9 @@ pub trait ApiContributor: Send + Sync {
 
 // ── REST Server ───────────────────────────────────────────────────────────────
 
-/// Dependencies injected into the REST server at startup.
-pub struct RestServerDeps {
-    /// All API contributors collected from every loaded plugin.
-    pub contributors: Vec<Arc<dyn ApiContributor>>,
-}
-
 /// A running REST server.
 #[async_trait]
 pub trait RestServer: Send + Sync {
     fn name(&self) -> &str;
     fn run(self: Box<Self>) -> ServerContext<(), ()>;
-}
-
-/// Plugin factory for creating a RestServer from configuration and injected dependencies.
-pub trait RestServerFactory: Send + Sync {
-    fn name(&self) -> &str;
-    fn build(&self, config: Value, deps: RestServerDeps) -> Result<Box<dyn RestServer>, RestError>;
 }

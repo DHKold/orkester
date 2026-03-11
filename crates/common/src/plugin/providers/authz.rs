@@ -5,7 +5,7 @@ use thiserror::Error;
 use super::auth::Identity;
 
 #[derive(Debug, Error)]
-pub enum AuthzError {
+pub enum AuthorizationError {
     #[error("Access denied: {0}")]
     Forbidden(String),
     #[error("Configuration error: {0}")]
@@ -32,12 +32,12 @@ pub trait AuthorizationProvider: Send + Sync {
     /// Provider's unique name (e.g., "opa", "rbac").
     fn name(&self) -> &str;
 
-    /// Return `Ok(())` if the request is allowed, or `Err(AuthzError::Forbidden)` if denied.
-    async fn authorize(&self, request: &AuthzRequest) -> Result<(), AuthzError>;
+    /// Return `Ok(())` if the request is allowed, or `Err(AuthorizationError::Forbidden)` if denied.
+    async fn authorize(&self, request: &AuthzRequest) -> Result<(), AuthorizationError>;
 }
 
 /// Builder that creates an [`AuthorizationProvider`] from a JSON configuration.
-pub trait AuthzProviderBuilder: Send + Sync {
+pub trait AuthorizationProviderBuilder: Send + Sync {
     fn name(&self) -> &str;
-    fn build(&self, config: Value) -> Result<Box<dyn AuthorizationProvider>, AuthzError>;
+    fn build(&self, config: Value) -> Result<Box<dyn AuthorizationProvider>, AuthorizationError>;
 }

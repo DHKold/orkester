@@ -1,5 +1,5 @@
 use crate::domain::{ExecutionId, Work, WorkExecution, WorkExecutionStatus};
-use crate::servers::ServerContext;
+use crate::plugin::servers::ServerContext;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Arc;
@@ -49,10 +49,4 @@ pub trait WorkflowServer: Send + Sync {
     fn name(&self) -> &str;
     fn handle(&self) -> Arc<dyn WorkflowHandle>;
     fn run(self: Box<Self>) -> ServerContext<ExecutionRequest, ()>;
-}
-
-/// Plugin factory for creating a WorkflowServer from configuration.
-pub trait WorkflowServerFactory: Send + Sync {
-    fn name(&self) -> &str;
-    fn build(&self, config: Value) -> Result<Box<dyn WorkflowServer>, WorkflowError>;
 }

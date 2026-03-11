@@ -1,7 +1,6 @@
 use crate::domain::{Work, WorkId, Workspace, WorkspaceId};
-use crate::servers::ServerContext;
+use crate::plugin::servers::ServerContext;
 use async_trait::async_trait;
-use serde_json::Value;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -48,10 +47,4 @@ pub trait StateServer: Send + Sync {
     fn handle(&self) -> Arc<dyn StateHandle>;
     /// Drive the server. Resolves when the server shuts down.
     fn run(self: Box<Self>) -> ServerContext<(), ()>;
-}
-
-/// Plugin factory for creating a StateServer from configuration.
-pub trait StateServerFactory: Send + Sync {
-    fn name(&self) -> &str;
-    fn build(&self, config: Value) -> Result<Box<dyn StateServer>, StateError>;
 }
