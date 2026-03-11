@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     main_logging::load_logging_config(&config_tree);
 
     // Load plugins and register components/servers
-    let plugins = plugin::load_plugins();
+    let plugins = plugin::load_plugins(&config_tree);
     registry::register_plugins(&plugins);
 
     // Start servers as defined in config

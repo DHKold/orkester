@@ -4,7 +4,9 @@
 // TODO: Support dependency resolution
 // TODO: Provide lookup and lifecycle management
 
-/// Stub: Register plugins
-pub fn register_plugins(_plugins: &Vec<()>) {
+use crate::plugin::LoadedPlugin;
+
+/// Register the components declared by each loaded plugin.
+pub fn register_plugins(_plugins: &[LoadedPlugin]) {
     // TODO: Implement real registration
 }
