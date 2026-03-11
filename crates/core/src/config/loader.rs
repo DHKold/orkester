@@ -13,8 +13,18 @@ use crate::logging::Logger;
 /// Load and merge a list of config files, applying CLI overrides last.
 /// Returns a merged [`ConfigTree`].
 pub fn load_config_files(paths: &[&str], overrides: &[&str]) -> ConfigTree {
+    Logger::info(format!(
+        "Loading config: {} file(s), {} override(s).",
+        paths.len(),
+        overrides.len()
+    ));
+
     let mut merged = Value::Object(serde_json::Map::new());
+    let mut loaded_count = 0usize;
+
     for path in paths {
+        Logger::debug(format!("Reading config file: {}", path));
+
         let ext = Path::new(path)
             .extension()
             .and_then(|e| e.to_str())
@@ -30,18 +40,36 @@ pub fn load_config_files(paths: &[&str], overrides: &[&str]) -> ConfigTree {
             }
         };
         match loaded {
-            Ok(val) => merge_values(&mut merged, &val),
+            Ok(val) => {
+                Logger::debug(format!("Config file '{}' loaded successfully.", path));
+                merge_values(&mut merged, &val);
+                loaded_count += 1;
+            }
             Err(e) => Logger::error(format!("Failed to load config '{}': {}", path, e)),
         }
     }
+
     // Apply CLI overrides
     for ov in overrides {
         if let Some((k, v)) = ov.split_once('=') {
+            Logger::trace(format!("Applying config override: {} = {}", k, v));
             apply_override(&mut merged, k, v);
         } else {
             Logger::warn(format!("Invalid override '{}', expected key=value", ov));
         }
     }
+
+    Logger::info(format!(
+        "Config loading complete: {}/{} file(s) merged, {} override(s) applied.",
+        loaded_count,
+        paths.len(),
+        overrides.len()
+    ));
+    Logger::debug(format!(
+        "Final config:\n{}",
+        serde_json::to_string_pretty(&merged).unwrap_or_else(|_| "<serialization error>".to_string())
+    ));
+
     ConfigTree(merged)
 }
 
