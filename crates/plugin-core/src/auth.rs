@@ -10,10 +10,6 @@ pub struct NoAuthenticationProvider;
 
 #[async_trait]
 impl AuthenticationProvider for NoAuthenticationProvider {
-    fn name(&self) -> &str {
-        "no-auth"
-    }
-
     async fn authenticate(&self, _credentials: &Value) -> Result<Identity, AuthenticationError> {
         tracing::debug!("NoAuthenticationProvider: granting anonymous identity");
         Ok(Identity {

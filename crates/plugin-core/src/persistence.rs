@@ -19,10 +19,6 @@ fn make_key(key: &EntityKey) -> String {
 
 #[async_trait]
 impl PersistenceProvider for MemoryPersistenceProvider {
-    fn name(&self) -> &str {
-        "memory"
-    }
-
     async fn put(&self, key: &EntityKey, data: Value) -> Result<(), PersistenceError> {
         let mut store = self.store.write().await;
         tracing::debug!(key = %make_key(key), "MemoryPersistenceProvider: put");
@@ -61,10 +57,6 @@ impl PersistenceProvider for MemoryPersistenceProvider {
 pub struct MemoryPersistenceBuilder;
 
 impl PersistenceBuilder for MemoryPersistenceBuilder {
-    fn name(&self) -> &str {
-        "memory"
-    }
-
     fn build(&self, _config: Value) -> Result<Box<dyn PersistenceProvider>, PersistenceError> {
         Ok(Box::new(MemoryPersistenceProvider::default()))
     }

@@ -1,6 +1,4 @@
-#![allow(dead_code)]
 //! Entry point for the core app
-//! Handles CLI parsing, logging setup, and main orchestration
 
 mod config;
 mod logging;

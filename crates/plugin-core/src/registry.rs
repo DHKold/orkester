@@ -22,10 +22,6 @@ pub struct LocalWorkflowRegistry {
 
 #[async_trait]
 impl WorkflowRegistry for LocalWorkflowRegistry {
-    fn name(&self) -> &str {
-        "local"
-    }
-
     async fn list_workflows(&self) -> Result<Vec<WorkflowDefinition>, RegistryError> {
         let store = self.store.read().await;
         Ok(store.values().cloned().collect())
@@ -62,10 +58,6 @@ impl WorkflowRegistry for LocalWorkflowRegistry {
 pub struct LocalRegistryBuilder;
 
 impl RegistryBuilder for LocalRegistryBuilder {
-    fn name(&self) -> &str {
-        "local"
-    }
-
     fn build(&self, _config: Value) -> Result<Box<dyn WorkflowRegistry>, RegistryError> {
         // TODO: if config["path"] is set, scan the directory and pre-populate the store.
         Ok(Box::new(LocalWorkflowRegistry::default()))

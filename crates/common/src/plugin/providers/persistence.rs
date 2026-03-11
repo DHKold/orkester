@@ -28,9 +28,6 @@ pub struct EntityKey {
 /// Execution State, History, Logs, Metrics, and Configuration.
 #[async_trait]
 pub trait PersistenceProvider: Send + Sync {
-    /// Backend's unique name (e.g., "sql", "file").
-    fn name(&self) -> &str;
-
     /// Persist an entity under the given key.
     async fn put(&self, key: &EntityKey, data: Value) -> Result<(), PersistenceError>;
 
@@ -46,6 +43,5 @@ pub trait PersistenceProvider: Send + Sync {
 
 /// Builder that creates a [`PersistenceProvider`] from a JSON configuration.
 pub trait PersistenceBuilder: Send + Sync {
-    fn name(&self) -> &str;
     fn build(&self, config: Value) -> Result<Box<dyn PersistenceProvider>, PersistenceError>;
 }

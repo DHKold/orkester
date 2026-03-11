@@ -29,15 +29,11 @@ pub struct AuthzRequest {
 /// Trait that all Authorization Providers must implement.
 #[async_trait]
 pub trait AuthorizationProvider: Send + Sync {
-    /// Provider's unique name (e.g., "opa", "rbac").
-    fn name(&self) -> &str;
-
     /// Return `Ok(())` if the request is allowed, or `Err(AuthorizationError::Forbidden)` if denied.
     async fn authorize(&self, request: &AuthzRequest) -> Result<(), AuthorizationError>;
 }
 
 /// Builder that creates an [`AuthorizationProvider`] from a JSON configuration.
 pub trait AuthorizationProviderBuilder: Send + Sync {
-    fn name(&self) -> &str;
     fn build(&self, config: Value) -> Result<Box<dyn AuthorizationProvider>, AuthorizationError>;
 }

@@ -21,38 +21,23 @@ pub fn load_plugins(config: &ConfigTree) -> Vec<LoadedPlugin> {
     let dir = match config.get_typed::<String>("plugins.dir") {
         Some(d) => d,
         None => {
-            Logger::warn(
-                "No plugin directory configured under `plugins.dir` — running with no plugins.",
-            );
+            Logger::warn("No plugin directory configured under `plugins.dir` — running with no plugins.");
             return Vec::new();
         }
     };
     let recursive = config
         .get_typed::<bool>("plugins.recursive")
         .unwrap_or(false);
-
-    Logger::info(&format!(
-        "Scanning plugin directory '{}' (recursive={})...",
-        dir, recursive
-    ));
+    Logger::info(&format!("Scanning plugin directory '{}' (recursive={})...", dir, recursive));
 
     let so_files = find_so_files(Path::new(&dir), recursive);
-
     if so_files.is_empty() {
-        Logger::warn(&format!(
-            "No .so files found in plugin directory '{}'.",
-            dir
-        ));
+        Logger::warn(&format!("No .so files found in plugin directory '{}'.", dir));
         return Vec::new();
     }
-
-    Logger::info(&format!(
-        "Found {} .so file(s) — loading...",
-        so_files.len()
-    ));
+    Logger::info(&format!("Found {} .so file(s) — loading...", so_files.len()));
 
     let mut loaded: Vec<LoadedPlugin> = Vec::with_capacity(so_files.len());
-
     for path in &so_files {
         let display = path.display().to_string();
         Logger::trace(&format!("Attempting to load plugin library: {}", display));
@@ -60,16 +45,7 @@ pub fn load_plugins(config: &ConfigTree) -> Vec<LoadedPlugin> {
         match load_dynamic(&display) {
             Ok(lp) => {
                 let meta = &lp.plugin.metadata;
-                Logger::info(&format!(
-                    "Plugin loaded: '{}' v{} [{}]",
-                    meta.name, meta.version, meta.id
-                ));
-                for comp in &lp.plugin.components {
-                    Logger::debug(&format!(
-                        "  component registered: '{}' [kind={}, id={}]",
-                        comp.name, comp.kind, comp.id
-                    ));
-                }
+                Logger::info(&format!("Plugin loaded: '{}' v{} ({})", meta.id, meta.version, meta.description));
                 loaded.push(lp);
             }
             Err(e) => {
@@ -77,12 +53,7 @@ pub fn load_plugins(config: &ConfigTree) -> Vec<LoadedPlugin> {
             }
         }
     }
-
-    Logger::info(&format!(
-        "Plugin loading complete: {}/{} plugin(s) loaded successfully.",
-        loaded.len(),
-        so_files.len()
-    ));
+    Logger::info(&format!("Plugin loading complete: {}/{} plugin(s) loaded successfully.", loaded.len(), so_files.len()));
 
     loaded
 }

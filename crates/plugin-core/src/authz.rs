@@ -19,10 +19,6 @@ pub struct BasicAuthorizationProvider {
 
 #[async_trait]
 impl AuthorizationProvider for BasicAuthorizationProvider {
-    fn name(&self) -> &str {
-        "basic-authz"
-    }
-
     async fn authorize(&self, request: &AuthzRequest) -> Result<(), AuthorizationError> {
         if self.deny_all {
             tracing::warn!(
@@ -49,9 +45,6 @@ impl AuthorizationProvider for BasicAuthorizationProvider {
 pub struct BasicAuthzProviderBuilder;
 
 impl AuthorizationProviderBuilder for BasicAuthzProviderBuilder {
-    fn name(&self) -> &str {
-        "basic-authz"
-    }
 
     fn build(&self, config: Value) -> Result<Box<dyn AuthorizationProvider>, AuthorizationError> {
         let deny_all = config

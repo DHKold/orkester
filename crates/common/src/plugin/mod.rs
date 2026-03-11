@@ -8,7 +8,7 @@ use providers::{
     persistence::PersistenceBuilder,
     registry::RegistryBuilder,
 };
-use servers::ServerFactory;
+use servers::ServerBuilder;
 
 /// A plugin component, which can be either a provider or a server.
 pub enum PluginComponent {
@@ -20,7 +20,7 @@ pub enum PluginComponent {
     RegistryProvider(Box<dyn RegistryBuilder>),
 
     // ── Servers ────────────────────────────────────────────────────────────
-    Server(Box<dyn ServerFactory>),
+    Server(Box<dyn ServerBuilder>),
 }
 
 /// Metadata describing a plugin.
@@ -28,8 +28,6 @@ pub enum PluginComponent {
 pub struct PluginMetadata {
     /// Unique identifier for this plugin (e.g., `"orkester-auth-oidc"`).
     pub id: String,
-    /// Human-readable name.
-    pub name: String,
     /// Semantic version string.
     pub version: String,
     /// Short description.
@@ -44,8 +42,6 @@ pub struct ComponentMetadata {
     pub kind: String,
     /// Unique identifier for this component (e.g., `"oidc-auth"`).
     pub id: String,
-    /// Human-readable name.
-    pub name: String,
     /// Short description.
     pub description: String,
     /// Builder for constructing this component (e.g. an `AuthProviderBuilder` or `ServerFactory`).

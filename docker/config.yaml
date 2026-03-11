@@ -1,3 +1,16 @@
 plugins:
-  dir: ./docker/plugins        # directory to scan for .so plugin files
-  recursive: false             # scan sub-directories?
+  dir: ./docker/plugins # directory to scan for .so plugin files
+  recursive: false # scan sub-directories?
+servers:
+  rest_api:
+    component:
+      plugin: orkester-plugin-core
+      server: axum-rest-server
+    enabled: true
+    port: 8080
+  metrics:
+    component:
+      plugin: orkester-plugin-core
+      server: no-metrics-server
+    rest_server: rest_api
+    enabled: true

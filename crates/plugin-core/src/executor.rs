@@ -9,10 +9,6 @@ pub struct DummyTaskExecutor;
 
 #[async_trait]
 impl TaskExecutor for DummyTaskExecutor {
-    fn name(&self) -> &str {
-        "dummy"
-    }
-
     async fn execute(&self, request: ExecutionRequest) -> Result<ExecutionResult, ExecutorError> {
         tracing::info!(
             execution_id = %request.id,
@@ -38,10 +34,6 @@ impl TaskExecutor for DummyTaskExecutor {
 pub struct DummyExecutorBuilder;
 
 impl ExecutorBuilder for DummyExecutorBuilder {
-    fn name(&self) -> &str {
-        "dummy"
-    }
-
     fn build(&self, _config: Value) -> Result<Box<dyn TaskExecutor>, ExecutorError> {
         Ok(Box::new(DummyTaskExecutor))
     }

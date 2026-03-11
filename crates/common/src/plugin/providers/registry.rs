@@ -22,9 +22,6 @@ pub type WorkflowDefinition = Value;
 /// A registry is the source-of-truth for workflow (Works/Tasks) definitions.
 #[async_trait]
 pub trait WorkflowRegistry: Send + Sync {
-    /// Registry's unique name (e.g., "rest", "s3").
-    fn name(&self) -> &str;
-
     /// Return all workflow definitions available in this registry.
     async fn list_workflows(&self) -> Result<Vec<WorkflowDefinition>, RegistryError>;
 
@@ -32,11 +29,7 @@ pub trait WorkflowRegistry: Send + Sync {
     async fn get_workflow(&self, id: &str) -> Result<WorkflowDefinition, RegistryError>;
 
     /// Store or update a workflow definition.
-    async fn put_workflow(
-        &self,
-        id: &str,
-        definition: WorkflowDefinition,
-    ) -> Result<(), RegistryError>;
+    async fn put_workflow(&self, id: &str, definition: WorkflowDefinition) -> Result<(), RegistryError>;
 
     /// Delete a workflow by ID.
     async fn delete_workflow(&self, id: &str) -> Result<(), RegistryError>;
@@ -44,6 +37,5 @@ pub trait WorkflowRegistry: Send + Sync {
 
 /// Builder that creates a [`WorkflowRegistry`] from a JSON configuration.
 pub trait RegistryBuilder: Send + Sync {
-    fn name(&self) -> &str;
     fn build(&self, config: Value) -> Result<Box<dyn WorkflowRegistry>, RegistryError>;
 }

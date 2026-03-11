@@ -48,9 +48,6 @@ pub struct ExecutionRequest {
 /// Executors abstract over execution backends: shell, Kubernetes, Podman, etc.
 #[async_trait]
 pub trait TaskExecutor: Send + Sync {
-    /// Executor's unique name (e.g., "shell", "kubernetes", "podman").
-    fn name(&self) -> &str;
-
     /// Execute the given task and return the result.
     async fn execute(&self, request: ExecutionRequest) -> Result<ExecutionResult, ExecutorError>;
 
@@ -60,6 +57,5 @@ pub trait TaskExecutor: Send + Sync {
 
 /// Builder that creates a [`TaskExecutor`] from a JSON configuration.
 pub trait ExecutorBuilder: Send + Sync {
-    fn name(&self) -> &str;
     fn build(&self, config: Value) -> Result<Box<dyn TaskExecutor>, ExecutorError>;
 }

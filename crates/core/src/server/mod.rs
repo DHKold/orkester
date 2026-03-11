@@ -1,22 +1,18 @@
-//! Server management
+//! Server lifecycle management — parse config, resolve startup order, build and run.
 
 use crate::config::ConfigTree;
+use crate::logging::Logger;
 use crate::registry::Registry;
 
-/// A running server handle (placeholder until server startup is implemented).
+/// Represents a running server instance, allowing for later shutdown.
 pub struct RunningServer;
 
-/// Start all servers whose factories are registered in `registry`.
-pub fn start_servers(
-    _config: &ConfigTree,
-    _registry: &Registry,
-) -> Result<Vec<RunningServer>, Box<dyn std::error::Error>> {
-    // TODO: Topological sort of server_factories by dependencies, build, and run each.
-    Ok(vec![])
+/// Start all servers defined in the config, using the provided plugin registry to construct them.
+pub fn start_servers(config: &ConfigTree, registry: &Registry) -> Result<Vec<RunningServer>, Box<dyn std::error::Error>> {
+    Ok(Vec::new()) // TODO: implement server startup logic
 }
 
-/// Shut down all running servers cleanly.
-pub fn cleanup_servers(_servers: &[RunningServer]) -> Result<(), String> {
-    // TODO: Implement real cleanup
+/// Clean up all running servers on shutdown.
+pub fn cleanup_servers(servers: &[RunningServer]) -> Result<(), String> {
     Ok(())
 }
