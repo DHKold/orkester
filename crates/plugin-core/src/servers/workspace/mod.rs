@@ -182,6 +182,9 @@ async fn run(config: Value, channel: ServerSide) {
                     "http_request" => {
                         handler.handle(msg).await;
                     }
+                    "workspace_request" => {
+                        handle_workspace_request(&store, msg, &channel.to_hub).await;
+                    }
                     "route_registered" => {
                         let method = msg.content.get("method").and_then(|v| v.as_str()).unwrap_or("?");
                         let path   = msg.content.get("path").and_then(|v| v.as_str()).unwrap_or("?");
@@ -225,6 +228,75 @@ async fn run(config: Value, channel: ServerSide) {
     }
 
     log_info!("Server stopped.");
+}
+
+// ── Direct messaging handler ──────────────────────────────────────────────────
+
+/// Handles `workspace_request` messages sent directly by other servers (e.g.
+/// the Workflows server) — no REST layer involved.
+///
+/// Request content:
+/// ```json
+/// { "correlation_id": 1, "op": "get_task", "namespace": "acme", "name": "my-task", "version": "1.0.0" }
+/// ```
+/// Response (`workspace_response`):
+/// ```json
+/// { "correlation_id": 1, "ok": true,  "object": { ... } }
+/// { "correlation_id": 1, "ok": false, "error": "not found: ..." }
+/// ```
+async fn handle_workspace_request(
+    store: &WorkspaceStore,
+    msg: Message,
+    to_hub: &std::sync::mpsc::Sender<Message>,
+) {
+    let corr_id = msg.content.get("correlation_id").and_then(|v| v.as_u64()).unwrap_or(0);
+    let op      = msg.content.get("op").and_then(|v| v.as_str()).unwrap_or("");
+    let ns      = msg.content.get("namespace").and_then(|v| v.as_str()).unwrap_or("");
+    let name    = msg.content.get("name").and_then(|v| v.as_str()).unwrap_or("");
+    let version = msg.content.get("version").and_then(|v| v.as_str()).unwrap_or("");
+
+    let reply_content = match op {
+        "get_namespace" => match store.get_namespace(name).await {
+            Ok(obj)  => json!({ "correlation_id": corr_id, "ok": true,  "object": obj }),
+            Err(e)   => json!({ "correlation_id": corr_id, "ok": false, "error": e.to_string() }),
+        },
+        "list_namespaces" => match store.list_namespaces().await {
+            Ok(objs) => json!({ "correlation_id": corr_id, "ok": true,  "objects": objs }),
+            Err(e)   => json!({ "correlation_id": corr_id, "ok": false, "error": e.to_string() }),
+        },
+        "get_task" => match store.get_task(ns, name, version).await {
+            Ok(obj)  => json!({ "correlation_id": corr_id, "ok": true,  "object": obj }),
+            Err(e)   => json!({ "correlation_id": corr_id, "ok": false, "error": e.to_string() }),
+        },
+        "list_tasks" => match store.list_tasks(ns).await {
+            Ok(objs) => json!({ "correlation_id": corr_id, "ok": true,  "objects": objs }),
+            Err(e)   => json!({ "correlation_id": corr_id, "ok": false, "error": e.to_string() }),
+        },
+        "get_work" => match store.get_work(ns, name, version).await {
+            Ok(obj)  => json!({ "correlation_id": corr_id, "ok": true,  "object": obj }),
+            Err(e)   => json!({ "correlation_id": corr_id, "ok": false, "error": e.to_string() }),
+        },
+        "list_works" => match store.list_works(ns).await {
+            Ok(objs) => json!({ "correlation_id": corr_id, "ok": true,  "objects": objs }),
+            Err(e)   => json!({ "correlation_id": corr_id, "ok": false, "error": e.to_string() }),
+        },
+        other => json!({
+            "correlation_id": corr_id,
+            "ok": false,
+            "error": format!("unknown workspace op: '{other}'"),
+        }),
+    };
+
+    let reply = Message::new(
+        corr_id,
+        "",
+        msg.source.as_str(),
+        "workspace_response",
+        reply_content,
+    );
+    if let Err(e) = to_hub.send(reply) {
+        log_warn!("Failed to send workspace_response: {}", e);
+    }
 }
 
 // ── Builder ────────────────────────────────────────────────────────────────────

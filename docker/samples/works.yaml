@@ -75,3 +75,37 @@ spec:
       inputs:
         message: "daily-etl-pipeline finished for {{work.inputs.source_date}} — table: {{work.inputs.target_table}}"
       allowFailure: true   # notification failure must not fail the whole Work
+---
+# ── Acme nightly report Work ─────────────────────────────────────────────────
+# Two-step sequential pipeline: generate report → send report.
+#
+#  generate-report ─→ send-report
+#
+apiVersion: orkester.io/v1
+kind: Work
+name: nightly
+version: "1.0.0"
+metadata:
+  namespace: acme
+  description: "Nightly report: generate and distribute the daily summary"
+  labels:
+    team: acme
+    schedule: nightly
+spec:
+  inputs:
+    report_date: "Reporting date (YYYY-MM-DD); defaults to yesterday"
+  steps:
+    - id: generate
+      task: generate-report
+      dependsOn: []
+      inputs:
+        report_date: "{{work.inputs.report_date}}"
+      allowFailure: false
+
+    - id: send
+      task: send-report
+      dependsOn:
+        - generate
+      inputs:
+        report_path: "{{steps.generate.outputs.report_path}}"
+      allowFailure: false

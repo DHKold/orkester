@@ -85,7 +85,7 @@ pub async fn run(config: Value, channel: ServerSide) {
                     "http_request" => {
                         handler.handle(msg).await;
                     }
-                    "http_response" => {
+                    "workspace_response" => {
                         workspace_client.handle_response(msg);
                     }
                     "route_registered" => {

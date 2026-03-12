@@ -29,3 +29,15 @@ metadata:
     env: dev
 spec:
   max_concurrent_workflows: 3
+---
+apiVersion: orkester.io/v1
+kind: Namespace
+name: acme
+version: "1.0.0"
+metadata:
+  description: "Acme Corp — production workflows"
+  labels:
+    team: acme
+    env: production
+spec:
+  max_concurrent_workflows: 5

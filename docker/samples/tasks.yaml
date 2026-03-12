@@ -141,3 +141,44 @@ spec:
     message: "Message body to include in the Slack notification"
   timeout_seconds: 30
   retries: 3
+---
+# ── Acme nightly report task ─────────────────────────────────────────────────
+apiVersion: orkester.io/v1
+kind: Task
+name: generate-report
+version: "1.0.0"
+metadata:
+  namespace: acme
+  description: "Generate the nightly summary report and write it to S3"
+  labels:
+    team: acme
+    schedule: nightly
+spec:
+  executor: command
+  config:
+    command: ["echo", "Generating nightly report for {{report_date}}"]
+  inputs:
+    report_date: "Reporting date (YYYY-MM-DD)"
+  outputs:
+    report_path: "S3 path of the generated report"
+  timeout_seconds: 600
+  retries: 1
+---
+apiVersion: orkester.io/v1
+kind: Task
+name: send-report
+version: "1.0.0"
+metadata:
+  namespace: acme
+  description: "Send the nightly report to distribution recipients"
+  labels:
+    team: acme
+    schedule: nightly
+spec:
+  executor: command
+  config:
+    command: ["echo", "Sending report at {{report_path}} to distribution"]
+  inputs:
+    report_path: "S3 path of the report to send"
+  timeout_seconds: 120
+  retries: 2

@@ -1,13 +1,9 @@
 //! Workspace client — fetches Namespace, Task, and Work definitions from the
-//! Workspace server via hub messages.
+//! Workspace server via direct hub messages.
 //!
-//! Instead of hitting an external HTTP server, the client sends
-//! `http_request`-style messages directly to the Workspace server's hub
-//! participant name (configurable, default `"workspace"`).  The Workspace
-//! server replies with an `http_response` message containing the JSON body.
-//!
-//! This keeps everything in-process and avoids any network round-trip when
-//! both servers run in the same Orkester instance.
+//! Uses the `workspace_request` / `workspace_response` message protocol so
+//! requests bypass the REST layer entirely and go straight to the Workspace
+//! server's in-process store.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -21,9 +17,8 @@ use tokio::sync::oneshot;
 
 // ── WorkspaceClient ───────────────────────────────────────────────────────────
 
-/// Async client that queries the Workspace server over the hub.
-///
-/// One instance is shared across the scheduler and worker tasks.
+/// Sends `workspace_request` messages directly to the Workspace server and
+/// awaits `workspace_response` replies through the shared hub.
 #[derive(Clone)]
 pub struct WorkspaceClient {
     inner: Arc<WorkspaceClientInner>,
@@ -51,14 +46,13 @@ impl WorkspaceClient {
         }
     }
 
-    /// Must be called from the server's event loop whenever an
-    /// `http_response` message addressed to this client arrives from the hub.
+    /// Must be called from the server's event loop whenever a
+    /// `workspace_response` message arrives from the hub.
     pub fn handle_response(&self, msg: Message) {
         let corr_id = msg.content.get("correlation_id").and_then(|v| v.as_u64());
         if let Some(id) = corr_id {
             if let Some(tx) = self.inner.pending.lock().unwrap().remove(&id) {
-                let body = msg.content.get("body").cloned().unwrap_or(Value::Null);
-                let _ = tx.send(body);
+                let _ = tx.send(msg.content);
             }
         }
     }
@@ -66,55 +60,49 @@ impl WorkspaceClient {
     // ── Namespace queries ─────────────────────────────────────────────────
 
     pub async fn get_namespace(&self, name: &str) -> ClientResult<Namespace> {
-        let body = self.get(&format!("/v1/namespaces/{name}")).await?;
-        parse_one(body)
+        let resp = self.request(json!({ "op": "get_namespace", "name": name })).await?;
+        parse_object(resp)
     }
 
     pub async fn list_namespaces(&self) -> ClientResult<Vec<Namespace>> {
-        let body = self.get("/v1/namespaces").await?;
-        parse_list(body, "namespaces")
+        let resp = self.request(json!({ "op": "list_namespaces" })).await?;
+        parse_objects(resp)
     }
 
     // ── Task queries ──────────────────────────────────────────────────────
 
     pub async fn get_task(&self, namespace: &str, name: &str, version: &str) -> ClientResult<Task> {
-        let body = self
-            .get(&format!(
-                "/v1/namespaces/{namespace}/tasks/{name}/{version}"
-            ))
+        let resp = self
+            .request(json!({ "op": "get_task", "namespace": namespace, "name": name, "version": version }))
             .await?;
-        parse_one(body)
+        parse_object(resp)
     }
 
     pub async fn list_tasks(&self, namespace: &str) -> ClientResult<Vec<Task>> {
-        let body = self
-            .get(&format!("/v1/namespaces/{namespace}/tasks"))
-            .await?;
-        parse_list(body, "tasks")
+        let resp = self.request(json!({ "op": "list_tasks", "namespace": namespace })).await?;
+        parse_objects(resp)
     }
 
     // ── Work queries ──────────────────────────────────────────────────────
 
     pub async fn get_work(&self, namespace: &str, name: &str, version: &str) -> ClientResult<Work> {
-        let body = self
-            .get(&format!(
-                "/v1/namespaces/{namespace}/works/{name}/{version}"
-            ))
+        let resp = self
+            .request(json!({ "op": "get_work", "namespace": namespace, "name": name, "version": version }))
             .await?;
-        parse_one(body)
+        parse_object(resp)
     }
 
     pub async fn list_works(&self, namespace: &str) -> ClientResult<Vec<Work>> {
-        let body = self
-            .get(&format!("/v1/namespaces/{namespace}/works"))
-            .await?;
-        parse_list(body, "works")
+        let resp = self.request(json!({ "op": "list_works", "namespace": namespace })).await?;
+        parse_objects(resp)
     }
 
     // ── Internal ──────────────────────────────────────────────────────────
 
-    async fn get(&self, path: &str) -> ClientResult<Value> {
+    async fn request(&self, mut payload: Value) -> ClientResult<Value> {
         let corr_id = self.inner.next_id.fetch_add(1, Ordering::SeqCst);
+        payload["correlation_id"] = json!(corr_id);
+
         let (tx, rx) = oneshot::channel::<Value>();
         self.inner.pending.lock().unwrap().insert(corr_id, tx);
 
@@ -122,12 +110,8 @@ impl WorkspaceClient {
             corr_id,
             "",
             self.inner.target.as_str(),
-            "http_request",
-            json!({
-                "correlation_id": corr_id,
-                "method": "GET",
-                "path": path,
-            }),
+            "workspace_request",
+            payload,
         );
 
         if self.inner.to_hub.send(msg).is_err() {
@@ -136,8 +120,8 @@ impl WorkspaceClient {
         }
 
         match tokio::time::timeout(Duration::from_secs(10), rx).await {
-            Ok(Ok(body)) => Ok(body),
-            Ok(Err(_)) => Err(ClientError::HubDisconnected),
+            Ok(Ok(resp)) => Ok(resp),
+            Ok(Err(_))   => Err(ClientError::HubDisconnected),
             Err(_) => {
                 self.inner.pending.lock().unwrap().remove(&corr_id);
                 Err(ClientError::Timeout)
@@ -156,19 +140,31 @@ pub enum ClientError {
     Timeout,
     #[error("hub channel disconnected")]
     HubDisconnected,
-    #[error("workspace returned status {status}: {message}")]
-    Api { status: u16, message: String },
+    #[error("workspace returned error: {0}")]
+    NotFound(String),
     #[error("deserialization error: {0}")]
     Deserialize(String),
 }
 
-// ── Parsing helpers ───────────────────────────────────────────────────────────
+// ── Response parsing ──────────────────────────────────────────────────────────
 
-fn parse_one<T: serde::de::DeserializeOwned>(body: Value) -> ClientResult<T> {
-    serde_json::from_value(body).map_err(|e| ClientError::Deserialize(e.to_string()))
+fn check_ok(resp: &Value) -> ClientResult<()> {
+    if resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+        Ok(())
+    } else {
+        let msg = resp.get("error").and_then(|v| v.as_str()).unwrap_or("unknown error");
+        Err(ClientError::NotFound(msg.to_string()))
+    }
 }
 
-fn parse_list<T: serde::de::DeserializeOwned>(body: Value, key: &str) -> ClientResult<Vec<T>> {
-    let arr = body.get(key).cloned().unwrap_or(Value::Array(vec![]));
+fn parse_object<T: serde::de::DeserializeOwned>(resp: Value) -> ClientResult<T> {
+    check_ok(&resp)?;
+    let obj = resp.get("object").cloned().unwrap_or(Value::Null);
+    serde_json::from_value(obj).map_err(|e| ClientError::Deserialize(e.to_string()))
+}
+
+fn parse_objects<T: serde::de::DeserializeOwned>(resp: Value) -> ClientResult<Vec<T>> {
+    check_ok(&resp)?;
+    let arr = resp.get("objects").cloned().unwrap_or(Value::Array(vec![]));
     serde_json::from_value(arr).map_err(|e| ClientError::Deserialize(e.to_string()))
 }
