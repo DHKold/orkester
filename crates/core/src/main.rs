@@ -2,6 +2,7 @@
 
 mod config;
 mod main_logging;
+mod management;
 mod messaging;
 mod plugin;
 mod registry;
@@ -64,12 +65,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Start servers as defined in config
     let (servers, hub_sides) = server::start_servers(&config_tree, &registry)?;
 
+    // Build the management API — capture snapshots and create its hub channel.
+    let (management_api, mgmt_hub_side) = management::ManagementApi::new(
+        &registry,
+        &config_tree,
+        &servers,
+    );
+
     // Build the message hub and register all server channels.
     let mut hub = messaging::Hub::new();
     for hub_side in hub_sides {
         hub.register(hub_side);
     }
+    hub.register(mgmt_hub_side);
     log_info!("Message hub ready.");
+
+    // Register management routes with REST servers.
+    management_api.register_routes();
 
     // Setup graceful shutdown
     let running = Arc::new(AtomicBool::new(true));
@@ -84,6 +96,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Main loop: drive the message hub.
     while running.load(Ordering::SeqCst) {
         hub.poll();
+        management_api.poll();
         thread::sleep(Duration::from_millis(10));
     }
 

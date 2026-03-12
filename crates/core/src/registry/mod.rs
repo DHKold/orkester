@@ -12,11 +12,13 @@ use libloading::Library;
 use orkester_common::{log_debug, log_info};
 use orkester_common::plugin::{
     servers::{Server, ServerBuilder},
-    ComponentMetadata, PluginComponent,
+    ComponentMetadata, PluginComponent, PluginMetadata,
 };
 
 // ── Registry ──────────────────────────────────────────────────────────────────
 pub struct Registry {
+    /// Metadata for every successfully loaded plugin (populated by `register_plugins`).
+    pub plugins: Vec<PluginMetadata>,
     pub authentication_providers: HashMap<String, ComponentMetadata>,
     pub authorization_providers: HashMap<String, ComponentMetadata>,
     pub executor_providers: HashMap<String, ComponentMetadata>,
@@ -29,6 +31,7 @@ pub struct Registry {
 impl Registry {
     fn new() -> Self {
         Registry {
+            plugins: Vec::new(),
             authentication_providers: HashMap::new(),
             authorization_providers: HashMap::new(),
             executor_providers: HashMap::new(),
@@ -57,6 +60,8 @@ pub fn register_plugins(plugins: Vec<LoadedPlugin>) -> Registry {
 
         // Consume the boxed Plugin to iterate its components by value.
         let plugin = *lp.plugin;
+        // Save metadata before consuming components.
+        registry.plugins.push(plugin.metadata.clone());
         for comp in plugin.components {
             register_component(&mut registry, comp, &plugin_id);
         }
