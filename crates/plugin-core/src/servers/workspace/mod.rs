@@ -42,7 +42,6 @@
 
 pub mod api;
 pub mod loader;
-pub mod model;
 pub mod store;
 
 use std::sync::Arc;

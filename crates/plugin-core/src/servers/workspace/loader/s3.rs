@@ -29,7 +29,7 @@ use orkester_common::{log_debug, log_info, log_warn};
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{parse_yaml_documents, LoaderError, LoaderEvent, ObjectLoader};
-use super::super::model::ObjectEnvelope;
+use orkester_common::domain::ObjectEnvelope;
 
 // ── S3Loader ──────────────────────────────────────────────────────────────────
 

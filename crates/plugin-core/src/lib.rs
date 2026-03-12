@@ -14,8 +14,7 @@ use crate::{
     servers::{
         metrics::NoMetricsServerBuilder,
         rest::AxumRestServerBuilder,
-        workspace::WorkspaceServerBuilder,
-    },
+        workspace::WorkspaceServerBuilder,        workflows::WorkflowsServerBuilder,    },
 };
 use orkester_common::plugin::{ComponentMetadata, Plugin, PluginComponent, PluginMetadata};
 use orkester_common::logging::Logger;
@@ -85,6 +84,12 @@ pub fn core_plugin() -> Plugin {
                 id: "workspace-server".to_string(),
                 description: "Loads and exposes Namespace, Task, and Work objects.".to_string(),
                 builder: PluginComponent::Server(Box::new(WorkspaceServerBuilder)),
+            },
+            ComponentMetadata {
+                kind: "server".to_string(),
+                id: "workflows-server".to_string(),
+                description: "Manages Crons, schedules, and Workflow execution.".to_string(),
+                builder: PluginComponent::Server(Box::new(WorkflowsServerBuilder)),
             },
         ],
     }

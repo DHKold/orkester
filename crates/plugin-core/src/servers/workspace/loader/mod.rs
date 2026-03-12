@@ -13,7 +13,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use super::model::ObjectEnvelope;
+use orkester_common::domain::ObjectEnvelope;
 
 // ── Events ────────────────────────────────────────────────────────────────────
 

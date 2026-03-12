@@ -14,7 +14,7 @@ use notify::{Event, EventKind, PollWatcher, RecursiveMode, Watcher};
 use orkester_common::{log_debug, log_error, log_info, log_warn};
 use tokio::sync::mpsc::UnboundedSender;
 
-use super::super::model::ObjectEnvelope;
+use orkester_common::domain::ObjectEnvelope;
 use super::{parse_yaml_documents, LoaderError, LoaderEvent, ObjectLoader};
 
 // ── LocalLoader ───────────────────────────────────────────────────────────────

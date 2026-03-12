@@ -33,3 +33,11 @@ servers:
     loaders:
       - type: local
         dir: /orkester/docker/samples
+  workflows:
+    component:
+      plugin: orkester-plugin-core
+      server: workflows-server
+    enabled: true
+    rest_target: rest_api
+    # How often the scheduler checks for due Crons (seconds).
+    scheduler_interval_seconds: 30
