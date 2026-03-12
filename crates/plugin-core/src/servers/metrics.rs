@@ -1,8 +1,6 @@
-use std::time::Duration;
-
 use orkester_common::messaging::{Message, ServerSide};
 use orkester_common::plugin::servers::{Server, ServerError, ServerBuilder};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 pub struct NoMetricsServer {
     /// Instance name of the REST server to register the metrics route on.
@@ -13,12 +11,13 @@ impl Server for NoMetricsServer {
     fn start(&self, channel: ServerSide) -> Result<(), ServerError> {
         let rest_target = self.rest_target.clone();
         std::thread::spawn(move || {
+            // Register GET /v1/metrics with the REST server.
             let msg = Message::new(
                 1,
-                "",   // hub stamps the real source
+                "", // hub stamps source
                 rest_target.as_str(),
                 "register_route",
-                serde_json::json!({ "method": "GET", "path": "/v1/metrics" }),
+                json!({ "method": "GET", "path": "/v1/metrics" }),
             );
             println!("[metrics] Sending register_route to '{}'.", rest_target);
             if channel.to_hub.send(msg).is_err() {
@@ -26,12 +25,54 @@ impl Server for NoMetricsServer {
                 return;
             }
 
-            match channel.from_hub.recv_timeout(Duration::from_secs(5)) {
-                Ok(reply) => println!(
-                    "[metrics] Route confirmed by '{}': {}",
-                    reply.source, reply.content
-                ),
-                Err(_) => println!("[metrics] Timed out waiting for route_registered confirmation."),
+            // Event loop: handle incoming messages indefinitely.
+            loop {
+                match channel.from_hub.recv() {
+                    Ok(msg) => match msg.message_type.as_str() {
+                        "route_registered" => {
+                            println!(
+                                "[metrics] Route confirmed by '{}': {}",
+                                msg.source, msg.content
+                            );
+                        }
+                        "http_request" => {
+                            let corr_id = msg
+                                .content
+                                .get("correlation_id")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            println!(
+                                "[metrics] Handling HTTP request (correlation_id={}).",
+                                corr_id
+                            );
+                            let reply = Message::new(
+                                0,
+                                "", // hub stamps source
+                                msg.source.as_str(),
+                                "http_response",
+                                json!({
+                                    "correlation_id": corr_id,
+                                    "status": 200,
+                                    "body": {
+                                        "uptime_seconds": 42,
+                                        "requests_total": 1,
+                                    }
+                                }),
+                            );
+                            if channel.to_hub.send(reply).is_err() {
+                                println!("[metrics] Hub channel closed.");
+                                return;
+                            }
+                        }
+                        other => {
+                            println!("[metrics] Unhandled message type '{}'.", other);
+                        }
+                    },
+                    Err(_) => {
+                        println!("[metrics] Hub channel disconnected — stopping.");
+                        break;
+                    }
+                }
             }
         });
         Ok(())
