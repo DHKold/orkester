@@ -1,5 +1,6 @@
 use crate::config::ConfigTree;
-use crate::logging::{consumers::ConsoleConsumer, Logger};
+
+use orkester_common::logging::{consumers::ConsoleConsumer, Logger};
 
 pub(crate) fn init_logging() {
     Logger::add_consumer(ConsoleConsumer);

@@ -1,5 +1,5 @@
 use orkester_common::messaging::{Message, ServerSide};
-use orkester_common::plugin::servers::{Server, ServerError, ServerBuilder};
+use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
 use serde_json::{json, Value};
 
 pub struct NoMetricsServer {

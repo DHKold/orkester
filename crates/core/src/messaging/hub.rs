@@ -1,11 +1,10 @@
 //! The message hub — collects inbound messages from all servers and routes them
 //! to the correct target, or returns an error message if the target is unknown.
 
+use orkester_common::logging;
+use orkester_common::messaging::Message;
 use std::collections::HashMap;
 use std::sync::mpsc;
-use orkester_common::messaging::Message;
-
-use crate::logging::Logger;
 
 use super::channel::HubSide;
 
@@ -31,7 +30,7 @@ impl Hub {
 
     /// Register one server channel with the hub.
     pub fn register(&mut self, hub_side: HubSide) {
-        Logger::debug(format!(
+        logging::Logger::debug(format!(
             "Hub: registered channel for server '{}'.",
             hub_side.instance_name
         ));
@@ -56,12 +55,12 @@ impl Hub {
                     Ok(mut msg) => {
                         // Always stamp the real sender before forwarding.
                         msg.source = hub_side.instance_name.clone();
-                        Logger::trace(format!("Hub received: {}", msg));
+                        logging::Logger::trace(format!("Hub received: {}", msg));
                         messages.push(msg);
                     }
                     Err(mpsc::TryRecvError::Empty) => break,
                     Err(mpsc::TryRecvError::Disconnected) => {
-                        Logger::info(format!(
+                        logging::Logger::info(format!(
                             "Hub: server '{}' disconnected — deregistering channel.",
                             hub_side.instance_name
                         ));
@@ -88,13 +87,16 @@ impl Hub {
     fn route(&self, msg: Message) {
         match self.channels.get(&msg.target) {
             Some(target_side) => {
-                Logger::trace(format!("Hub forwarding: {}", msg));
+                logging::Logger::trace(format!("Hub forwarding: {}", msg));
                 if let Err(e) = target_side.to_server.send(msg) {
-                    Logger::error(format!("Hub: failed to deliver message to '{}': {}", e.0.target, e));
+                    logging::Logger::error(format!(
+                        "Hub: failed to deliver message to '{}': {}",
+                        e.0.target, e
+                    ));
                 }
             }
             None => {
-                Logger::warn(format!(
+                logging::Logger::warn(format!(
                     "Hub: unknown target '{}' for message '{}' from '{}' — returning error.",
                     msg.target, msg.id, msg.source
                 ));
@@ -107,9 +109,9 @@ impl Hub {
     fn send_error_reply(&self, reply: Message, source: &str) {
         match self.channels.get(source) {
             Some(src_side) => {
-                Logger::trace(format!("Hub: sending error reply to '{}'.", source));
+                logging::Logger::trace(format!("Hub: sending error reply to '{}'.", source));
                 if let Err(e) = src_side.to_server.send(reply) {
-                    Logger::error(format!(
+                    logging::Logger::error(format!(
                         "Hub: failed to deliver error reply to '{}': {}",
                         source, e
                     ));
@@ -117,7 +119,7 @@ impl Hub {
             }
             None => {
                 // The original sender is also gone — just drop the error reply.
-                Logger::warn(format!(
+                logging::Logger::warn(format!(
                     "Hub: could not send error reply — source '{}' is not registered.",
                     source
                 ));

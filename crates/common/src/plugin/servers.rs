@@ -12,7 +12,7 @@ pub enum ServerError {
     Internal(String),
 }
 
-/// Server 
+/// Server
 pub trait Server: Send + Sync {
     fn start(&self, channel: ServerSide) -> Result<(), ServerError>;
     fn stop(&self) -> Result<(), ServerError>;

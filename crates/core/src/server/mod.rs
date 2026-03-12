@@ -6,7 +6,6 @@ mod runner;
 pub use runner::RunningServer;
 
 use crate::config::ConfigTree;
-use crate::logging::Logger;
 use crate::messaging::HubSide;
 use crate::registry::Registry;
 

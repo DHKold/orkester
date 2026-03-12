@@ -5,7 +5,7 @@ mod loaded;
 pub use loaded::LoadedPlugin;
 
 use crate::config::ConfigTree;
-use crate::logging::Logger;
+use orkester_common::logging;
 use orkester_common::plugin::{Plugin, PluginRegistrationFn, PLUGIN_REGISTRATION_SYMBOL};
 use std::path::{Path, PathBuf};
 
@@ -21,39 +21,57 @@ pub fn load_plugins(config: &ConfigTree) -> Vec<LoadedPlugin> {
     let dir = match config.get_typed::<String>("plugins.dir") {
         Some(d) => d,
         None => {
-            Logger::warn("No plugin directory configured under `plugins.dir` — running with no plugins.");
+            logging::Logger::warn(
+                "No plugin directory configured under `plugins.dir` — running with no plugins.",
+            );
             return Vec::new();
         }
     };
     let recursive = config
         .get_typed::<bool>("plugins.recursive")
         .unwrap_or(false);
-    Logger::info(&format!("Scanning plugin directory '{}' (recursive={})...", dir, recursive));
+    logging::Logger::info(&format!(
+        "Scanning plugin directory '{}' (recursive={})...",
+        dir, recursive
+    ));
 
     let so_files = find_so_files(Path::new(&dir), recursive);
     if so_files.is_empty() {
-        Logger::warn(&format!("No .so files found in plugin directory '{}'.", dir));
+        logging::Logger::warn(&format!(
+            "No .so files found in plugin directory '{}'.",
+            dir
+        ));
         return Vec::new();
     }
-    Logger::info(&format!("Found {} .so file(s) — loading...", so_files.len()));
+    logging::Logger::info(&format!(
+        "Found {} .so file(s) — loading...",
+        so_files.len()
+    ));
 
     let mut loaded: Vec<LoadedPlugin> = Vec::with_capacity(so_files.len());
     for path in &so_files {
         let display = path.display().to_string();
-        Logger::trace(&format!("Attempting to load plugin library: {}", display));
+        logging::Logger::trace(&format!("Attempting to load plugin library: {}", display));
 
         match load_dynamic(&display) {
             Ok(lp) => {
                 let meta = &lp.plugin.metadata;
-                Logger::info(&format!("Plugin loaded: '{}' v{} ({})", meta.id, meta.version, meta.description));
+                logging::Logger::info(&format!(
+                    "Plugin loaded: '{}' v{} ({})",
+                    meta.id, meta.version, meta.description
+                ));
                 loaded.push(lp);
             }
             Err(e) => {
-                Logger::error(&format!("Failed to load plugin '{}': {}", display, e));
+                logging::Logger::error(&format!("Failed to load plugin '{}': {}", display, e));
             }
         }
     }
-    Logger::info(&format!("Plugin loading complete: {}/{} plugin(s) loaded successfully.", loaded.len(), so_files.len()));
+    logging::Logger::info(&format!(
+        "Plugin loading complete: {}/{} plugin(s) loaded successfully.",
+        loaded.len(),
+        so_files.len()
+    ));
 
     loaded
 }
@@ -66,7 +84,7 @@ fn find_so_files(dir: &Path, recursive: bool) -> Vec<PathBuf> {
     let read_dir = match std::fs::read_dir(dir) {
         Ok(rd) => rd,
         Err(e) => {
-            Logger::error(&format!(
+            logging::Logger::error(&format!(
                 "Cannot read plugin directory '{}': {}",
                 dir.display(),
                 e
@@ -79,7 +97,7 @@ fn find_so_files(dir: &Path, recursive: bool) -> Vec<PathBuf> {
         let entry = match entry {
             Ok(e) => e,
             Err(e) => {
-                Logger::warn(&format!(
+                logging::Logger::warn(&format!(
                     "Skipping unreadable entry in '{}': {}",
                     dir.display(),
                     e
@@ -92,11 +110,14 @@ fn find_so_files(dir: &Path, recursive: bool) -> Vec<PathBuf> {
 
         if path.is_dir() {
             if recursive {
-                Logger::trace(&format!("Descending into sub-directory: {}", path.display()));
+                logging::Logger::trace(&format!(
+                    "Descending into sub-directory: {}",
+                    path.display()
+                ));
                 results.extend(find_so_files(&path, recursive));
             }
         } else if path.extension().and_then(|e| e.to_str()) == Some("so") {
-            Logger::trace(&format!("Found plugin file: {}", path.display()));
+            logging::Logger::trace(&format!("Found plugin file: {}", path.display()));
             results.push(path);
         }
     }
@@ -119,7 +140,7 @@ fn load_dynamic(path: &str) -> Result<LoadedPlugin, Box<dyn std::error::Error>> 
         let sym: libloading::Symbol<PluginRegistrationFn> =
             lib.get(PLUGIN_REGISTRATION_SYMBOL.as_bytes())?;
 
-        Logger::trace(&format!(
+        logging::Logger::trace(&format!(
             "Symbol '{}' resolved in '{}'",
             PLUGIN_REGISTRATION_SYMBOL, path
         ));

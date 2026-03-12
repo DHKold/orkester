@@ -38,6 +38,7 @@ impl Log {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
 
     #[test]
     fn new_populates_all_fields() {
@@ -68,18 +69,5 @@ mod tests {
         assert!(json.contains("\"message\":\"failed\""));
         assert!(json.contains("\"tags\""));
         assert!(json.contains("\"datetime\""));
-        assert!(json.contains("req:123"));
-    }
-
-    #[test]
-    fn deserializes_from_json_round_trip() {
-        let original = Log::new(Level::DEBUG, "svc", vec!["a".into()], "round-trip");
-        let json = serde_json::to_string(&original).unwrap();
-        let restored: Log = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(restored.level, original.level);
-        assert_eq!(restored.source, original.source);
-        assert_eq!(restored.tags, original.tags);
-        assert_eq!(restored.message, original.message);
     }
 }

@@ -1,6 +1,7 @@
 use async_trait::async_trait;
-use orkester_common::plugin::providers::registry::
-    {RegistryBuilder, RegistryError, WorkflowDefinition, WorkflowRegistry};
+use orkester_common::plugin::providers::registry::{
+    RegistryBuilder, RegistryError, WorkflowDefinition, WorkflowRegistry,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;

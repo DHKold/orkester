@@ -1,8 +1,8 @@
 //! Build, start, and stop server instances.
 
-use crate::logging::Logger;
 use crate::messaging::{self, HubSide};
 use crate::registry::Registry;
+use orkester_common::logging;
 use orkester_common::plugin::servers::Server;
 
 use super::config::ServerEntry;
@@ -37,7 +37,7 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
     for entry in entries {
         let component_key = format!("{}:{}", entry.plugin_id, entry.server_id);
 
-        Logger::info(format!(
+        logging::Logger::info(format!(
             "Starting server '{}' (component='{}')...",
             entry.instance_name, component_key
         ));
@@ -45,7 +45,7 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
         let comp = match registry.server_builders.get(&component_key) {
             Some(c) => c,
             None => {
-                Logger::error(format!(
+                logging::Logger::error(format!(
                     "No builder registered for '{}' (instance '{}'). \
                      Is the plugin providing it loaded?",
                     component_key, entry.instance_name
@@ -57,7 +57,7 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
         let builder = match &comp.builder {
             orkester_common::plugin::PluginComponent::Server(b) => b,
             _ => {
-                Logger::error(format!(
+                logging::Logger::error(format!(
                     "Component '{}' is not a Server builder — skipping.",
                     component_key
                 ));
@@ -65,16 +65,15 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
             }
         };
 
-        Logger::debug(format!(
+        logging::Logger::debug(format!(
             "Building server '{}' with config: {}",
-            entry.instance_name,
-            entry.config
+            entry.instance_name, entry.config
         ));
 
         let server = match builder.build(entry.config.clone()) {
             Ok(s) => s,
             Err(e) => {
-                Logger::error(format!(
+                logging::Logger::error(format!(
                     "Builder failed for server '{}': {}",
                     entry.instance_name, e
                 ));
@@ -84,20 +83,20 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
 
         // Create the bi-directional channel before starting the server.
         let (hub_side, server_side) = messaging::create(&entry.instance_name);
-        Logger::debug(format!(
+        logging::Logger::debug(format!(
             "Channel created for server '{}'.",
             entry.instance_name
         ));
 
         if let Err(e) = server.start(server_side) {
-            Logger::error(format!(
+            logging::Logger::error(format!(
                 "Server '{}' failed to start: {}",
                 entry.instance_name, e
             ));
             continue;
         }
 
-        Logger::info(format!("Server '{}' started.", entry.instance_name));
+        logging::Logger::info(format!("Server '{}' started.", entry.instance_name));
 
         hub_sides.push(hub_side);
         running.push(RunningServer {
@@ -108,12 +107,12 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
     }
 
     if running.len() == entries.len() {
-        Logger::info(format!(
+        logging::Logger::info(format!(
             "All {} server(s) started successfully.",
             running.len()
         ));
     } else {
-        Logger::warn(format!(
+        logging::Logger::warn(format!(
             "{}/{} server(s) started — {} failed (see errors above).",
             running.len(),
             entries.len(),
@@ -129,30 +128,30 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
 /// Stop all running servers.
 pub fn cleanup(servers: &[RunningServer]) -> Result<(), String> {
     if servers.is_empty() {
-        Logger::info("No running servers to stop.");
+        logging::Logger::info("No running servers to stop.");
         return Ok(());
     }
 
-    Logger::info(format!("Stopping {} server(s)...", servers.len()));
+    logging::Logger::info(format!("Stopping {} server(s)...", servers.len()));
 
     let mut errors: Vec<String> = Vec::new();
 
     for srv in servers {
-        Logger::info(format!(
+        logging::Logger::info(format!(
             "Stopping server '{}' ({})...",
             srv.instance_name, srv.component_key
         ));
         if let Err(e) = srv.server.stop() {
             let msg = format!("Server '{}' stop error: {}", srv.instance_name, e);
-            Logger::error(&msg);
+            logging::Logger::error(&msg);
             errors.push(msg);
         } else {
-            Logger::info(format!("Server '{}' stopped.", srv.instance_name));
+            logging::Logger::info(format!("Server '{}' stopped.", srv.instance_name));
         }
     }
 
     if errors.is_empty() {
-        Logger::info("All servers stopped.");
+        logging::Logger::info("All servers stopped.");
         Ok(())
     } else {
         Err(errors.join("; "))

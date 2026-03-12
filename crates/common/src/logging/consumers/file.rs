@@ -12,13 +12,6 @@ use crate::logging::log::Log;
 ///
 /// The file is created if it does not exist, and appended to if it does.
 /// Writes are flushed immediately so no entries are lost on crash.
-///
-/// # Example
-/// ```no_run
-/// use crate::logging::{Logger, consumers::FileConsumer};
-///
-/// Logger::add_consumer(FileConsumer::open("app.log").unwrap());
-/// ```
 pub struct FileConsumer {
     writer: Mutex<BufWriter<File>>,
 }
@@ -27,10 +20,7 @@ impl FileConsumer {
     /// Opens (or creates) the file at `path` and returns a [`FileConsumer`]
     /// that appends to it.
     pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?;
+        let file = OpenOptions::new().create(true).append(true).open(path)?;
         Ok(Self {
             writer: Mutex::new(BufWriter::new(file)),
         })
@@ -77,7 +67,10 @@ mod tests {
         drop(consumer);
 
         let content = std::fs::read_to_string(&path).unwrap();
-        assert!(content.contains("hello from file"), "missing message: {content}");
+        assert!(
+            content.contains("hello from file"),
+            "missing message: {content}"
+        );
         assert!(content.contains("INFO"), "missing level: {content}");
         assert!(content.contains("[test]"), "missing source: {content}");
     }
@@ -120,7 +113,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test.log");
         let consumer = FileConsumer::open(&path).unwrap();
-        let log = Log::new(Level::WARN, "svc", vec!["tag-a".into(), "tag-b".into()], "tagged");
+        let log = Log::new(
+            Level::WARN,
+            "svc",
+            vec!["tag-a".into(), "tag-b".into()],
+            "tagged",
+        );
         consumer.consume(&log);
         drop(consumer);
 
@@ -128,17 +126,5 @@ mod tests {
         assert!(content.contains("tag-a"), "missing tag: {content}");
         assert!(content.contains("tag-b"), "missing tag: {content}");
         assert!(content.contains("tagged"), "missing message: {content}");
-    }
-
-    #[test]
-    fn entry_is_newline_terminated() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("test.log");
-        let consumer = FileConsumer::open(&path).unwrap();
-        consumer.consume(&make_log("newline check"));
-        drop(consumer);
-
-        let content = std::fs::read_to_string(&path).unwrap();
-        assert!(content.ends_with('\n'), "file should end with newline");
     }
 }

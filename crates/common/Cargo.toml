@@ -6,7 +6,11 @@ description = "Shared types, traits, and plugin interfaces for Orkester"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-async-trait = "0.1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "2"
+async-trait = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

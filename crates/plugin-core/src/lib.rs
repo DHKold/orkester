@@ -11,10 +11,7 @@ use crate::{
     executor::DummyExecutorBuilder,
     persistence::MemoryPersistenceBuilder,
     registry::LocalRegistryBuilder,
-    servers::{
-        metrics::NoMetricsServerBuilder,
-        rest::AxumRestServerBuilder,
-    },
+    servers::{metrics::NoMetricsServerBuilder, rest::AxumRestServerBuilder},
 };
 use orkester_common::plugin::{ComponentMetadata, Plugin, PluginComponent, PluginMetadata};
 
@@ -42,7 +39,9 @@ pub fn core_plugin() -> Plugin {
                 kind: "authz".to_string(),
                 id: "basic-authz".to_string(),
                 description: "Simple role-based authorization.".to_string(),
-                builder: PluginComponent::AuthorizationProvider(Box::new(BasicAuthzProviderBuilder)),
+                builder: PluginComponent::AuthorizationProvider(Box::new(
+                    BasicAuthzProviderBuilder,
+                )),
             },
             ComponentMetadata {
                 kind: "executor".to_string(),
@@ -66,7 +65,8 @@ pub fn core_plugin() -> Plugin {
             ComponentMetadata {
                 kind: "server".to_string(),
                 id: "no-metrics-server".to_string(),
-                description: "Discards all metrics; exposes an empty /metrics endpoint.".to_string(),
+                description: "Discards all metrics; exposes an empty /metrics endpoint."
+                    .to_string(),
                 builder: PluginComponent::Server(Box::new(NoMetricsServerBuilder)),
             },
             ComponentMetadata {

@@ -3,7 +3,7 @@
 //! # Quick start
 //!
 //! ```no_run
-//! use crate::logging::{Logger, Level, consumers::ConsoleConsumer};
+//! use orkester_common::logging::{Logger, Level, consumers::ConsoleConsumer};
 //!
 //! // Register one or more consumers once at startup.
 //! Logger::add_consumer(ConsoleConsumer);
@@ -15,12 +15,6 @@
 //! // Macros — source is set to the call-site module path automatically.
 //! log_info!("server started on port {}", 8080);
 //! log_warn!("retrying in {} ms", delay);
-//!
-//! // Manual scoping — attach an explicit source and/or tags.
-//! Logger::global()
-//!     .scoped("auth")
-//!     .with_tag("user:alice")
-//!     .log(Level::DEBUG, "session created");
 //! ```
 
 pub mod consumer;
@@ -34,4 +28,3 @@ pub use consumer::LogConsumer;
 pub use level::Level;
 pub use log::Log;
 pub use logger::{Logger, ScopedLogger};
-

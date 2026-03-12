@@ -10,7 +10,7 @@ fn global() -> &'static Logger {
     GLOBAL.get_or_init(|| Logger::new(env!("CARGO_PKG_NAME")))
 }
 
-// ── Logger ───────────────────────────────────────────────────────────────────
+// ── Logger ────────────────────────────────────────────────────────────────────
 
 /// Holds a list of [`LogConsumer`]s and dispatches [`Log`] entries to them.
 ///
@@ -36,7 +36,7 @@ impl Logger {
         }
     }
 
-    // ── Static API (global logger) ──────────────────────────────────────────
+    // ── Static API (global logger) ────────────────────────────────────────────
 
     /// Returns the global logger, creating it if necessary.
     pub fn global() -> &'static Logger {
@@ -78,7 +78,7 @@ impl Logger {
         Self::log(Level::ERROR, message);
     }
 
-    // ── Instance API ────────────────────────────────────────────────────────
+    // ── Instance API ──────────────────────────────────────────────────────────
 
     /// Adds a consumer to this logger instance.
     pub fn register(&self, consumer: Box<dyn LogConsumer>) {
@@ -114,7 +114,7 @@ impl Logger {
     }
 }
 
-// ── ScopedLogger ────────────────────────────────────────────────────────────
+// ── ScopedLogger ──────────────────────────────────────────────────────────────
 
 /// A temporary view over a [`Logger`] with an overridden `source` and optional
 /// `tags`. Useful for attaching context without creating a new logger.
@@ -149,7 +149,12 @@ impl<'a> ScopedLogger<'a> {
         if consumers.is_empty() {
             return;
         }
-        let entry = Log::new(level.into(), &self.source, self.tags.clone(), message.into());
+        let entry = Log::new(
+            level.into(),
+            &self.source,
+            self.tags.clone(),
+            message.into(),
+        );
         for consumer in consumers.iter() {
             consumer.consume(&entry);
         }
@@ -180,7 +185,6 @@ mod tests {
     #[test]
     fn no_consumer_does_not_panic() {
         let logger = Logger::new("test");
-        // should complete silently – no consumer means early return
         logger.emit(Level::INFO, "no consumer");
     }
 
@@ -230,7 +234,9 @@ mod tests {
         let logger = Logger::new("root");
         let (consumer, store) = captured();
         logger.register(Box::new(consumer));
-        logger.scoped("sub-module").log(Level::INFO, "scoped message");
+        logger
+            .scoped("sub-module")
+            .log(Level::INFO, "scoped message");
 
         let logs = store.lock().unwrap();
         assert_eq!(logs.len(), 1);

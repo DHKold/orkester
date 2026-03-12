@@ -7,9 +7,9 @@
 
 use std::collections::HashMap;
 
-use crate::logging::Logger;
 use crate::plugin::LoadedPlugin;
 use libloading::Library;
+use orkester_common::logging;
 use orkester_common::plugin::{
     servers::{Server, ServerBuilder},
     ComponentMetadata, PluginComponent,
@@ -48,7 +48,10 @@ pub fn register_plugins(plugins: Vec<LoadedPlugin>) -> Registry {
         let plugin_id = lp.plugin.metadata.id.clone();
         let plugin_version = lp.plugin.metadata.version.clone();
 
-        Logger::info(format!("Registering components from plugin '{}' v{}...",plugin_id, plugin_version));
+        logging::Logger::info(format!(
+            "Registering components from plugin '{}' v{}...",
+            plugin_id, plugin_version
+        ));
 
         // Transfer library handle into the registry so the .so stays mapped.
         if let Some(lib) = lp._lib {
@@ -67,11 +70,16 @@ pub fn register_plugins(plugins: Vec<LoadedPlugin>) -> Registry {
 
 fn register_component(registry: &mut Registry, comp: ComponentMetadata, plugin_id: &str) {
     let component_key = plugin_id.to_string() + ":" + &comp.id;
-    Logger::debug(format!("  component '{}' [kind={}]", component_key, comp.kind));
+    logging::Logger::debug(format!(
+        "  component '{}' [kind={}]",
+        component_key, comp.kind
+    ));
 
     match comp.builder {
         PluginComponent::AuthenticationProvider(ref builder) => {
-            registry.authentication_providers.insert(component_key, comp);
+            registry
+                .authentication_providers
+                .insert(component_key, comp);
         }
         PluginComponent::AuthorizationProvider(ref builder) => {
             registry.authorization_providers.insert(component_key, comp);

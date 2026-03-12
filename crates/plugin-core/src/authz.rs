@@ -45,7 +45,6 @@ impl AuthorizationProvider for BasicAuthorizationProvider {
 pub struct BasicAuthzProviderBuilder;
 
 impl AuthorizationProviderBuilder for BasicAuthzProviderBuilder {
-
     fn build(&self, config: Value) -> Result<Box<dyn AuthorizationProvider>, AuthorizationError> {
         let deny_all = config
             .get("mode")

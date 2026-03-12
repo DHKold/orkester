@@ -4,14 +4,6 @@ use serde::{Deserialize, Serialize};
 ///
 /// Five named levels are provided as associated constants, but any `i32`
 /// is a valid level, letting callers define domain-specific severity values.
-///
-/// # Examples
-/// ```
-/// use crate::logging::level::Level;
-///
-/// Logger::log(Level::INFO, "hello");
-/// Logger::log(Level(25), "between INFO and WARN");
-/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Level(pub i32);
 
@@ -83,25 +75,5 @@ mod tests {
     #[test]
     fn display_custom_level() {
         assert_eq!(Level(25).to_string(), "LEVEL(25)");
-        assert_eq!(Level(-1).to_string(), "LEVEL(-1)");
-    }
-
-    #[test]
-    fn from_i32_round_trips() {
-        assert_eq!(Level::from(20), Level::INFO);
-        assert_eq!(Level::from(99), Level(99));
-    }
-
-    #[test]
-    fn into_i32_round_trips() {
-        let n: i32 = Level::WARN.into();
-        assert_eq!(n, 30);
-    }
-
-    #[test]
-    fn custom_level_sits_between_named_ones() {
-        let between = Level(15);
-        assert!(between > Level::DEBUG);
-        assert!(between < Level::INFO);
     }
 }

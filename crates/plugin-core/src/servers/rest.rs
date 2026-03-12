@@ -11,7 +11,7 @@ use axum::{
     Json, Router,
 };
 use orkester_common::messaging::{Message, ServerSide};
-use orkester_common::plugin::servers::{Server, ServerError, ServerBuilder};
+use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
 use serde_json::{json, Value};
 
 // ── Route registry ────────────────────────────────────────────────────────────
@@ -46,8 +46,8 @@ struct AppState {
 async fn list_routes_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let routes = state.routes.read().unwrap();
     let list: Vec<Value> = routes
-        .keys()
-        .map(|k| json!({ "method": k.method, "path": k.path }))
+        .iter()
+        .map(|(k, v)| json!({ "method": k.method, "path": k.path, "registrant": v.target }))
         .collect();
     Json(json!({ "routes": list }))
 }
@@ -157,8 +157,13 @@ async fn hub_message_task(
                 );
 
                 state.routes.write().unwrap().insert(
-                    RouteKey { method: method.clone(), path: path.clone() },
-                    RouteRegistration { target: msg.source.clone() },
+                    RouteKey {
+                        method: method.clone(),
+                        path: path.clone(),
+                    },
+                    RouteRegistration {
+                        target: msg.source.clone(),
+                    },
                 );
 
                 let ack = Message::new(
@@ -222,8 +227,7 @@ impl Server for AxumRestServer {
 
                 // Bridge the synchronous from_hub receiver into a tokio channel
                 // so the async hub_message_task can await it.
-                let (hub_msg_tx, hub_msg_rx) =
-                    tokio::sync::mpsc::unbounded_channel::<Message>();
+                let (hub_msg_tx, hub_msg_rx) = tokio::sync::mpsc::unbounded_channel::<Message>();
                 let from_hub = channel.from_hub;
                 std::thread::spawn(move || {
                     while let Ok(msg) = from_hub.recv() {

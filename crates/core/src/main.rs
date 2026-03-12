@@ -1,7 +1,6 @@
 //! Entry point for the core app
 
 mod config;
-mod logging;
 mod main_logging;
 mod messaging;
 mod plugin;
@@ -13,6 +12,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+
+use orkester_common::logging;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Register a console consumer so logs are visible from the start.

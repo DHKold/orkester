@@ -1,8 +1,7 @@
 /// Log a message at an arbitrary level through the global logger.
 ///
-/// The `source` field of the resulting [`Log`] is automatically set to the
-/// Rust module path of the *call site* (e.g. `"orkester::server"`), so you
-/// never have to pass it manually.
+/// The `source` field is automatically set to the Rust module path of the
+/// *call site* (e.g. `"my_plugin::server"`).
 ///
 /// # Examples
 /// ```

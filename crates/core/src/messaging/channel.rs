@@ -1,7 +1,7 @@
 //! Bi-directional channel between the hub and a single server instance.
 
-use std::sync::mpsc;
 pub use orkester_common::messaging::{Message, ServerSide};
+use std::sync::mpsc;
 
 /// The hub's end of a server channel.
 ///

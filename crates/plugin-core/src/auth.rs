@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use orkester_common::plugin::providers::auth::{
-    AuthenticationError, AuthenticationProviderBuilder, AuthenticationProvider, Identity,
+    AuthenticationError, AuthenticationProvider, AuthenticationProviderBuilder, Identity,
 };
 use serde_json::{json, Value};
 
@@ -24,7 +24,10 @@ impl AuthenticationProvider for NoAuthenticationProvider {
 pub struct NoAuthProviderBuilder;
 
 impl AuthenticationProviderBuilder for NoAuthProviderBuilder {
-    fn build(&self, _config: Value) -> Result<Box<dyn AuthenticationProvider>, AuthenticationError> {
+    fn build(
+        &self,
+        _config: Value,
+    ) -> Result<Box<dyn AuthenticationProvider>, AuthenticationError> {
         Ok(Box::new(NoAuthenticationProvider))
     }
 }

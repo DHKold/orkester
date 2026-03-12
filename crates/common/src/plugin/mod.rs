@@ -2,11 +2,8 @@ pub mod providers;
 pub mod servers;
 
 use providers::{
-    auth::AuthenticationProviderBuilder,
-    authz::AuthorizationProviderBuilder,
-    executor::ExecutorBuilder,
-    persistence::PersistenceBuilder,
-    registry::RegistryBuilder,
+    auth::AuthenticationProviderBuilder, authz::AuthorizationProviderBuilder,
+    executor::ExecutorBuilder, persistence::PersistenceBuilder, registry::RegistryBuilder,
 };
 use servers::ServerBuilder;
 
