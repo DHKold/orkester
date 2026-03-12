@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use serde_json::Value;
 use thiserror::Error;
@@ -26,21 +29,21 @@ pub enum ExecutionStatus {
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {
     pub status: ExecutionStatus,
-    /// Artifacts produced by the execution, as key-value pairs.
-    pub artifacts: Value,
-    /// Logs produced during execution.
+    /// Named outputs produced by the execution (passed to downstream steps).
+    pub outputs: HashMap<String, Value>,
+    /// Human-readable log lines captured during execution.
     pub logs: Vec<String>,
 }
 
 /// A task execution request passed to an executor.
 #[derive(Debug, Clone)]
 pub struct ExecutionRequest {
-    /// Unique execution ID.
+    /// Unique execution ID (UUID v4 stamped by the worker).
     pub id: String,
-    /// Task definition (executor-specific fields).
+    /// Executor-specific configuration taken verbatim from `TaskSpec.config`.
     pub task_definition: Value,
-    /// Input artifacts/parameters.
-    pub inputs: Value,
+    /// Resolved runtime inputs (merged workflow context + step overrides).
+    pub inputs: HashMap<String, Value>,
 }
 
 /// Trait that all Task Executor implementations must satisfy.
@@ -58,4 +61,31 @@ pub trait TaskExecutor: Send + Sync {
 /// Builder that creates a [`TaskExecutor`] from a JSON configuration.
 pub trait ExecutorBuilder: Send + Sync {
     fn build(&self, config: Value) -> Result<Box<dyn TaskExecutor>, ExecutorError>;
+}
+
+// ── ExecutorRegistry ──────────────────────────────────────────────────────────
+
+/// Runtime registry of named [`TaskExecutor`] instances.
+///
+/// Built once at startup from the loaded plugin components and shared
+/// (via [`Arc`]) with every server that needs to dispatch tasks.
+#[derive(Default)]
+pub struct ExecutorRegistry {
+    executors: HashMap<String, Arc<dyn TaskExecutor>>,
+}
+
+impl ExecutorRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Register an executor under `name` (e.g. `"command"`, `"eks-pod"`).
+    pub fn register(&mut self, name: impl Into<String>, executor: Arc<dyn TaskExecutor>) {
+        self.executors.insert(name.into(), executor);
+    }
+
+    /// Look up a registered executor by name.
+    pub fn get(&self, name: &str) -> Option<Arc<dyn TaskExecutor>> {
+        self.executors.get(name).cloned()
+    }
 }

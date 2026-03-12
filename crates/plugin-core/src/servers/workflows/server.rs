@@ -3,7 +3,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use orkester_common::messaging::{Message, ServerSide};
+use orkester_common::messaging::Message;
+use orkester_common::plugin::servers::ServerContext;
 use orkester_common::{log_error, log_info, log_warn};
 use serde_json::{json, Value};
 
@@ -13,7 +14,9 @@ use super::store::WorkflowsStore;
 use super::workspace_client::WorkspaceClient;
 use crate::persistence::MemoryPersistenceProvider;
 
-pub async fn run(config: Value, channel: ServerSide) {
+pub async fn run(config: Value, ctx: ServerContext) {
+    let channel = ctx.channel;
+    let executor_registry = ctx.executor_registry;
     // ── Build persistence store ───────────────────────────────────────────
     let provider: Arc<dyn orkester_common::plugin::providers::persistence::PersistenceProvider> =
         Arc::new(MemoryPersistenceProvider::default());
@@ -106,7 +109,7 @@ pub async fn run(config: Value, channel: ServerSide) {
             }
 
             _ = scheduler_tick.tick() => {
-                scheduler::run_tick(&store, &workspace_client).await;
+                scheduler::run_tick(&store, &workspace_client, &executor_registry).await;
             }
 
             else => break,

@@ -8,7 +8,7 @@ pub mod servers;
 use crate::{
     auth::NoAuthProviderBuilder,
     authz::BasicAuthzProviderBuilder,
-    executor::DummyExecutorBuilder,
+    executor::{CommandExecutorBuilder, DummyExecutorBuilder},
     persistence::MemoryPersistenceBuilder,
     registry::LocalRegistryBuilder,
     servers::{
@@ -49,9 +49,16 @@ pub fn core_plugin() -> Plugin {
             },
             ComponentMetadata {
                 kind: "executor".to_string(),
-                id: "dummy-executor".to_string(),
+                id: "dummy".to_string(),
                 description: "No-op task executor for testing.".to_string(),
                 builder: PluginComponent::ExecutorProvider(Box::new(DummyExecutorBuilder)),
+            },
+            ComponentMetadata {
+                kind: "executor".to_string(),
+                id: "command".to_string(),
+                description: "Runs shell commands locally; captures stdout/stderr as outputs."
+                    .to_string(),
+                builder: PluginComponent::ExecutorProvider(Box::new(CommandExecutorBuilder)),
             },
             ComponentMetadata {
                 kind: "persistence".to_string(),

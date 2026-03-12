@@ -11,8 +11,8 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use orkester_common::messaging::{Message, ServerSide};
-use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
+use orkester_common::messaging::Message;
+use orkester_common::plugin::servers::{Server, ServerBuilder, ServerContext, ServerError};
 use orkester_common::{log_debug, log_info, log_trace};
 use serde_json::{json, Value};
 
@@ -285,7 +285,8 @@ pub struct AxumRestServer {
 }
 
 impl Server for AxumRestServer {
-    fn start(&self, channel: ServerSide) -> Result<(), ServerError> {
+    fn start(&self, ctx: ServerContext) -> Result<(), ServerError> {
+        let channel = ctx.channel;
         let bind_addr = self
             .config
             .get("bind")

@@ -48,7 +48,7 @@ use std::sync::Arc;
 
 use orkester_common::messaging::{Message, ServerSide};
 use orkester_common::plugin::providers::persistence::{EntityKey, PersistenceProvider};
-use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
+use orkester_common::plugin::servers::{Server, ServerBuilder, ServerContext, ServerError};
 use orkester_common::{log_error, log_info, log_warn};
 use serde_json::{json, Value};
 
@@ -65,7 +65,7 @@ pub struct WorkspaceServer {
 }
 
 impl Server for WorkspaceServer {
-    fn start(&self, channel: ServerSide) -> Result<(), ServerError> {
+    fn start(&self, ctx: ServerContext) -> Result<(), ServerError> {
         let config = self.config.clone();
 
         std::thread::spawn(move || {
@@ -74,7 +74,7 @@ impl Server for WorkspaceServer {
                 .build()
                 .expect("Failed to build Tokio runtime");
 
-            rt.block_on(run(config, channel));
+            rt.block_on(run(config, ctx.channel));
         });
 
         Ok(())

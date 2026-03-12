@@ -1,8 +1,10 @@
 //! Build, start, and stop server instances.
 
+use std::sync::Arc;
+
 use crate::messaging::{self, HubSide};
 use crate::registry::Registry;
-use orkester_common::plugin::servers::Server;
+use orkester_common::plugin::servers::{Server, ServerContext};
 use orkester_common::{log_debug, log_error, log_info, log_warn};
 
 use super::config::ServerEntry;
@@ -33,6 +35,9 @@ pub struct RunningServer {
 pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer>, Vec<HubSide>) {
     let mut running = Vec::with_capacity(entries.len());
     let mut hub_sides = Vec::with_capacity(entries.len());
+
+    // Build the executor registry once; every server shares the same Arc.
+    let executor_registry = registry.build_executor_registry();
 
     for entry in entries {
         let component_key = format!("{}:{}", entry.plugin_id, entry.server_id);
@@ -80,7 +85,10 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
         let (hub_side, server_side) = messaging::create(&entry.instance_name);
         log_debug!("Channel created for server '{}'.", entry.instance_name);
 
-        if let Err(e) = server.start(server_side) {
+        if let Err(e) = server.start(ServerContext {
+            channel: server_side,
+            executor_registry: Arc::clone(&executor_registry),
+        }) {
             log_error!("Server '{}' failed to start: {}", entry.instance_name, e);
             continue;
         }

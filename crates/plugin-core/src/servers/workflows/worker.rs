@@ -18,16 +18,23 @@
 //!
 //! # Task dispatch
 //!
-//! [`dispatch_task`] is the leaf function that calls the actual executor.
-//! It is currently stubbed — plug in real `TaskExecutor` dispatch there.
+//! [`dispatch_task`] looks up the named [`TaskExecutor`] in the
+//! [`ExecutorRegistry`] and delegates to it, converting results back to the
+//! worker's `HashMap<String, Value>` output format.
+//!
+//! [`TaskExecutor`]: orkester_common::plugin::providers::executor::TaskExecutor
+//! [`ExecutorRegistry`]: crate::executor::ExecutorRegistry
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::Utc;
 use orkester_common::domain::{Task, Work, WorkStep};
+use orkester_common::plugin::providers::executor::{ExecutionRequest, ExecutionStatus, ExecutorRegistry};
 use serde_json::Value;
+use uuid::Uuid;
 
 use super::model::{
     FailurePolicy, StepState, StepStatus, Workflow, WorkflowMetrics, WorkflowStatus,
@@ -48,7 +55,9 @@ pub trait Worker: Send + Sync {
 
 // ── LocalWorker ───────────────────────────────────────────────────────────────
 
-pub struct LocalWorker;
+pub struct LocalWorker {
+    pub executor_registry: Arc<ExecutorRegistry>,
+}
 
 #[async_trait]
 impl Worker for LocalWorker {
@@ -121,12 +130,16 @@ impl Worker for LocalWorker {
 
         // ── 4. Execute the DAG (with optional whole-workflow timeout) ─────
         let timeout = workflow.execution.timeout_seconds.map(Duration::from_secs);
+        let executors = Arc::clone(&self.executor_registry);
         let result = if let Some(t) = timeout {
-            tokio::time::timeout(t, execute_dag(&mut workflow, &work, &store, &workspace))
-                .await
-                .unwrap_or_else(|_| Err("workflow timed out".to_string()))
+            tokio::time::timeout(
+                t,
+                execute_dag(&mut workflow, &work, &store, &workspace, &executors),
+            )
+            .await
+            .unwrap_or_else(|_| Err("workflow timed out".to_string()))
         } else {
-            execute_dag(&mut workflow, &work, &store, &workspace).await
+            execute_dag(&mut workflow, &work, &store, &workspace, &executors).await
         };
 
         // ── 5. Final state ────────────────────────────────────────────────
@@ -198,6 +211,7 @@ async fn execute_dag(
     work: &Work,
     store: &WorkflowsStore,
     workspace: &WorkspaceClient,
+    executors: &Arc<ExecutorRegistry>,
 ) -> Result<(), String> {
     // Build lookup and adjacency structures once.
     let step_map: HashMap<String, WorkStep> = work
@@ -267,10 +281,11 @@ async fn execute_dag(
             let step = step_map[step_id].clone();
             let inputs = build_step_inputs(&step, &workflow.work_context, &step_outputs);
             let workspace_c = workspace.clone();
+            let executors_c = Arc::clone(executors);
             let ns = workflow.namespace.clone();
 
             join_set.spawn(async move {
-                let result = execute_step(&step, &ns, inputs, &workspace_c).await;
+                let result = execute_step(&step, &ns, inputs, &workspace_c, &executors_c).await;
                 (step.id.clone(), result)
             });
         }
@@ -415,6 +430,7 @@ async fn execute_step(
     namespace: &str,
     inputs: HashMap<String, Value>,
     workspace: &WorkspaceClient,
+    executors: &Arc<ExecutorRegistry>,
 ) -> Result<HashMap<String, Value>, String> {
     // Resolve the Task definition by name within the namespace.
     let tasks = workspace
@@ -440,7 +456,7 @@ async fn execute_step(
         );
 
         let result = match timeout {
-            Some(t) => tokio::time::timeout(t, dispatch_task(&task, inputs.clone()))
+            Some(t) => tokio::time::timeout(t, dispatch_task(&task, inputs.clone(), executors))
                 .await
                 .unwrap_or_else(|_| {
                     Err(format!(
@@ -449,7 +465,7 @@ async fn execute_step(
                         task.spec.timeout_seconds.unwrap_or(0)
                     ))
                 }),
-            None => dispatch_task(&task, inputs.clone()).await,
+            None => dispatch_task(&task, inputs.clone(), executors).await,
         };
 
         match result {
@@ -495,20 +511,35 @@ fn build_step_inputs(
     inputs
 }
 
-/// Dispatch a task to the appropriate executor.
-///
-/// **TODO**: implement real executor dispatch via the hub.  The executor is
-/// selected by `task.spec.executor` (e.g. `"eks-pod"`, `"command"`).
+/// Look up the named executor in the registry and run the task.
 async fn dispatch_task(
     task: &Task,
-    _inputs: HashMap<String, Value>,
+    inputs: HashMap<String, Value>,
+    executors: &ExecutorRegistry,
 ) -> Result<HashMap<String, Value>, String> {
-    orkester_common::log_warn!(
-        "dispatch_task: executor '{}' not yet implemented — task '{}' succeeds as stub",
-        task.spec.executor,
-        task.meta.name
-    );
-    Ok(HashMap::new())
+    let executor = executors.get(&task.spec.executor).ok_or_else(|| {
+        format!(
+            "no executor registered for '{}' (task '{}')",
+            task.spec.executor, task.meta.name
+        )
+    })?;
+
+    let request = ExecutionRequest {
+        id: Uuid::new_v4().to_string(),
+        task_definition: task.spec.config.clone(),
+        inputs,
+    };
+
+    let result = executor
+        .execute(request)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    match result.status {
+        ExecutionStatus::Succeeded => Ok(result.outputs),
+        ExecutionStatus::Failed(msg) => Err(msg),
+        other => Err(format!("unexpected execution status: {other:?}")),
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

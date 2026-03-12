@@ -1,5 +1,5 @@
-use orkester_common::messaging::{Message, ServerSide};
-use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
+use orkester_common::messaging::Message;
+use orkester_common::plugin::servers::{Server, ServerBuilder, ServerContext, ServerError};
 use orkester_common::{log_debug, log_error, log_info, log_warn};
 use serde_json::{json, Value};
 
@@ -9,7 +9,8 @@ pub struct NoMetricsServer {
 }
 
 impl Server for NoMetricsServer {
-    fn start(&self, channel: ServerSide) -> Result<(), ServerError> {
+    fn start(&self, ctx: ServerContext) -> Result<(), ServerError> {
+        let channel = ctx.channel;
         let rest_target = self.rest_target.clone();
         std::thread::spawn(move || {
             // Register GET /v1/metrics with the REST server.
@@ -20,9 +21,9 @@ impl Server for NoMetricsServer {
                 "register_route",
                 json!({ "method": "GET", "path": "/v1/metrics" }),
             );
-            log_info!("[metrics] Sending register_route to '{}'.", rest_target);
+            log_info!("Sending register_route to '{}'.", rest_target);
             if channel.to_hub.send(msg).is_err() {
-                log_error!("[metrics] Hub channel closed — could not send.");
+                log_error!("Hub channel closed — could not send.");
                 return;
             }
 
@@ -32,7 +33,7 @@ impl Server for NoMetricsServer {
                     Ok(msg) => match msg.message_type.as_str() {
                         "route_registered" => {
                             log_info!(
-                                "[metrics] Route confirmed by '{}': {}",
+                                "Route confirmed by '{}': {}",
                                 msg.source,
                                 msg.content
                             );
@@ -44,7 +45,7 @@ impl Server for NoMetricsServer {
                                 .and_then(|v| v.as_u64())
                                 .unwrap_or(0);
                             log_debug!(
-                                "[metrics] Handling HTTP request (correlation_id={}).",
+                                "Handling HTTP request (correlation_id={}).",
                                 corr_id
                             );
                             let reply = Message::new(
@@ -62,16 +63,16 @@ impl Server for NoMetricsServer {
                                 }),
                             );
                             if channel.to_hub.send(reply).is_err() {
-                                log_error!("[metrics] Hub channel closed.");
+                                log_error!("Hub channel closed.");
                                 return;
                             }
                         }
                         other => {
-                            log_warn!("[metrics] Unhandled message type '{}'.", other);
+                            log_warn!("Unhandled message type '{}'.", other);
                         }
                     },
                     Err(_) => {
-                        log_info!("[metrics] Hub channel disconnected — stopping.");
+                        log_info!("Hub channel disconnected — stopping.");
                         break;
                     }
                 }

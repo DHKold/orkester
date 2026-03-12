@@ -1,7 +1,11 @@
 //! Scheduler — fires enabled Crons on their schedule and spawns Worker tasks.
 
+use std::sync::Arc;
+
 use chrono::Utc;
 use orkester_common::{log_error, log_info};
+
+use orkester_common::plugin::providers::executor::ExecutorRegistry;
 
 use super::model::{ConcurrencyAction, Cron, Workflow, WorkflowStatus};
 use super::store::WorkflowsStore;
@@ -10,7 +14,11 @@ use super::workspace_client::WorkspaceClient;
 
 /// On every tick: find enabled Crons whose `next_fire_at` is in the past and
 /// apply the concurrency policy to decide whether to create a new Workflow.
-pub async fn run_tick(store: &WorkflowsStore, workspace: &WorkspaceClient) {
+pub async fn run_tick(
+    store: &WorkflowsStore,
+    workspace: &WorkspaceClient,
+    executors: &Arc<ExecutorRegistry>,
+) {
     let crons = match store.list_all_enabled_crons().await {
         Ok(c) => c,
         Err(e) => {
@@ -112,8 +120,9 @@ pub async fn run_tick(store: &WorkflowsStore, workspace: &WorkspaceClient) {
                     let store_clone = store.clone();
                     let wf_clone = wf.clone();
                     let workspace_clone = workspace.clone();
+                    let executors_clone = Arc::clone(executors);
                     tokio::spawn(async move {
-                        LocalWorker
+                        LocalWorker { executor_registry: executors_clone }
                             .run(wf_clone, store_clone, workspace_clone)
                             .await;
                     });

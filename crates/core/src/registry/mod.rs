@@ -6,6 +6,7 @@
 //! setup stages.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::plugin::LoadedPlugin;
 use libloading::Library;
@@ -13,7 +14,7 @@ use orkester_common::plugin::{
     servers::{Server, ServerBuilder},
     ComponentMetadata, PluginComponent, PluginMetadata,
 };
-use orkester_common::{log_debug, log_info};
+use orkester_common::{log_debug, log_error, log_info};
 
 // ── Registry ──────────────────────────────────────────────────────────────────
 pub struct Registry {
@@ -99,5 +100,32 @@ fn register_component(registry: &mut Registry, comp: ComponentMetadata, plugin_i
         PluginComponent::Server(ref builder) => {
             registry.server_builders.insert(component_key, comp);
         }
+    }
+}
+
+impl Registry {
+    /// Build an [`ExecutorRegistry`] populated with every executor contributed
+    /// by loaded plugins. Executors are keyed by their component `id` — this
+    /// must match the `executor` field in `TaskSpec` (e.g. `"command"`).
+    pub fn build_executor_registry(
+        &self,
+    ) -> Arc<orkester_common::plugin::providers::executor::ExecutorRegistry> {
+        use orkester_common::plugin::providers::executor::ExecutorRegistry;
+
+        let mut reg = ExecutorRegistry::new();
+        for (key, comp) in &self.executor_providers {
+            if let PluginComponent::ExecutorProvider(builder) = &comp.builder {
+                match builder.build(serde_json::Value::Null) {
+                    Ok(executor) => {
+                        log_info!("Registered executor '{}'.", comp.id);
+                        reg.register(comp.id.clone(), Arc::from(executor));
+                    }
+                    Err(e) => {
+                        log_error!("Failed to build executor '{}': {}", key, e);
+                    }
+                }
+            }
+        }
+        Arc::new(reg)
     }
 }
