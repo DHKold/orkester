@@ -1,13 +1,25 @@
 use std::sync::{OnceLock, RwLock};
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 use super::consumer::LogConsumer;
 use super::level::Level;
 use super::log::Log;
 
-static GLOBAL: OnceLock<Logger> = OnceLock::new();
+/// Pointer to a logger injected from the host process (e.g. into a cdylib plugin).
+/// Non-null once `Logger::inject` has been called.
+static INJECTED: AtomicPtr<Logger> = AtomicPtr::new(std::ptr::null_mut());
+
+/// The process-owned global logger, created lazily when no injection is active.
+static OWNED: OnceLock<Logger> = OnceLock::new();
 
 fn global() -> &'static Logger {
-    GLOBAL.get_or_init(|| Logger::new(env!("CARGO_PKG_NAME")))
+    let ptr = INJECTED.load(Ordering::Acquire);
+    if !ptr.is_null() {
+        // SAFETY: `inject` requires the pointer to be valid for the process lifetime.
+        unsafe { &*ptr }
+    } else {
+        OWNED.get_or_init(|| Logger::new(env!("CARGO_PKG_NAME")))
+    }
 }
 
 // ── Logger ────────────────────────────────────────────────────────────────────
@@ -41,6 +53,20 @@ impl Logger {
     /// Returns the global logger, creating it if necessary.
     pub fn global() -> &'static Logger {
         global()
+    }
+
+    /// Redirects every subsequent call to the global logger to `logger`.
+    ///
+    /// Plugins compiled as `cdylib` have their own static data segment and
+    /// therefore a separate `OWNED` instance. Call this once — immediately after
+    /// the plugin is loaded — to make all `log_*!` calls inside the plugin write
+    /// to the host process's consumers instead.
+    ///
+    /// # Safety
+    /// `logger` must remain valid for the entire remaining lifetime of the process
+    /// (i.e. it should be `Logger::global()` from the host binary).
+    pub unsafe fn inject(logger: *const Logger) {
+        INJECTED.store(logger as *mut Logger, Ordering::Release);
     }
 
     /// Registers `consumer` with the global logger.

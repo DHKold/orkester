@@ -14,6 +14,7 @@ use crate::{
     servers::{metrics::NoMetricsServerBuilder, rest::AxumRestServerBuilder},
 };
 use orkester_common::plugin::{ComponentMetadata, Plugin, PluginComponent, PluginMetadata};
+use orkester_common::logging::Logger;
 
 /// Constructs the core plugin, bundling all built-in provider and server implementations.
 pub fn core_plugin() -> Plugin {
@@ -87,4 +88,17 @@ pub fn core_plugin() -> Plugin {
 #[no_mangle]
 pub extern "C" fn orkester_register_plugin() -> *mut Plugin {
     Box::into_raw(Box::new(core_plugin()))
+}
+
+/// Logger-injection entry point called by Orkester right after loading this library.
+///
+/// Redirects all `log_*!` calls in this plugin to the host process's global logger
+/// so they reach the consumers configured in `core`.
+///
+/// # Safety
+/// `logger` must be a valid pointer to a [`Logger`] that lives for the entire
+/// process lifetime (i.e. the host's `Logger::global()`).
+#[no_mangle]
+pub unsafe extern "C" fn orkester_set_logger(logger: *const Logger) {
+    Logger::inject(logger);
 }

@@ -1,0 +1,23 @@
+[2026-03-12T11:14:01.540Z] DEBUG [orkester::server::config] Parsed server entry 'metrics' → plugin='orkester-plugin-core' server='no-metrics-server'
+[2026-03-12T11:14:01.540Z] DEBUG [orkester::server::config] Parsed server entry 'rest_api' → plugin='orkester-plugin-core' server='axum-rest-server'
+[2026-03-12T11:14:01.541Z] INFO  [orkester::server::config] Config contains 2 enabled server(s).
+[2026-03-12T11:14:01.542Z] INFO  [orkester::server::runner] Starting server 'metrics' (component='orkester-plugin-core:no-metrics-server')...
+[2026-03-12T11:14:01.542Z] DEBUG [orkester::server::runner] Building server 'metrics' with config: {"rest_server":"rest_api"}
+[2026-03-12T11:14:01.544Z] DEBUG [orkester::server::runner] Channel created for server 'metrics'.
+[2026-03-12T11:14:01.549Z] INFO  [orkester::server::runner] Server 'metrics' started.
+[2026-03-12T11:14:01.550Z] INFO  [orkester::server::runner] Starting server 'rest_api' (component='orkester-plugin-core:axum-rest-server')...
+[2026-03-12T11:14:01.550Z] DEBUG [orkester::server::runner] Building server 'rest_api' with config: {"port":8080}
+[2026-03-12T11:14:01.551Z] DEBUG [orkester::server::runner] Channel created for server 'rest_api'.
+[2026-03-12T11:14:01.553Z] INFO  [orkester::server::runner] Server 'rest_api' started.
+[2026-03-12T11:14:01.553Z] INFO  [orkester::server::runner] All 2 server(s) started successfully.
+[2026-03-12T11:14:27.788Z] INFO  [orkester::server::runner] Stopping 2 server(s)...
+[2026-03-12T11:14:27.789Z] INFO  [orkester::server::runner] Stopping server 'metrics' (orkester-plugin-core:no-metrics-server)...
+[2026-03-12T11:14:27.789Z] INFO  [orkester::server::runner] Server 'metrics' stopped.
+[2026-03-12T11:14:27.790Z] INFO  [orkester::server::runner] Stopping server 'rest_api' (orkester-plugin-core:axum-rest-server)...
+[2026-03-12T11:14:27.792Z] INFO  [orkester::server::runner] Server 'rest_api' stopped.
+[2026-03-12T11:14:27.793Z] INFO  [orkester::server::runner] All servers stopped.
+[2026-03-12T11:14:58.099Z] INFO  [orkester_plugin_core::servers::metrics] [metrics] Sending register_route to 'rest_api'.
+[2026-03-12T11:14:58.106Z] INFO  [orkester_plugin_core::servers::rest] [rest] Registering route GET /v1/metrics (requested by 'metrics').
+[2026-03-12T11:14:58.107Z] INFO  [orkester_plugin_core::servers::rest] [rest] Listening on 0.0.0.0:8080.
+[2026-03-12T11:14:58.111Z] INFO  [orkester_plugin_core::servers::metrics] [metrics] Route confirmed by 'rest_api': {"method":"GET","path":"/v1/metrics","status":"ok"}
+[2026-03-12T11:15:05.328Z] TRACE [orkester_plugin_core::servers::rest] REST GET /v1/routes — listing 1 route(s)

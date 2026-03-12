@@ -7,6 +7,8 @@ use providers::{
 };
 use servers::ServerBuilder;
 
+use crate::logging::Logger;
+
 /// A plugin component, which can be either a provider or a server.
 pub enum PluginComponent {
     // ── Providers ──────────────────────────────────────────────────────────
@@ -57,3 +59,11 @@ pub type PluginRegistrationFn = unsafe extern "C" fn() -> *mut Plugin;
 
 /// The symbol name Orkester looks up in every loaded shared library.
 pub const PLUGIN_REGISTRATION_SYMBOL: &str = "orkester_register_plugin";
+
+/// Type alias for the optional logger-injection entry point exported by plugins.
+/// Signature: `unsafe extern "C" fn(logger: *const Logger)`
+pub type PluginSetLoggerFn = unsafe extern "C" fn(*const Logger);
+
+/// Symbol name Orkester calls (if present) right after loading a shared library
+/// to share the host process's global logger with the plugin.
+pub const PLUGIN_SET_LOGGER_SYMBOL: &str = "orkester_set_logger";
