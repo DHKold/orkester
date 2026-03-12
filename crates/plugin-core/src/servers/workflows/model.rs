@@ -15,11 +15,12 @@ use uuid::Uuid;
 // ── WorkflowStatus ────────────────────────────────────────────────────────────
 
 /// Lifecycle state of a Workflow instance.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowStatus {
     /// Created but waiting for its `start_condition` to be met or
     /// `start_datetime` to arrive.
+    #[default]
     Waiting,
     /// Actively executing steps.
     Running,
@@ -111,9 +112,11 @@ impl Default for FailurePolicy {
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workflow {
-    /// Unique identifier (UUID v4).
+    /// Unique identifier (UUID v4). Stamped by the server if omitted.
+    #[serde(default)]
     pub id: String,
-    /// Namespace that owns this workflow.
+    /// Namespace that owns this workflow. Overwritten by the server from the URL.
+    #[serde(default)]
     pub namespace: String,
 
     // ── What to run ───────────────────────────────────────────────────────
@@ -139,13 +142,16 @@ pub struct Workflow {
     pub triggers: WorkflowTriggers,
 
     // ── State ─────────────────────────────────────────────────────────────
+    #[serde(default)]
     pub status: WorkflowStatus,
     #[serde(default)]
     pub steps: HashMap<String, StepState>,
     #[serde(default)]
     pub metrics: WorkflowMetrics,
 
+    #[serde(default)]
     pub created_at: DateTime<Utc>,
+    #[serde(default)]
     pub updated_at: DateTime<Utc>,
     pub started_at: Option<DateTime<Utc>>,
     pub finished_at: Option<DateTime<Utc>>,
@@ -317,8 +323,11 @@ impl Default for CronConcurrencyPolicy {
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cron {
-    /// User-chosen unique identifier within the namespace (e.g. `"nightly-etl"`).
+    /// User-chosen unique identifier within the namespace (e.g. `"nightly-etl"`). Stamped by the server if omitted.
+    #[serde(default)]
     pub id: String,
+    /// Overwritten by the server from the URL.
+    #[serde(default)]
     pub namespace: String,
     #[serde(default)]
     pub description: String,
@@ -346,7 +355,9 @@ pub struct Cron {
     pub concurrency_policy: CronConcurrencyPolicy,
 
     // ── Metadata ──────────────────────────────────────────────────────────
+    #[serde(default)]
     pub created_at: DateTime<Utc>,
+    #[serde(default)]
     pub updated_at: DateTime<Utc>,
     /// Last time this Cron fired (i.e. attempted to create a Workflow).
     pub last_fired_at: Option<DateTime<Utc>>,
@@ -379,6 +390,15 @@ impl Cron {
             last_fired_at: None,
             next_fire_at: None,
         }
+    }
+
+    /// Compute the next fire time after `after`.
+    ///
+    /// TODO: integrate the `cron` crate for proper expression parsing.
+    /// For now advances by 1 minute as a safe stub.
+    pub fn next_fire_after(schedule: &str, after: DateTime<Utc>) -> Option<DateTime<Utc>> {
+        let _ = schedule;
+        Some(after + chrono::Duration::minutes(1))
     }
 }
 

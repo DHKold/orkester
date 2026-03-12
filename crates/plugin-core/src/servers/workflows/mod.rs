@@ -55,7 +55,7 @@ use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
 use serde_json::{json, Value};
 
 use api::ApiHandler;
-use model::{ConcurrencyAction, Workflow, WorkflowStatus};
+use model::{Cron, ConcurrencyAction, Workflow, WorkflowStatus};
 use store::WorkflowsStore;
 use worker::{LocalWorker, Worker};
 use workspace_client::WorkspaceClient;
@@ -327,7 +327,7 @@ async fn run_scheduler_tick(store: &WorkflowsStore, workspace: &WorkspaceClient)
 
         // Advance next_fire_at.
         cron.last_fired_at = Some(now);
-        cron.next_fire_at = next_fire_after(&cron.schedule, now);
+        cron.next_fire_at = Cron::next_fire_after(&cron.schedule, now);
         cron.updated_at = now;
         if let Err(e) = store.put_cron(&cron).await {
             log_error!(
@@ -355,18 +355,13 @@ async fn cancel_workflow(store: &WorkflowsStore, namespace: &str, id: &str) {
 
 /// Compute the next fire time after `after` for a 5-field cron expression.
 ///
-/// Returns `None` if the expression cannot be parsed.
-/// Uses the `cron` crate when available; currently a stub that advances by
-/// the minimum cron granularity (1 minute) so the scheduler does not tight-loop.
+/// Delegated to [`Cron::next_fire_after`].
+#[allow(dead_code)]
 fn next_fire_after(
     schedule: &str,
     after: chrono::DateTime<Utc>,
 ) -> Option<chrono::DateTime<Utc>> {
-    // TODO: integrate the `cron` crate (e.g. `cron = "0.12"`) for proper
-    //       next-fire computation.  The stub below advances by 1 minute to
-    //       prevent tight-looping while the cron library is not yet wired in.
-    let _ = schedule;
-    Some(after + chrono::Duration::minutes(1))
+    Cron::next_fire_after(schedule, after)
 }
 
 // ── Builder ────────────────────────────────────────────────────────────────────

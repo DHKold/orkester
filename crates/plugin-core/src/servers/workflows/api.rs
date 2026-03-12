@@ -157,9 +157,16 @@ impl ApiHandler {
                     Err(e) => (400, json!({ "error": format!("invalid body: {e}") })),
                     Ok(mut cron) => {
                         cron.namespace = ns.to_string();
+                        if cron.id.is_empty() {
+                            cron.id = uuid::Uuid::new_v4().to_string();
+                        }
                         let now = Utc::now();
                         cron.created_at = now;
                         cron.updated_at = now;
+                        // Pre-compute the first fire time so the scheduler picks it up immediately.
+                        if cron.next_fire_at.is_none() {
+                            cron.next_fire_at = Cron::next_fire_after(&cron.schedule, now);
+                        }
 
                         match self.store.put_cron(&cron).await {
                             Err(e) => return server_error(e),

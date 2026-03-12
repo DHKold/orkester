@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use axum::{
+    body::Bytes,
     extract::State,
     http::{Method, StatusCode, Uri},
     response::IntoResponse,
@@ -75,7 +76,13 @@ async fn dynamic_route_handler(
     State(state): State<Arc<AppState>>,
     method: Method,
     uri: Uri,
+    body: Bytes,
 ) -> impl IntoResponse {
+    let body_json: Value = if body.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&body).unwrap_or(Value::Null)
+    };
     let method_str = method.to_string();
     let path = uri.path().to_string();
 
@@ -131,6 +138,7 @@ async fn dynamic_route_handler(
             "correlation_id": corr_id,
             "method": method_str,
             "path": path,
+            "body": body_json,
         }),
     );
 
