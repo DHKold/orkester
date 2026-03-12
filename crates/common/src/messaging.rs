@@ -15,7 +15,7 @@ use serde_json::Value;
 #[derive(Debug, Clone)]
 pub struct Message {
     /// Unique message ID (caller-assigned; the hub preserves it on forwarding).
-    pub id: String,
+    pub id: u64,
     /// Name of the sender (server instance name or `"hub"`).
     pub source: String,
     /// Name of the intended recipient (server instance name or `"hub"`).
@@ -28,14 +28,14 @@ pub struct Message {
 
 impl Message {
     pub fn new(
-        id: impl Into<String>,
+        id: u64,
         source: impl Into<String>,
         target: impl Into<String>,
         message_type: impl Into<String>,
         content: Value,
     ) -> Self {
         Message {
-            id: id.into(),
+            id,
             source: source.into(),
             target: target.into(),
             message_type: message_type.into(),
@@ -46,7 +46,7 @@ impl Message {
     /// Build an error reply sent back to the original sender when the target is unknown.
     pub fn unknown_target_error(original: &Message) -> Message {
         Message {
-            id: format!("{}-err", original.id),
+            id: 0,
             source: "hub".to_string(),
             target: original.source.clone(),
             message_type: "error".to_string(),

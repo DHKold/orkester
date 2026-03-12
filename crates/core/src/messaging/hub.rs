@@ -42,9 +42,13 @@ impl Hub {
     /// Drain all pending inbound messages from every registered server and
     /// route each one.  Returns the number of messages processed.
     ///
+    /// Channels whose sender has been dropped are automatically deregistered
+    /// so they are not polled again.
+    ///
     /// This is designed to be called repeatedly from the main loop.
-    pub fn poll(&self) -> usize {
-        let mut count = 0;
+    pub fn poll(&mut self) -> usize {
+        let mut messages = Vec::new();
+        let mut disconnected = Vec::new();
 
         for hub_side in self.channels.values() {
             loop {
@@ -52,24 +56,30 @@ impl Hub {
                     Ok(mut msg) => {
                         // Always stamp the real sender before forwarding.
                         msg.source = hub_side.instance_name.clone();
-
                         Logger::trace(format!("Hub received: {}", msg));
-
-                        self.route(msg);
-                        count += 1;
+                        messages.push(msg);
                     }
                     Err(mpsc::TryRecvError::Empty) => break,
                     Err(mpsc::TryRecvError::Disconnected) => {
-                        Logger::warn(format!(
-                            "Hub: channel from server '{}' disconnected.",
+                        Logger::info(format!(
+                            "Hub: server '{}' disconnected — deregistering channel.",
                             hub_side.instance_name
                         ));
+                        disconnected.push(hub_side.instance_name.clone());
                         break;
                     }
                 }
             }
         }
 
+        for name in disconnected {
+            self.channels.remove(&name);
+        }
+
+        let count = messages.len();
+        for msg in messages {
+            self.route(msg);
+        }
         count
     }
 
