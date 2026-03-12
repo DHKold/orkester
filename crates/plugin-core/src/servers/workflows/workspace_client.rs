@@ -9,9 +9,9 @@
 //! This keeps everything in-process and avoids any network round-trip when
 //! both servers run in the same Orkester instance.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 use std::time::Duration;
 
 use orkester_common::domain::{Namespace, Task, Work};
@@ -54,10 +54,7 @@ impl WorkspaceClient {
     /// Must be called from the server's event loop whenever an
     /// `http_response` message addressed to this client arrives from the hub.
     pub fn handle_response(&self, msg: Message) {
-        let corr_id = msg
-            .content
-            .get("correlation_id")
-            .and_then(|v| v.as_u64());
+        let corr_id = msg.content.get("correlation_id").and_then(|v| v.as_u64());
         if let Some(id) = corr_id {
             if let Some(tx) = self.inner.pending.lock().unwrap().remove(&id) {
                 let body = msg.content.get("body").cloned().unwrap_or(Value::Null);
@@ -69,9 +66,7 @@ impl WorkspaceClient {
     // ── Namespace queries ─────────────────────────────────────────────────
 
     pub async fn get_namespace(&self, name: &str) -> ClientResult<Namespace> {
-        let body = self
-            .get(&format!("/v1/namespaces/{name}"))
-            .await?;
+        let body = self.get(&format!("/v1/namespaces/{name}")).await?;
         parse_one(body)
     }
 
@@ -82,14 +77,11 @@ impl WorkspaceClient {
 
     // ── Task queries ──────────────────────────────────────────────────────
 
-    pub async fn get_task(
-        &self,
-        namespace: &str,
-        name: &str,
-        version: &str,
-    ) -> ClientResult<Task> {
+    pub async fn get_task(&self, namespace: &str, name: &str, version: &str) -> ClientResult<Task> {
         let body = self
-            .get(&format!("/v1/namespaces/{namespace}/tasks/{name}/{version}"))
+            .get(&format!(
+                "/v1/namespaces/{namespace}/tasks/{name}/{version}"
+            ))
             .await?;
         parse_one(body)
     }
@@ -103,14 +95,11 @@ impl WorkspaceClient {
 
     // ── Work queries ──────────────────────────────────────────────────────
 
-    pub async fn get_work(
-        &self,
-        namespace: &str,
-        name: &str,
-        version: &str,
-    ) -> ClientResult<Work> {
+    pub async fn get_work(&self, namespace: &str, name: &str, version: &str) -> ClientResult<Work> {
         let body = self
-            .get(&format!("/v1/namespaces/{namespace}/works/{name}/{version}"))
+            .get(&format!(
+                "/v1/namespaces/{namespace}/works/{name}/{version}"
+            ))
             .await?;
         parse_one(body)
     }
@@ -180,9 +169,6 @@ fn parse_one<T: serde::de::DeserializeOwned>(body: Value) -> ClientResult<T> {
 }
 
 fn parse_list<T: serde::de::DeserializeOwned>(body: Value, key: &str) -> ClientResult<Vec<T>> {
-    let arr = body
-        .get(key)
-        .cloned()
-        .unwrap_or(Value::Array(vec![]));
+    let arr = body.get(key).cloned().unwrap_or(Value::Array(vec![]));
     serde_json::from_value(arr).map_err(|e| ClientError::Deserialize(e.to_string()))
 }

@@ -2,8 +2,8 @@
 
 use crate::messaging::{self, HubSide};
 use crate::registry::Registry;
-use orkester_common::{log_debug, log_error, log_info, log_warn};
 use orkester_common::plugin::servers::Server;
+use orkester_common::{log_debug, log_error, log_info, log_warn};
 
 use super::config::ServerEntry;
 
@@ -37,7 +37,11 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
     for entry in entries {
         let component_key = format!("{}:{}", entry.plugin_id, entry.server_id);
 
-        log_info!("Starting server '{}' (component='{}')...", entry.instance_name, component_key);
+        log_info!(
+            "Starting server '{}' (component='{}')...",
+            entry.instance_name,
+            component_key
+        );
 
         let comp = match registry.server_builders.get(&component_key) {
             Some(c) => c,
@@ -50,12 +54,19 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
         let builder = match &comp.builder {
             orkester_common::plugin::PluginComponent::Server(b) => b,
             _ => {
-                log_error!("Component '{}' is not a Server builder — skipping.", component_key);
+                log_error!(
+                    "Component '{}' is not a Server builder — skipping.",
+                    component_key
+                );
                 continue;
             }
         };
 
-        log_debug!("Building server '{}' with config: {}", entry.instance_name, entry.config);
+        log_debug!(
+            "Building server '{}' with config: {}",
+            entry.instance_name,
+            entry.config
+        );
 
         let server = match builder.build(entry.config.clone()) {
             Ok(s) => s,
@@ -87,7 +98,12 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
     if running.len() == entries.len() {
         log_info!("All {} server(s) started successfully.", running.len());
     } else {
-        log_warn!("{}/{} server(s) started — {} failed (see errors above).", running.len(), entries.len(), entries.len() - running.len());
+        log_warn!(
+            "{}/{} server(s) started — {} failed (see errors above).",
+            running.len(),
+            entries.len(),
+            entries.len() - running.len()
+        );
     }
 
     (running, hub_sides)
@@ -107,7 +123,11 @@ pub fn cleanup(servers: &[RunningServer]) -> Result<(), String> {
     let mut errors: Vec<String> = Vec::new();
 
     for srv in servers {
-        log_info!("Stopping server '{}' ({})...", srv.instance_name, srv.component_key);
+        log_info!(
+            "Stopping server '{}' ({})...",
+            srv.instance_name,
+            srv.component_key
+        );
         if let Err(e) = srv.server.stop() {
             let msg = format!("Server '{}' stop error: {}", srv.instance_name, e);
             log_error!("{}", msg);

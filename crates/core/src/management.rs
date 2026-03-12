@@ -20,8 +20,8 @@
 use std::sync::mpsc;
 use std::time::Instant;
 
-use orkester_common::{log_debug, log_info, log_warn};
 use orkester_common::messaging::Message;
+use orkester_common::{log_debug, log_info, log_warn};
 use serde_json::{json, Value};
 
 use crate::config::ConfigTree;
@@ -105,7 +105,11 @@ impl ManagementApi {
                     json!({ "method": method, "path": path }),
                 );
                 if self.to_hub.send(msg).is_err() {
-                    log_warn!("Management: could not send register_route for {} {} — hub disconnected", method, path);
+                    log_warn!(
+                        "Management: could not send register_route for {} {} — hub disconnected",
+                        method,
+                        path
+                    );
                 }
             }
             log_info!("Management: sent route registrations to '{}'.", rest);
@@ -131,15 +135,26 @@ impl ManagementApi {
             "http_request" => self.handle_http(msg),
 
             "route_registered" => {
-                let method = msg.content.get("method").and_then(|v| v.as_str()).unwrap_or("?");
-                let path   = msg.content.get("path").and_then(|v| v.as_str()).unwrap_or("?");
+                let method = msg
+                    .content
+                    .get("method")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("?");
+                let path = msg
+                    .content
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("?");
                 log_info!("Management: route registered — {} {}", method, path);
             }
 
             "error" => {
                 log_warn!(
                     "Management: hub error — {}",
-                    msg.content.get("error").and_then(|v| v.as_str()).unwrap_or("unknown")
+                    msg.content
+                        .get("error")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown")
                 );
             }
 
@@ -150,8 +165,16 @@ impl ManagementApi {
     }
 
     fn handle_http(&self, msg: Message) {
-        let path    = msg.content.get("path").and_then(|v| v.as_str()).unwrap_or("");
-        let corr_id = msg.content.get("correlation_id").and_then(|v| v.as_u64()).unwrap_or(0);
+        let path = msg
+            .content
+            .get("path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let corr_id = msg
+            .content
+            .get("correlation_id")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
         let rest_server = msg.source.clone();
 
         log_debug!("Management: GET {} (correlation_id={})", path, corr_id);
@@ -162,10 +185,13 @@ impl ManagementApi {
                 "uptime_seconds": self.started_at.elapsed().as_secs(),
             }),
             "/v1/plugins" => self.plugins_json.clone(),
-            "/v1/config"  => self.config_json.clone(),
+            "/v1/config" => self.config_json.clone(),
             "/v1/servers" => self.servers_json.clone(),
             other => {
-                log_warn!("Management: received http_request for unhandled path '{}'", other);
+                log_warn!(
+                    "Management: received http_request for unhandled path '{}'",
+                    other
+                );
                 json!({ "error": "not found" })
             }
         };
@@ -179,7 +205,10 @@ impl ManagementApi {
         );
 
         if self.to_hub.send(reply).is_err() {
-            log_warn!("Management: could not send response for {} — hub disconnected", path);
+            log_warn!(
+                "Management: could not send response for {} — hub disconnected",
+                path
+            );
         }
     }
 }
@@ -190,12 +219,14 @@ fn build_plugins_json(registry: &Registry) -> Value {
     let list: Vec<Value> = registry
         .plugins
         .iter()
-        .map(|m| json!({
-            "id":          m.id,
-            "version":     m.version,
-            "description": m.description,
-            "authors":     m.authors,
-        }))
+        .map(|m| {
+            json!({
+                "id":          m.id,
+                "version":     m.version,
+                "description": m.description,
+                "authors":     m.authors,
+            })
+        })
         .collect();
     json!({ "plugins": list })
 }
@@ -203,10 +234,12 @@ fn build_plugins_json(registry: &Registry) -> Value {
 fn build_servers_json(running: &[RunningServer]) -> Value {
     let list: Vec<Value> = running
         .iter()
-        .map(|s| json!({
-            "instance_name": s.instance_name,
-            "component":     s.component_key,
-        }))
+        .map(|s| {
+            json!({
+                "instance_name": s.instance_name,
+                "component":     s.component_key,
+            })
+        })
         .collect();
     json!({ "servers": list })
 }

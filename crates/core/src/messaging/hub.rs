@@ -1,8 +1,8 @@
 //! The message hub — collects inbound messages from all servers and routes them
 //! to the correct target, or returns an error message if the target is unknown.
 
-use orkester_common::{log_debug, log_error, log_info, log_trace, log_warn};
 use orkester_common::messaging::Message;
+use orkester_common::{log_debug, log_error, log_info, log_trace, log_warn};
 use std::collections::HashMap;
 use std::sync::mpsc;
 
@@ -30,7 +30,10 @@ impl Hub {
 
     /// Register one server channel with the hub.
     pub fn register(&mut self, hub_side: HubSide) {
-        log_debug!("Hub: registered channel for server '{}'.", hub_side.instance_name);
+        log_debug!(
+            "Hub: registered channel for server '{}'.",
+            hub_side.instance_name
+        );
         self.channels
             .insert(hub_side.instance_name.clone(), hub_side);
     }
@@ -57,7 +60,10 @@ impl Hub {
                     }
                     Err(mpsc::TryRecvError::Empty) => break,
                     Err(mpsc::TryRecvError::Disconnected) => {
-                        log_info!("Hub: server '{}' disconnected — deregistering channel.", hub_side.instance_name);
+                        log_info!(
+                            "Hub: server '{}' disconnected — deregistering channel.",
+                            hub_side.instance_name
+                        );
                         disconnected.push(hub_side.instance_name.clone());
                         break;
                     }
@@ -87,7 +93,12 @@ impl Hub {
                 }
             }
             None => {
-                log_warn!("Hub: unknown target '{}' for message '{}' from '{}' — returning error.", msg.target, msg.id, msg.source);
+                log_warn!(
+                    "Hub: unknown target '{}' for message '{}' from '{}' — returning error.",
+                    msg.target,
+                    msg.id,
+                    msg.source
+                );
                 let error_reply = Message::unknown_target_error(&msg);
                 self.send_error_reply(error_reply, &msg.source);
             }
@@ -104,7 +115,10 @@ impl Hub {
             }
             None => {
                 // The original sender is also gone — just drop the error reply.
-                log_warn!("Hub: could not send error reply — source '{}' is not registered.", source);
+                log_warn!(
+                    "Hub: could not send error reply — source '{}' is not registered.",
+                    source
+                );
             }
         }
     }

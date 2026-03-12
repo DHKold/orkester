@@ -12,12 +12,12 @@ use crate::{
     persistence::MemoryPersistenceBuilder,
     registry::LocalRegistryBuilder,
     servers::{
-        metrics::NoMetricsServerBuilder,
-        rest::AxumRestServerBuilder,
-        workspace::WorkspaceServerBuilder,        workflows::WorkflowsServerBuilder,    },
+        metrics::NoMetricsServerBuilder, rest::AxumRestServerBuilder,
+        workflows::WorkflowsServerBuilder, workspace::WorkspaceServerBuilder,
+    },
 };
-use orkester_common::plugin::{ComponentMetadata, Plugin, PluginComponent, PluginMetadata};
 use orkester_common::logging::Logger;
+use orkester_common::plugin::{ComponentMetadata, Plugin, PluginComponent, PluginMetadata};
 
 /// Constructs the core plugin, bundling all built-in provider and server implementations.
 pub fn core_plugin() -> Plugin {

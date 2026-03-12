@@ -235,7 +235,9 @@ pub struct StepState {
     pub attempt: u32,
 }
 
-fn default_one() -> u32 { 1 }
+fn default_one() -> u32 {
+    1
+}
 
 /// Aggregate execution metrics for a Workflow.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -402,4 +404,6 @@ impl Cron {
     }
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}

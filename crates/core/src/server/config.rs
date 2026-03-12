@@ -63,7 +63,10 @@ pub fn parse(config: &ConfigTree) -> Vec<ServerEntry> {
         {
             Some(n) => n.to_string(),
             None => {
-                log_error!("Server entry '{}' is missing `component.server` — skipping.", instance_name);
+                log_error!(
+                    "Server entry '{}' is missing `component.server` — skipping.",
+                    instance_name
+                );
                 continue;
             }
         };
@@ -78,7 +81,12 @@ pub fn parse(config: &ConfigTree) -> Vec<ServerEntry> {
             cfg
         };
 
-        log_debug!("Parsed server entry '{}' → plugin='{}' server='{}'", instance_name, plugin_id, server_id);
+        log_debug!(
+            "Parsed server entry '{}' → plugin='{}' server='{}'",
+            instance_name,
+            plugin_id,
+            server_id
+        );
 
         entries.push(ServerEntry {
             instance_name: instance_name.clone(),

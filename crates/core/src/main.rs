@@ -66,11 +66,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (servers, hub_sides) = server::start_servers(&config_tree, &registry)?;
 
     // Build the management API — capture snapshots and create its hub channel.
-    let (management_api, mgmt_hub_side) = management::ManagementApi::new(
-        &registry,
-        &config_tree,
-        &servers,
-    );
+    let (management_api, mgmt_hub_side) =
+        management::ManagementApi::new(&registry, &config_tree, &servers);
 
     // Build the message hub and register all server channels.
     let mut hub = messaging::Hub::new();

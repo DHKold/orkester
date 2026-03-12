@@ -46,9 +46,9 @@ pub mod store;
 pub mod worker;
 pub mod workspace_client;
 
-use serde_json::Value;
 use orkester_common::messaging::ServerSide;
 use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
+use serde_json::Value;
 
 // ── WorkflowsServer ───────────────────────────────────────────────────────────
 
@@ -83,4 +83,3 @@ impl ServerBuilder for WorkflowsServerBuilder {
         Ok(Box::new(WorkflowsServer { config }))
     }
 }
-

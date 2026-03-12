@@ -73,7 +73,10 @@ pub struct IntMinFilter {
 
 impl IntMinFilter {
     pub fn new(field: impl Fn(&Log) -> i64 + Send + Sync + 'static, min: i64) -> Self {
-        Self { field: Box::new(field), min }
+        Self {
+            field: Box::new(field),
+            min,
+        }
     }
 }
 
@@ -93,7 +96,10 @@ pub struct IntMaxFilter {
 
 impl IntMaxFilter {
     pub fn new(field: impl Fn(&Log) -> i64 + Send + Sync + 'static, max: i64) -> Self {
-        Self { field: Box::new(field), max }
+        Self {
+            field: Box::new(field),
+            max,
+        }
     }
 }
 
@@ -129,11 +135,11 @@ impl StrMatch {
 
     fn test(&self, s: &str) -> bool {
         match self {
-            StrMatch::Exact(p)    => s == p.as_str(),
+            StrMatch::Exact(p) => s == p.as_str(),
             StrMatch::Contains(p) => s.contains(p.as_str()),
-            StrMatch::Prefix(p)   => s.starts_with(p.as_str()),
-            StrMatch::Suffix(p)   => s.ends_with(p.as_str()),
-            StrMatch::Regex(re)   => re.is_match(s),
+            StrMatch::Prefix(p) => s.starts_with(p.as_str()),
+            StrMatch::Suffix(p) => s.ends_with(p.as_str()),
+            StrMatch::Regex(re) => re.is_match(s),
         }
     }
 }
@@ -147,11 +153,11 @@ pub struct StrMatchesFilter {
 }
 
 impl StrMatchesFilter {
-    pub fn new(
-        field: impl Fn(&Log) -> String + Send + Sync + 'static,
-        pattern: StrMatch,
-    ) -> Self {
-        Self { field: Box::new(field), pattern }
+    pub fn new(field: impl Fn(&Log) -> String + Send + Sync + 'static, pattern: StrMatch) -> Self {
+        Self {
+            field: Box::new(field),
+            pattern,
+        }
     }
 }
 
@@ -174,7 +180,10 @@ impl StrAnyMatchesFilter {
         field: impl Fn(&Log) -> Vec<String> + Send + Sync + 'static,
         pattern: StrMatch,
     ) -> Self {
-        Self { field: Box::new(field), pattern }
+        Self {
+            field: Box::new(field),
+            pattern,
+        }
     }
 }
 
@@ -200,17 +209,26 @@ pub struct DateTimeFilter {
 impl DateTimeFilter {
     /// Passes entries timestamped at or after `t` (open upper bound).
     pub fn after(t: DateTime<Utc>) -> Self {
-        Self { after: Some(t), before: None }
+        Self {
+            after: Some(t),
+            before: None,
+        }
     }
 
     /// Passes entries timestamped at or before `t` (open lower bound).
     pub fn before(t: DateTime<Utc>) -> Self {
-        Self { after: None, before: Some(t) }
+        Self {
+            after: None,
+            before: Some(t),
+        }
     }
 
     /// Passes entries timestamped between `after` and `before` (inclusive).
     pub fn between(after: DateTime<Utc>, before: DateTime<Utc>) -> Self {
-        Self { after: Some(after), before: Some(before) }
+        Self {
+            after: Some(after),
+            before: Some(before),
+        }
     }
 }
 
@@ -277,7 +295,9 @@ pub struct NotFilter {
 
 impl NotFilter {
     pub fn new(inner: impl LogFilter + 'static) -> Self {
-        Self { inner: Box::new(inner) }
+        Self {
+            inner: Box::new(inner),
+        }
     }
 }
 
@@ -326,8 +346,8 @@ mod tests {
     #[test]
     fn int_min_passes_at_and_above() {
         let f = level_min(Level::INFO);
-        assert!(f.matches(&make(Level::INFO,  "s", vec![], "m")));
-        assert!(f.matches(&make(Level::WARN,  "s", vec![], "m")));
+        assert!(f.matches(&make(Level::INFO, "s", vec![], "m")));
+        assert!(f.matches(&make(Level::WARN, "s", vec![], "m")));
         assert!(f.matches(&make(Level::ERROR, "s", vec![], "m")));
         assert!(!f.matches(&make(Level::DEBUG, "s", vec![], "m")));
         assert!(!f.matches(&make(Level::TRACE, "s", vec![], "m")));
@@ -421,9 +441,9 @@ mod tests {
             Box::new(level_min(Level::INFO)),
             Box::new(tag(StrMatch::Exact("api".into()))),
         ]);
-        assert!(f.matches(&make(Level::INFO,  "s", vec!["api".into()], "m")));
+        assert!(f.matches(&make(Level::INFO, "s", vec!["api".into()], "m")));
         assert!(!f.matches(&make(Level::DEBUG, "s", vec!["api".into()], "m")));
-        assert!(!f.matches(&make(Level::INFO,  "s", vec![], "m")));
+        assert!(!f.matches(&make(Level::INFO, "s", vec![], "m")));
     }
 
     #[test]
@@ -433,8 +453,8 @@ mod tests {
             Box::new(tag(StrMatch::Exact("critical".into()))),
         ]);
         assert!(f.matches(&make(Level::ERROR, "s", vec![], "m")));
-        assert!(f.matches(&make(Level::INFO,  "s", vec!["critical".into()], "m")));
-        assert!(!f.matches(&make(Level::INFO,  "s", vec![], "m")));
+        assert!(f.matches(&make(Level::INFO, "s", vec!["critical".into()], "m")));
+        assert!(!f.matches(&make(Level::INFO, "s", vec![], "m")));
     }
 
     #[test]

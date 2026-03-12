@@ -46,12 +46,10 @@ pub mod store;
 
 use std::sync::Arc;
 
-use orkester_common::{log_error, log_info, log_warn};
 use orkester_common::messaging::{Message, ServerSide};
-use orkester_common::plugin::providers::persistence::{
-    EntityKey, PersistenceProvider,
-};
+use orkester_common::plugin::providers::persistence::{EntityKey, PersistenceProvider};
 use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
+use orkester_common::{log_error, log_info, log_warn};
 use serde_json::{json, Value};
 
 use api::ApiHandler;
@@ -118,12 +116,7 @@ async fn run(config: Value, channel: ServerSide) {
                 let count = objs.len();
                 for obj in objs {
                     if let Err(e) = store.upsert(&obj).await {
-                        log_error!(
-                            "Failed to store {} '{}': {}",
-                            obj.kind(),
-                            obj.name(),
-                            e
-                        );
+                        log_error!("Failed to store {} '{}': {}", obj.kind(), obj.name(), e);
                     }
                 }
                 log_info!("Initial load complete: {} object(s).", count);
@@ -158,10 +151,7 @@ async fn run(config: Value, channel: ServerSide) {
             return;
         }
     }
-    log_info!(
-        "Route registrations sent to '{}'.",
-        rest_target
-    );
+    log_info!("Route registrations sent to '{}'.", rest_target);
 
     // ── Build API handler ─────────────────────────────────────────────────
     let handler = ApiHandler {

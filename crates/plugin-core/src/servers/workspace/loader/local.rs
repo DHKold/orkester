@@ -14,8 +14,8 @@ use notify::{Event, EventKind, PollWatcher, RecursiveMode, Watcher};
 use orkester_common::{log_debug, log_error, log_info, log_warn};
 use tokio::sync::mpsc::UnboundedSender;
 
-use orkester_common::domain::ObjectEnvelope;
 use super::{parse_yaml_documents, LoaderError, LoaderEvent, ObjectLoader};
+use orkester_common::domain::ObjectEnvelope;
 
 // ── LocalLoader ───────────────────────────────────────────────────────────────
 
@@ -44,7 +44,9 @@ impl ObjectLoader for LocalLoader {
         let indexed: HashMap<PathBuf, Vec<ObjectEnvelope>> =
             tokio::task::spawn_blocking(move || scan_dir_indexed(&dir))
                 .await
-                .map_err(|e| LoaderError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))??;
+                .map_err(|e| {
+                    LoaderError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+                })??;
 
         let mut all = Vec::new();
         let mut index = self.file_index.lock().unwrap();
@@ -66,8 +68,7 @@ impl ObjectLoader for LocalLoader {
 
             let mut watcher = match PollWatcher::new(
                 notify_tx,
-                notify::Config::default()
-                    .with_poll_interval(Duration::from_secs(2)),
+                notify::Config::default().with_poll_interval(Duration::from_secs(2)),
             ) {
                 Ok(w) => w,
                 Err(e) => {
@@ -77,18 +78,11 @@ impl ObjectLoader for LocalLoader {
             };
 
             if let Err(e) = watcher.watch(&dir, RecursiveMode::Recursive) {
-                log_error!(
-                    "Failed to watch directory '{}': {}",
-                    dir.display(),
-                    e
-                );
+                log_error!("Failed to watch directory '{}': {}", dir.display(), e);
                 return;
             }
 
-            log_info!(
-                "Watching '{}' for changes.",
-                dir.display()
-            );
+            log_info!("Watching '{}' for changes.", dir.display());
 
             for event_result in notify_rx {
                 match event_result {
@@ -109,7 +103,10 @@ impl ObjectLoader for LocalLoader {
 fn scan_dir_indexed(dir: &Path) -> Result<HashMap<PathBuf, Vec<ObjectEnvelope>>, LoaderError> {
     let mut result: HashMap<PathBuf, Vec<ObjectEnvelope>> = HashMap::new();
 
-    fn visit(path: &Path, result: &mut HashMap<PathBuf, Vec<ObjectEnvelope>>) -> Result<(), LoaderError> {
+    fn visit(
+        path: &Path,
+        result: &mut HashMap<PathBuf, Vec<ObjectEnvelope>>,
+    ) -> Result<(), LoaderError> {
         for entry in std::fs::read_dir(path)? {
             let entry = entry?;
             let entry_path = entry.path();
@@ -156,12 +153,15 @@ fn is_yaml(path: &Path) -> bool {
 /// Stable identity key for an object: `kind/namespace/name@version`.
 fn identity_key(obj: &ObjectEnvelope) -> String {
     match obj {
-        ObjectEnvelope::Namespace(n) =>
-            format!("Namespace//{}//{}", n.meta.name, n.meta.version),
-        ObjectEnvelope::Task(t) =>
-            format!("Task/{}/{}/{}", t.meta.metadata.namespace, t.meta.name, t.meta.version),
-        ObjectEnvelope::Work(w) =>
-            format!("Work/{}/{}/{}", w.meta.metadata.namespace, w.meta.name, w.meta.version),
+        ObjectEnvelope::Namespace(n) => format!("Namespace//{}//{}", n.meta.name, n.meta.version),
+        ObjectEnvelope::Task(t) => format!(
+            "Task/{}/{}/{}",
+            t.meta.metadata.namespace, t.meta.name, t.meta.version
+        ),
+        ObjectEnvelope::Work(w) => format!(
+            "Work/{}/{}/{}",
+            w.meta.metadata.namespace, w.meta.name, w.meta.version
+        ),
     }
 }
 
@@ -170,12 +170,7 @@ fn handle_event(
     tx: &UnboundedSender<LoaderEvent>,
     file_index: &Mutex<HashMap<PathBuf, Vec<ObjectEnvelope>>>,
 ) {
-    let yaml_paths: Vec<PathBuf> = event
-        .paths
-        .iter()
-        .filter(|p| is_yaml(p))
-        .cloned()
-        .collect();
+    let yaml_paths: Vec<PathBuf> = event.paths.iter().filter(|p| is_yaml(p)).cloned().collect();
 
     if yaml_paths.is_empty() {
         return;
@@ -198,17 +193,26 @@ fn handle_event(
                 // Emit Removed for objects present in the old version but gone
                 // from the new one (document deleted or renamed inside the file).
                 for old in &old_objs {
-                    if !new_objs.iter().any(|n| identity_key(n) == identity_key(old)) {
+                    if !new_objs
+                        .iter()
+                        .any(|n| identity_key(n) == identity_key(old))
+                    {
                         log_info!(
                             "Object removed from '{}': {} '{}'",
-                            path.display(), old.kind(), old.name()
+                            path.display(),
+                            old.kind(),
+                            old.name()
                         );
                         let _ = tx.send(LoaderEvent::Removed(old.clone()));
                     }
                 }
 
                 // Upsert every object currently in the file.
-                log_info!("File changed: '{}' ({} object(s))", path.display(), new_objs.len());
+                log_info!(
+                    "File changed: '{}' ({} object(s))",
+                    path.display(),
+                    new_objs.len()
+                );
                 for obj in &new_objs {
                     let _ = tx.send(LoaderEvent::Upserted(obj.clone()));
                 }
@@ -222,7 +226,8 @@ fn handle_event(
                 if let Some(old_objs) = index.remove(&path) {
                     log_info!(
                         "File removed: '{}' ({} object(s) deleted)",
-                        path.display(), old_objs.len()
+                        path.display(),
+                        old_objs.len()
                     );
                     for obj in old_objs {
                         let _ = tx.send(LoaderEvent::Removed(obj));

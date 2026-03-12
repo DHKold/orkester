@@ -1,5 +1,5 @@
-use std::sync::{OnceLock, RwLock};
 use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::{OnceLock, RwLock};
 
 use super::consumer::LogConsumer;
 use super::level::Level;

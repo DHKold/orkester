@@ -53,7 +53,10 @@ impl WorkflowsStore {
 
     pub async fn put_workflow(&self, wf: &Workflow) -> StoreResult<()> {
         let key = workflow_key(&wf.namespace, &wf.id);
-        self.inner.put(&key, to_value(wf)?).await.map_err(Into::into)
+        self.inner
+            .put(&key, to_value(wf)?)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn get_workflow(&self, namespace: &str, id: &str) -> StoreResult<Workflow> {
@@ -69,10 +72,7 @@ impl WorkflowsStore {
     }
 
     pub async fn list_workflows(&self, namespace: &str) -> StoreResult<Vec<Workflow>> {
-        let ids = self
-            .inner
-            .list(&format!("{namespace}/workflows"))
-            .await?;
+        let ids = self.inner.list(&format!("{namespace}/workflows")).await?;
         let mut out = Vec::with_capacity(ids.len());
         for id in ids {
             let val = self.inner.get(&workflow_key(namespace, &id)).await?;
@@ -103,7 +103,10 @@ impl WorkflowsStore {
 
     pub async fn put_cron(&self, cron: &Cron) -> StoreResult<()> {
         let key = cron_key(&cron.namespace, &cron.id);
-        self.inner.put(&key, to_value(cron)?).await.map_err(Into::into)
+        self.inner
+            .put(&key, to_value(cron)?)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn get_cron(&self, namespace: &str, id: &str) -> StoreResult<Cron> {

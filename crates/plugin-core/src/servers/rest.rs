@@ -11,9 +11,9 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use orkester_common::{log_debug, log_info, log_trace};
 use orkester_common::messaging::{Message, ServerSide};
 use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
+use orkester_common::{log_debug, log_info, log_trace};
 use serde_json::{json, Value};
 
 // ── Route registry ────────────────────────────────────────────────────────────
@@ -55,9 +55,9 @@ fn match_path_template(template: &str, path: &str) -> bool {
     if t.len() != p.len() {
         return false;
     }
-    t.iter().zip(p.iter()).all(|(ts, ps)| {
-        (ts.starts_with('{') && ts.ends_with('}')) || ts == ps
-    })
+    t.iter()
+        .zip(p.iter())
+        .all(|(ts, ps)| (ts.starts_with('{') && ts.ends_with('}')) || ts == ps)
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -101,9 +101,7 @@ async fn dynamic_route_handler(
         routes.get(&key).cloned().or_else(|| {
             routes
                 .iter()
-                .find(|(k, _)| {
-                    k.method == method_str && match_path_template(&k.path, &path)
-                })
+                .find(|(k, _)| k.method == method_str && match_path_template(&k.path, &path))
                 .map(|(_, v)| v.clone())
         })
     };
@@ -115,7 +113,7 @@ async fn dynamic_route_handler(
                 StatusCode::NOT_FOUND,
                 Json(json!({ "error": "route not found" })),
             )
-                .into_response()
+                .into_response();
         }
         Some(r) => r,
     };
@@ -126,7 +124,10 @@ async fn dynamic_route_handler(
 
     log_trace!(
         "REST dispatching to '{}' (method={} path={} correlation_id={})",
-        reg.target, method_str, path, corr_id
+        reg.target,
+        method_str,
+        path,
+        corr_id
     );
 
     let msg = Message::new(
@@ -144,7 +145,12 @@ async fn dynamic_route_handler(
 
     if state.to_hub.lock().unwrap().send(msg).is_err() {
         state.pending.lock().unwrap().remove(&corr_id);
-        log_debug!("REST {} {} → hub disconnected (correlation_id={})", method_str, path, corr_id);
+        log_debug!(
+            "REST {} {} → hub disconnected (correlation_id={})",
+            method_str,
+            path,
+            corr_id
+        );
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({ "error": "hub disconnected" })),
@@ -163,14 +169,23 @@ async fn dynamic_route_handler(
             let body = reply.content.get("body").cloned().unwrap_or(Value::Null);
             log_trace!(
                 "REST {} {} ← {} from '{}' (correlation_id={}, body={} bytes)",
-                method_str, path, status.as_u16(), reply.source, corr_id,
+                method_str,
+                path,
+                status.as_u16(),
+                reply.source,
+                corr_id,
                 body.to_string().len()
             );
             log_debug!("REST {} {} → {}", method_str, path, status.as_u16());
             (status, Json(body)).into_response()
         }
         Ok(Err(_)) => {
-            log_debug!("REST {} {} → upstream disconnected (correlation_id={})", method_str, path, corr_id);
+            log_debug!(
+                "REST {} {} → upstream disconnected (correlation_id={})",
+                method_str,
+                path,
+                corr_id
+            );
             (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(json!({ "error": "upstream disconnected" })),
@@ -180,7 +195,12 @@ async fn dynamic_route_handler(
         Err(_) => {
             // Timed out — clean up the pending slot.
             state.pending.lock().unwrap().remove(&corr_id);
-            log_debug!("REST {} {} → timeout (correlation_id={})", method_str, path, corr_id);
+            log_debug!(
+                "REST {} {} → timeout (correlation_id={})",
+                method_str,
+                path,
+                corr_id
+            );
             (
                 StatusCode::GATEWAY_TIMEOUT,
                 Json(json!({ "error": "upstream timeout" })),
@@ -215,7 +235,12 @@ async fn hub_message_task(
                     .unwrap_or("/")
                     .to_string();
 
-                log_info!("Registering route {} {} (requested by '{}').", method, path, msg.source);
+                log_info!(
+                    "Registering route {} {} (requested by '{}').",
+                    method,
+                    path,
+                    msg.source
+                );
 
                 state.routes.write().unwrap().insert(
                     RouteKey {

@@ -3,9 +3,9 @@ use serde_json::Value;
 use crate::config::ConfigTree;
 
 use orkester_common::logging::{
-    filter::{AllFilter, LogFilter, StrMatch, level_min, source},
     consumers::{ConsoleConsumer, FileConsumer},
-    Level, Logger, LogConsumer,
+    filter::{level_min, source, AllFilter, LogFilter, StrMatch},
+    Level, LogConsumer, Logger,
 };
 
 pub(crate) fn init_logging() {
@@ -88,9 +88,9 @@ fn build_filter(cfg: &Value) -> Option<Box<dyn LogFilter>> {
 
     match (level_f, source_f) {
         (Some(l), Some(s)) => Some(Box::new(AllFilter::new(vec![l, s]))),
-        (Some(l), None)    => Some(l),
-        (None,    Some(s)) => Some(s),
-        (None,    None)    => None,
+        (Some(l), None) => Some(l),
+        (None, Some(s)) => Some(s),
+        (None, None) => None,
     }
 }
 
@@ -98,9 +98,9 @@ fn parse_level(s: &str) -> Option<Level> {
     match s.to_uppercase().as_str() {
         "TRACE" => Some(Level::TRACE),
         "DEBUG" => Some(Level::DEBUG),
-        "INFO"  => Some(Level::INFO),
-        "WARN"  => Some(Level::WARN),
+        "INFO" => Some(Level::INFO),
+        "WARN" => Some(Level::WARN),
         "ERROR" => Some(Level::ERROR),
-        _       => None,
+        _ => None,
     }
 }

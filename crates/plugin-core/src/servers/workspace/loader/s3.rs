@@ -52,11 +52,7 @@ impl S3Loader {
 #[async_trait]
 impl ObjectLoader for S3Loader {
     async fn load_all(&self) -> Result<Vec<ObjectEnvelope>, LoaderError> {
-        log_info!(
-            "Initial load from s3://{}/{}",
-            self.bucket,
-            self.prefix
-        );
+        log_info!("Initial load from s3://{}/{}", self.bucket, self.prefix);
         fetch_all(&self.bucket, &self.prefix).await
     }
 
@@ -109,12 +105,15 @@ impl ObjectLoader for S3Loader {
                                                             n.kind() == old.kind()
                                                                 && n.name() == old.name()
                                                         }) {
-                                                            let _ = tx.send(LoaderEvent::Removed(old.clone()));
+                                                            let _ = tx.send(LoaderEvent::Removed(
+                                                                old.clone(),
+                                                            ));
                                                         }
                                                     }
                                                 }
                                                 for obj in &new_objs {
-                                                    let _ = tx.send(LoaderEvent::Upserted(obj.clone()));
+                                                    let _ =
+                                                        tx.send(LoaderEvent::Upserted(obj.clone()));
                                                 }
                                                 known.insert(key.clone(), (etag.clone(), new_objs));
                                             }
@@ -151,12 +150,7 @@ impl ObjectLoader for S3Loader {
                         }
                     }
                     Err(e) => {
-                        log_warn!(
-                            "Listing failed for s3://{}/{}: {}",
-                            bucket,
-                            prefix,
-                            e
-                        );
+                        log_warn!("Listing failed for s3://{}/{}: {}", bucket, prefix, e);
                     }
                 }
             }

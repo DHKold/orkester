@@ -14,7 +14,11 @@ use orkester_common::{log_debug, log_error, log_info, log_trace, log_warn};
 /// Load and merge a list of config files, applying CLI overrides last.
 /// Returns a merged [`ConfigTree`].
 pub fn load_config_files(paths: &[&str], overrides: &[&str]) -> ConfigTree {
-    log_info!("Loading config: {} file(s), {} override(s).", paths.len(), overrides.len());
+    log_info!(
+        "Loading config: {} file(s), {} override(s).",
+        paths.len(),
+        overrides.len()
+    );
 
     let mut merged = Value::Object(serde_json::Map::new());
     let mut loaded_count = 0usize;
@@ -56,8 +60,17 @@ pub fn load_config_files(paths: &[&str], overrides: &[&str]) -> ConfigTree {
         }
     }
 
-    log_info!("Config loading complete: {}/{} file(s) merged, {} override(s) applied.", loaded_count, paths.len(), overrides.len());
-    log_debug!("Final config:\n{}", serde_json::to_string_pretty(&merged).unwrap_or_else(|_| "<serialization error>".to_string()));
+    log_info!(
+        "Config loading complete: {}/{} file(s) merged, {} override(s) applied.",
+        loaded_count,
+        paths.len(),
+        overrides.len()
+    );
+    log_debug!(
+        "Final config:\n{}",
+        serde_json::to_string_pretty(&merged)
+            .unwrap_or_else(|_| "<serialization error>".to_string())
+    );
 
     ConfigTree(merged)
 }

@@ -1,6 +1,6 @@
-use orkester_common::{log_debug, log_error, log_info, log_warn};
 use orkester_common::messaging::{Message, ServerSide};
 use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
+use orkester_common::{log_debug, log_error, log_info, log_warn};
 use serde_json::{json, Value};
 
 pub struct NoMetricsServer {
@@ -33,7 +33,8 @@ impl Server for NoMetricsServer {
                         "route_registered" => {
                             log_info!(
                                 "[metrics] Route confirmed by '{}': {}",
-                                msg.source, msg.content
+                                msg.source,
+                                msg.content
                             );
                         }
                         "http_request" => {
@@ -42,7 +43,10 @@ impl Server for NoMetricsServer {
                                 .get("correlation_id")
                                 .and_then(|v| v.as_u64())
                                 .unwrap_or(0);
-                            log_debug!("[metrics] Handling HTTP request (correlation_id={}).", corr_id);
+                            log_debug!(
+                                "[metrics] Handling HTTP request (correlation_id={}).",
+                                corr_id
+                            );
                             let reply = Message::new(
                                 0,
                                 "", // hub stamps source

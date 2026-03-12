@@ -3,7 +3,7 @@
 use chrono::Utc;
 use orkester_common::{log_error, log_info};
 
-use super::model::{Cron, ConcurrencyAction, Workflow, WorkflowStatus};
+use super::model::{ConcurrencyAction, Cron, Workflow, WorkflowStatus};
 use super::store::WorkflowsStore;
 use super::worker::{LocalWorker, Worker};
 use super::workspace_client::WorkspaceClient;
@@ -28,7 +28,11 @@ pub async fn run_tick(store: &WorkflowsStore, workspace: &WorkspaceClient) {
             continue;
         }
 
-        log_info!("Scheduler: cron '{}' fired (schedule: {})", cron.id, cron.schedule);
+        log_info!(
+            "Scheduler: cron '{}' fired (schedule: {})",
+            cron.id,
+            cron.schedule
+        );
 
         // Find any active workflows for the same Work in the same namespace.
         let active = match store
@@ -39,7 +43,8 @@ pub async fn run_tick(store: &WorkflowsStore, workspace: &WorkspaceClient) {
             Err(e) => {
                 log_error!(
                     "Scheduler: could not list active workflows for cron '{}': {}",
-                    cron.id, e
+                    cron.id,
+                    e
                 );
                 continue;
             }
@@ -51,15 +56,17 @@ pub async fn run_tick(store: &WorkflowsStore, workspace: &WorkspaceClient) {
             let action = match existing.status {
                 WorkflowStatus::Waiting => &cron.concurrency_policy.on_waiting,
                 WorkflowStatus::Running => &cron.concurrency_policy.on_running,
-                WorkflowStatus::Paused  => &cron.concurrency_policy.on_paused,
-                _                       => &cron.concurrency_policy.default_action,
+                WorkflowStatus::Paused => &cron.concurrency_policy.on_paused,
+                _ => &cron.concurrency_policy.default_action,
             };
 
             match action {
                 ConcurrencyAction::Skip => {
                     log_info!(
                         "Scheduler: cron '{}' — skipping (existing workflow '{}' is {})",
-                        cron.id, existing.id, existing.status
+                        cron.id,
+                        existing.id,
+                        existing.status
                     );
                     create_new = false;
                     break;
@@ -67,7 +74,8 @@ pub async fn run_tick(store: &WorkflowsStore, workspace: &WorkspaceClient) {
                 ConcurrencyAction::CancelExisting => {
                     log_info!(
                         "Scheduler: cron '{}' — cancelling existing workflow '{}' and skipping",
-                        cron.id, existing.id
+                        cron.id,
+                        existing.id
                     );
                     cancel_workflow(store, &existing.namespace, &existing.id).await;
                     create_new = false;
@@ -75,7 +83,8 @@ pub async fn run_tick(store: &WorkflowsStore, workspace: &WorkspaceClient) {
                 ConcurrencyAction::Replace => {
                     log_info!(
                         "Scheduler: cron '{}' — replacing existing workflow '{}'",
-                        cron.id, existing.id
+                        cron.id,
+                        existing.id
                     );
                     cancel_workflow(store, &existing.namespace, &existing.id).await;
                     // create_new stays true — a new one will be spawned below.
@@ -92,7 +101,11 @@ pub async fn run_tick(store: &WorkflowsStore, workspace: &WorkspaceClient) {
             wf.execution = cron.execution.clone();
             wf.triggers.cron_id = Some(cron.id.clone());
 
-            log_info!("Scheduler: cron '{}' — creating workflow '{}'", cron.id, wf.id);
+            log_info!(
+                "Scheduler: cron '{}' — creating workflow '{}'",
+                cron.id,
+                wf.id
+            );
 
             match store.put_workflow(&wf).await {
                 Ok(()) => {
@@ -100,13 +113,16 @@ pub async fn run_tick(store: &WorkflowsStore, workspace: &WorkspaceClient) {
                     let wf_clone = wf.clone();
                     let workspace_clone = workspace.clone();
                     tokio::spawn(async move {
-                        LocalWorker.run(wf_clone, store_clone, workspace_clone).await;
+                        LocalWorker
+                            .run(wf_clone, store_clone, workspace_clone)
+                            .await;
                     });
                 }
                 Err(e) => {
                     log_error!(
                         "Scheduler: failed to persist workflow for cron '{}': {}",
-                        cron.id, e
+                        cron.id,
+                        e
                     );
                 }
             }
@@ -119,7 +135,8 @@ pub async fn run_tick(store: &WorkflowsStore, workspace: &WorkspaceClient) {
         if let Err(e) = store.put_cron(&cron).await {
             log_error!(
                 "Scheduler: failed to update cron '{}' after firing: {}",
-                cron.id, e
+                cron.id,
+                e
             );
         }
     }

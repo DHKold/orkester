@@ -49,7 +49,10 @@ pub enum LoaderError {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("yaml parse error in '{path}': {source}")]
-    Yaml { path: String, source: serde_yaml::Error },
+    Yaml {
+        path: String,
+        source: serde_yaml::Error,
+    },
     #[error("configuration error: {0}")]
     Config(String),
 }
@@ -58,10 +61,7 @@ pub enum LoaderError {
 
 /// Parse all YAML documents from `content` (a multi-document YAML string)
 /// that was loaded from `path` (used only in error messages).
-pub fn parse_yaml_documents(
-    content: &str,
-    path: &str,
-) -> Result<Vec<ObjectEnvelope>, LoaderError> {
+pub fn parse_yaml_documents(content: &str, path: &str) -> Result<Vec<ObjectEnvelope>, LoaderError> {
     let mut objects = Vec::new();
     for doc in serde_yaml::Deserializer::from_str(content) {
         let value: serde_yaml::Value =
@@ -79,35 +79,35 @@ pub fn parse_yaml_documents(
         // internally-tagged enum, which conflicts with #[serde(flatten)] in
         // serde_yaml — the tag field is consumed and not forwarded to the
         // flattened ObjectMeta, causing a "missing field `kind`" error.
-        let kind = value
-            .get("kind")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| LoaderError::Config(format!(
-                "document in '{}' is missing a 'kind' field", path
-            )))?;
+        let kind = value.get("kind").and_then(|v| v.as_str()).ok_or_else(|| {
+            LoaderError::Config(format!("document in '{}' is missing a 'kind' field", path))
+        })?;
 
         let envelope = match kind {
-            "Namespace" => ObjectEnvelope::Namespace(
-                serde_yaml::from_value(value).map_err(|e| LoaderError::Yaml {
+            "Namespace" => {
+                ObjectEnvelope::Namespace(serde_yaml::from_value(value).map_err(|e| {
+                    LoaderError::Yaml {
+                        path: path.to_string(),
+                        source: e,
+                    }
+                })?)
+            }
+            "Task" => ObjectEnvelope::Task(serde_yaml::from_value(value).map_err(|e| {
+                LoaderError::Yaml {
                     path: path.to_string(),
                     source: e,
-                })?,
-            ),
-            "Task" => ObjectEnvelope::Task(
-                serde_yaml::from_value(value).map_err(|e| LoaderError::Yaml {
+                }
+            })?),
+            "Work" => ObjectEnvelope::Work(serde_yaml::from_value(value).map_err(|e| {
+                LoaderError::Yaml {
                     path: path.to_string(),
                     source: e,
-                })?,
-            ),
-            "Work" => ObjectEnvelope::Work(
-                serde_yaml::from_value(value).map_err(|e| LoaderError::Yaml {
-                    path: path.to_string(),
-                    source: e,
-                })?,
-            ),
+                }
+            })?),
             other => {
                 return Err(LoaderError::Config(format!(
-                    "unknown kind '{}' in '{}'", other, path
+                    "unknown kind '{}' in '{}'",
+                    other, path
                 )))
             }
         };
@@ -120,9 +120,7 @@ pub fn parse_yaml_documents(
 ///
 /// The config must contain `type: "local"` or `type: "s3"` plus
 /// type-specific fields.
-pub fn loader_from_config(
-    cfg: &serde_json::Value,
-) -> Result<Arc<dyn ObjectLoader>, LoaderError> {
+pub fn loader_from_config(cfg: &serde_json::Value) -> Result<Arc<dyn ObjectLoader>, LoaderError> {
     let loader_type = cfg
         .get("type")
         .and_then(|v| v.as_str())
@@ -141,16 +139,15 @@ pub fn loader_from_config(
                 .get("bucket")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| LoaderError::Config("s3 loader requires 'bucket'".into()))?;
-            let prefix = cfg
-                .get("prefix")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let prefix = cfg.get("prefix").and_then(|v| v.as_str()).unwrap_or("");
             let poll_secs = cfg
                 .get("poll_interval_seconds")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(60);
             Ok(Arc::new(s3::S3Loader::new(bucket, prefix, poll_secs)))
         }
-        other => Err(LoaderError::Config(format!("unknown loader type '{other}'"))),
+        other => Err(LoaderError::Config(format!(
+            "unknown loader type '{other}'"
+        ))),
     }
 }

@@ -81,8 +81,15 @@ impl WorkspaceStore {
     // ── Tasks ─────────────────────────────────────────────────────────────
 
     pub async fn put_task(&self, task: &Task) -> StoreResult<()> {
-        let key = task_key(&task.meta.metadata.namespace, &task.meta.name, &task.meta.version);
-        self.inner.put(&key, to_value(task)?).await.map_err(Into::into)
+        let key = task_key(
+            &task.meta.metadata.namespace,
+            &task.meta.name,
+            &task.meta.version,
+        );
+        self.inner
+            .put(&key, to_value(task)?)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn get_task(&self, namespace: &str, name: &str, version: &str) -> StoreResult<Task> {
@@ -91,7 +98,10 @@ impl WorkspaceStore {
     }
 
     pub async fn delete_task(&self, namespace: &str, name: &str, version: &str) -> StoreResult<()> {
-        self.inner.delete(&task_key(namespace, name, version)).await.map_err(Into::into)
+        self.inner
+            .delete(&task_key(namespace, name, version))
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn list_tasks(&self, namespace: &str) -> StoreResult<Vec<Task>> {
@@ -109,8 +119,15 @@ impl WorkspaceStore {
     // ── Works ─────────────────────────────────────────────────────────────
 
     pub async fn put_work(&self, work: &Work) -> StoreResult<()> {
-        let key = work_key(&work.meta.metadata.namespace, &work.meta.name, &work.meta.version);
-        self.inner.put(&key, to_value(work)?).await.map_err(Into::into)
+        let key = work_key(
+            &work.meta.metadata.namespace,
+            &work.meta.name,
+            &work.meta.version,
+        );
+        self.inner
+            .put(&key, to_value(work)?)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn get_work(&self, namespace: &str, name: &str, version: &str) -> StoreResult<Work> {
@@ -119,7 +136,10 @@ impl WorkspaceStore {
     }
 
     pub async fn delete_work(&self, namespace: &str, name: &str, version: &str) -> StoreResult<()> {
-        self.inner.delete(&work_key(namespace, name, version)).await.map_err(Into::into)
+        self.inner
+            .delete(&work_key(namespace, name, version))
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn list_works(&self, namespace: &str) -> StoreResult<Vec<Work>> {
@@ -146,8 +166,14 @@ impl WorkspaceStore {
     pub async fn remove(&self, obj: &ObjectEnvelope) -> StoreResult<()> {
         match obj {
             ObjectEnvelope::Namespace(n) => self.delete_namespace(&n.meta.name).await,
-            ObjectEnvelope::Task(t) => self.delete_task(&t.meta.metadata.namespace, &t.meta.name, &t.meta.version).await,
-            ObjectEnvelope::Work(w) => self.delete_work(&w.meta.metadata.namespace, &w.meta.name, &w.meta.version).await,
+            ObjectEnvelope::Task(t) => {
+                self.delete_task(&t.meta.metadata.namespace, &t.meta.name, &t.meta.version)
+                    .await
+            }
+            ObjectEnvelope::Work(w) => {
+                self.delete_work(&w.meta.metadata.namespace, &w.meta.name, &w.meta.version)
+                    .await
+            }
         }
     }
 }
@@ -155,17 +181,34 @@ impl WorkspaceStore {
 // ── Key helpers ───────────────────────────────────────────────────────────────
 
 fn ns_key(name: &str) -> EntityKey {
-    EntityKey { namespace: "_namespaces".into(), id: name.to_string() }
+    EntityKey {
+        namespace: "_namespaces".into(),
+        id: name.to_string(),
+    }
 }
 
 fn task_key(namespace: &str, name: &str, version: &str) -> EntityKey {
-    let ns = if namespace.is_empty() { "default" } else { namespace };
-    EntityKey { namespace: format!("{ns}/tasks"), id: format!("{name}/{version}") }
+    let ns = if namespace.is_empty() {
+        "default"
+    } else {
+        namespace
+    };
+    EntityKey {
+        namespace: format!("{ns}/tasks"),
+        id: format!("{name}/{version}"),
+    }
 }
 
 fn work_key(namespace: &str, name: &str, version: &str) -> EntityKey {
-    let ns = if namespace.is_empty() { "default" } else { namespace };
-    EntityKey { namespace: format!("{ns}/works"), id: format!("{name}/{version}") }
+    let ns = if namespace.is_empty() {
+        "default"
+    } else {
+        namespace
+    };
+    EntityKey {
+        namespace: format!("{ns}/works"),
+        id: format!("{name}/{version}"),
+    }
 }
 
 fn split_id(id: &str) -> (&str, &str) {

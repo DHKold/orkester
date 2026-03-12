@@ -3,8 +3,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use orkester_common::{log_error, log_info, log_warn};
 use orkester_common::messaging::{Message, ServerSide};
+use orkester_common::{log_error, log_info, log_warn};
 use serde_json::{json, Value};
 
 use super::api::{self, ApiHandler};

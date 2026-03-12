@@ -9,11 +9,11 @@ use std::collections::HashMap;
 
 use crate::plugin::LoadedPlugin;
 use libloading::Library;
-use orkester_common::{log_debug, log_info};
 use orkester_common::plugin::{
     servers::{Server, ServerBuilder},
     ComponentMetadata, PluginComponent, PluginMetadata,
 };
+use orkester_common::{log_debug, log_info};
 
 // ── Registry ──────────────────────────────────────────────────────────────────
 pub struct Registry {
@@ -51,7 +51,11 @@ pub fn register_plugins(plugins: Vec<LoadedPlugin>) -> Registry {
         let plugin_id = lp.plugin.metadata.id.clone();
         let plugin_version = lp.plugin.metadata.version.clone();
 
-        log_info!("Registering components from plugin '{}' v{}...", plugin_id, plugin_version);
+        log_info!(
+            "Registering components from plugin '{}' v{}...",
+            plugin_id,
+            plugin_version
+        );
 
         // Transfer library handle into the registry so the .so stays mapped.
         if let Some(lib) = lp._lib {

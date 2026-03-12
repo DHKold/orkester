@@ -1,5 +1,5 @@
-use super::log::Log;
 use super::filter::LogFilter;
+use super::log::Log;
 
 /// Receives a [`Log`] entry and does something with it — prints it, forwards it,
 /// persists it, etc.

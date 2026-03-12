@@ -149,24 +149,24 @@ impl ObjectEnvelope {
     pub fn kind(&self) -> &'static str {
         match self {
             ObjectEnvelope::Namespace(_) => "Namespace",
-            ObjectEnvelope::Task(_)      => "Task",
-            ObjectEnvelope::Work(_)      => "Work",
+            ObjectEnvelope::Task(_) => "Task",
+            ObjectEnvelope::Work(_) => "Work",
         }
     }
 
     pub fn name(&self) -> &str {
         match self {
             ObjectEnvelope::Namespace(n) => &n.meta.name,
-            ObjectEnvelope::Task(t)      => &t.meta.name,
-            ObjectEnvelope::Work(w)      => &w.meta.name,
+            ObjectEnvelope::Task(t) => &t.meta.name,
+            ObjectEnvelope::Work(w) => &w.meta.name,
         }
     }
 
     pub fn namespace(&self) -> &str {
         match self {
             ObjectEnvelope::Namespace(_) => "",
-            ObjectEnvelope::Task(t)      => &t.meta.metadata.namespace,
-            ObjectEnvelope::Work(w)      => &w.meta.metadata.namespace,
+            ObjectEnvelope::Task(t) => &t.meta.metadata.namespace,
+            ObjectEnvelope::Work(w) => &w.meta.metadata.namespace,
         }
     }
 }

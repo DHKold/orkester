@@ -5,12 +5,12 @@ mod loaded;
 pub use loaded::LoadedPlugin;
 
 use crate::config::ConfigTree;
-use orkester_common::{log_error, log_info, log_trace, log_warn};
 use orkester_common::logging::Logger;
 use orkester_common::plugin::{
-    Plugin, PluginRegistrationFn, PluginSetLoggerFn,
-    PLUGIN_REGISTRATION_SYMBOL, PLUGIN_SET_LOGGER_SYMBOL,
+    Plugin, PluginRegistrationFn, PluginSetLoggerFn, PLUGIN_REGISTRATION_SYMBOL,
+    PLUGIN_SET_LOGGER_SYMBOL,
 };
+use orkester_common::{log_error, log_info, log_trace, log_warn};
 use std::path::{Path, PathBuf};
 
 /// Scan `plugins.dir` for `.so` files and load each one as a plugin.
@@ -25,14 +25,20 @@ pub fn load_plugins(config: &ConfigTree) -> Vec<LoadedPlugin> {
     let dir = match config.get_typed::<String>("plugins.dir") {
         Some(d) => d,
         None => {
-            log_warn!("No plugin directory configured under `plugins.dir` — running with no plugins.");
+            log_warn!(
+                "No plugin directory configured under `plugins.dir` — running with no plugins."
+            );
             return Vec::new();
         }
     };
     let recursive = config
         .get_typed::<bool>("plugins.recursive")
         .unwrap_or(false);
-    log_info!("Scanning plugin directory '{}' (recursive={})...", dir, recursive);
+    log_info!(
+        "Scanning plugin directory '{}' (recursive={})...",
+        dir,
+        recursive
+    );
 
     let so_files = find_so_files(Path::new(&dir), recursive);
     if so_files.is_empty() {
@@ -49,7 +55,12 @@ pub fn load_plugins(config: &ConfigTree) -> Vec<LoadedPlugin> {
         match load_dynamic(&display) {
             Ok(lp) => {
                 let meta = &lp.plugin.metadata;
-                log_info!("Plugin loaded: '{}' v{} ({})", meta.id, meta.version, meta.description);
+                log_info!(
+                    "Plugin loaded: '{}' v{} ({})",
+                    meta.id,
+                    meta.version,
+                    meta.description
+                );
                 loaded.push(lp);
             }
             Err(e) => {
@@ -57,7 +68,11 @@ pub fn load_plugins(config: &ConfigTree) -> Vec<LoadedPlugin> {
             }
         }
     }
-    log_info!("Plugin loading complete: {}/{} plugin(s) loaded successfully.", loaded.len(), so_files.len());
+    log_info!(
+        "Plugin loading complete: {}/{} plugin(s) loaded successfully.",
+        loaded.len(),
+        so_files.len()
+    );
 
     loaded
 }
@@ -115,9 +130,9 @@ fn load_dynamic(path: &str) -> Result<LoadedPlugin, Box<dyn std::error::Error>> 
     // inside the plugin write to the same consumers.  Optional — silently
     // skipped if the plugin does not export the symbol.
     unsafe {
-        if let Ok(sym) = lib.get::<libloading::Symbol<PluginSetLoggerFn>>(
-            PLUGIN_SET_LOGGER_SYMBOL.as_bytes(),
-        ) {
+        if let Ok(sym) =
+            lib.get::<libloading::Symbol<PluginSetLoggerFn>>(PLUGIN_SET_LOGGER_SYMBOL.as_bytes())
+        {
             sym(Logger::global() as *const Logger);
             log_trace!("Logger injected into plugin '{}'", path);
         }
@@ -127,7 +142,11 @@ fn load_dynamic(path: &str) -> Result<LoadedPlugin, Box<dyn std::error::Error>> 
         let sym: libloading::Symbol<PluginRegistrationFn> =
             lib.get(PLUGIN_REGISTRATION_SYMBOL.as_bytes())?;
 
-        log_trace!("Symbol '{}' resolved in '{}'", PLUGIN_REGISTRATION_SYMBOL, path);
+        log_trace!(
+            "Symbol '{}' resolved in '{}'",
+            PLUGIN_REGISTRATION_SYMBOL,
+            path
+        );
 
         let raw: *mut Plugin = sym();
         if raw.is_null() {

@@ -14,8 +14,8 @@
 
 use std::sync::mpsc;
 
-use orkester_common::{log_debug, log_warn};
 use orkester_common::messaging::Message;
+use orkester_common::{log_debug, log_warn};
 use serde_json::{json, Value};
 
 use super::store::WorkspaceStore;
@@ -43,9 +43,18 @@ pub struct ApiHandler {
 
 impl ApiHandler {
     pub async fn handle(&self, msg: Message) {
-        let path    = msg.content.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let corr_id = msg.content.get("correlation_id").and_then(|v| v.as_u64()).unwrap_or(0);
-        let source  = msg.source.clone();
+        let path = msg
+            .content
+            .get("path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let corr_id = msg
+            .content
+            .get("correlation_id")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        let source = msg.source.clone();
 
         log_debug!("GET {} (correlation_id={})", path, corr_id);
 
@@ -59,28 +68,22 @@ impl ApiHandler {
 
         match segs.as_slice() {
             // GET /v1/namespaces
-            ["v1", "namespaces"] => {
-                match self.store.list_namespaces().await {
-                    Ok(list) => (200, json!({ "namespaces": list })),
-                    Err(e) => server_error(e),
-                }
-            }
+            ["v1", "namespaces"] => match self.store.list_namespaces().await {
+                Ok(list) => (200, json!({ "namespaces": list })),
+                Err(e) => server_error(e),
+            },
 
             // GET /v1/namespaces/{name}
-            ["v1", "namespaces", name] => {
-                match self.store.get_namespace(name).await {
-                    Ok(ns) => (200, json!(ns)),
-                    Err(e) => not_found_or_error(e),
-                }
-            }
+            ["v1", "namespaces", name] => match self.store.get_namespace(name).await {
+                Ok(ns) => (200, json!(ns)),
+                Err(e) => not_found_or_error(e),
+            },
 
             // GET /v1/namespaces/{ns}/tasks
-            ["v1", "namespaces", ns, "tasks"] => {
-                match self.store.list_tasks(ns).await {
-                    Ok(list) => (200, json!({ "tasks": list })),
-                    Err(e) => server_error(e),
-                }
-            }
+            ["v1", "namespaces", ns, "tasks"] => match self.store.list_tasks(ns).await {
+                Ok(list) => (200, json!({ "tasks": list })),
+                Err(e) => server_error(e),
+            },
 
             // GET /v1/namespaces/{ns}/tasks/{name}/{version}
             ["v1", "namespaces", ns, "tasks", name, version] => {
@@ -91,12 +94,10 @@ impl ApiHandler {
             }
 
             // GET /v1/namespaces/{ns}/works
-            ["v1", "namespaces", ns, "works"] => {
-                match self.store.list_works(ns).await {
-                    Ok(list) => (200, json!({ "works": list })),
-                    Err(e) => server_error(e),
-                }
-            }
+            ["v1", "namespaces", ns, "works"] => match self.store.list_works(ns).await {
+                Ok(list) => (200, json!({ "works": list })),
+                Err(e) => server_error(e),
+            },
 
             // GET /v1/namespaces/{ns}/works/{name}/{version}
             ["v1", "namespaces", ns, "works", name, version] => {
