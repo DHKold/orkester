@@ -1,40 +1,47 @@
 //! Filter predicates for log consumers.
 //!
-//! A [`LogFilter`] is a boolean predicate on a [`Log`] entry.  Consumers hold
-//! a list of filters and accept a log only when **all** filters return `true`.
+//! # Generic primitive filters
 //!
-//! # Primitive filters
-//!
-//! | Type               | Passes when                                         |
-//! |--------------------|-----------------------------------------------------|
-//! | [`MinLevel`]       | `log.level >= min`                                  |
-//! | [`MaxLevel`]       | `log.level <= max`                                  |
-//! | [`SourceFilter`]   | source matches an exact, contains, or prefix rule   |
-//! | [`TagFilter`]      | the entry carries a specific tag                    |
-//! | [`DateTimeFilter`] | timestamp is within an optional time window         |
+//! | Type                    | Passes when                                         |
+//! |-------------------------|-----------------------------------------------------|
+//! | [`IntMinFilter`]        | extracted integer >= min                            |
+//! | [`IntMaxFilter`]        | extracted integer <= max                            |
+//! | [`StrMatchesFilter`]    | extracted string satisfies a [`StrMatch`] rule      |
+//! | [`StrAnyMatchesFilter`] | any string in extracted list satisfies a [`StrMatch`] rule |
+//! | [`DateTimeFilter`]      | timestamp is within an optional time window         |
 //!
 //! # Combinators
 //!
-//! | Type             | Semantics   |
-//! |------------------|-------------|
-//! | [`AllFilter`]    | logical AND |
-//! | [`AnyFilter`]    | logical OR  |
-//! | [`NotFilter`]    | logical NOT |
+//! | Type          | Semantics   |
+//! |---------------|-------------|
+//! | [`AllFilter`] | logical AND |
+//! | [`AnyFilter`] | logical OR  |
+//! | [`NotFilter`] | logical NOT |
+//!
+//! # Log-field convenience constructors
+//!
+//! | Function      | Field                   |
+//! |---------------|-------------------------|
+//! | [`level_min`] | `log.level >= min`      |
+//! | [`level_max`] | `log.level <= max`      |
+//! | [`source`]    | `log.source` match      |
+//! | [`tag`]       | any `log.tags[]` match  |
 //!
 //! # Example
 //!
 //! ```no_run
-//! use orkester_common::logging::filter::{AllFilter, MinLevel, TagFilter};
+//! use orkester_common::logging::filter::{AllFilter, level_min, source, StrMatch};
 //! use orkester_common::logging::{Level, consumers::ConsoleConsumer};
 //!
-//! let consumer = ConsoleConsumer::new()
-//!     .with_filter(AllFilter::new(vec![
-//!         Box::new(MinLevel::new(Level::INFO)),
-//!         Box::new(TagFilter::new("api")),
-//!     ]));
+//! let consumer = ConsoleConsumer::new();
+//! consumer.set_filter(Some(AllFilter::new(vec![
+//!     Box::new(level_min(Level::INFO)),
+//!     Box::new(source(StrMatch::Prefix("orkester".into()))),
+//! ])));
 //! ```
 
 use chrono::{DateTime, Utc};
+use regex::Regex;
 
 use crate::logging::{level::Level, log::Log};
 
@@ -48,110 +55,132 @@ pub trait LogFilter: Send + Sync {
     fn matches(&self, log: &Log) -> bool;
 }
 
-// ── Level filters ─────────────────────────────────────────────────────────────
+impl LogFilter for Box<dyn LogFilter> {
+    fn matches(&self, log: &Log) -> bool {
+        (**self).matches(log)
+    }
+}
 
-/// Passes log entries whose level is **at or above** `min`.
+// ── Generic: integer ─────────────────────────────────────────────────────────
+
+/// Passes when the extracted integer is **at or above** `min`.
 ///
-/// Use this to suppress TRACE / DEBUG noise in production consumers.
-pub struct MinLevel {
-    pub min: Level,
+/// Use [`level_min`] for the common case of filtering on `log.level`.
+pub struct IntMinFilter {
+    field: Box<dyn Fn(&Log) -> i64 + Send + Sync>,
+    pub min: i64,
 }
 
-impl MinLevel {
-    pub fn new(min: Level) -> Self {
-        Self { min }
+impl IntMinFilter {
+    pub fn new(field: impl Fn(&Log) -> i64 + Send + Sync + 'static, min: i64) -> Self {
+        Self { field: Box::new(field), min }
     }
 }
 
-impl LogFilter for MinLevel {
+impl LogFilter for IntMinFilter {
     fn matches(&self, log: &Log) -> bool {
-        log.level >= self.min
+        (self.field)(log) >= self.min
     }
 }
 
-/// Passes log entries whose level is **at or below** `max`.
-pub struct MaxLevel {
-    pub max: Level,
+/// Passes when the extracted integer is **at or below** `max`.
+///
+/// Use [`level_max`] for the common case of filtering on `log.level`.
+pub struct IntMaxFilter {
+    field: Box<dyn Fn(&Log) -> i64 + Send + Sync>,
+    pub max: i64,
 }
 
-impl MaxLevel {
-    pub fn new(max: Level) -> Self {
-        Self { max }
+impl IntMaxFilter {
+    pub fn new(field: impl Fn(&Log) -> i64 + Send + Sync + 'static, max: i64) -> Self {
+        Self { field: Box::new(field), max }
     }
 }
 
-impl LogFilter for MaxLevel {
+impl LogFilter for IntMaxFilter {
     fn matches(&self, log: &Log) -> bool {
-        log.level <= self.max
+        (self.field)(log) <= self.max
     }
 }
 
-// ── Source filter ─────────────────────────────────────────────────────────────
+// ── Generic: string match ─────────────────────────────────────────────────────
 
-/// Specifies how a log entry's `source` string must match.
-pub enum SourceMatch {
-    /// The source must equal `s` exactly (case-sensitive).
+/// How a string value must match.
+pub enum StrMatch {
+    /// Exact equality (case-sensitive).
     Exact(String),
-    /// The source must contain `s` as a substring (case-sensitive).
+    /// The value contains the pattern as a substring (case-sensitive).
     Contains(String),
-    /// The source must start with `s` (case-sensitive).
+    /// The value starts with the pattern (case-sensitive).
     Prefix(String),
+    /// The value ends with the pattern (case-sensitive).
+    Suffix(String),
+    /// The value matches a compiled regular expression.
+    Regex(Regex),
 }
 
-/// Passes log entries whose `source` satisfies a [`SourceMatch`] rule.
-pub struct SourceFilter {
-    pub pattern: SourceMatch,
-}
-
-impl SourceFilter {
-    /// Passes only entries whose source equals `s` exactly.
-    pub fn exact(s: impl Into<String>) -> Self {
-        Self {
-            pattern: SourceMatch::Exact(s.into()),
-        }
+impl StrMatch {
+    /// Compiles `pattern` as a regular expression.
+    ///
+    /// Returns an error if the pattern is invalid.
+    pub fn regex(pattern: &str) -> Result<Self, regex::Error> {
+        Regex::new(pattern).map(StrMatch::Regex)
     }
 
-    /// Passes entries whose source contains `s` as a substring.
-    pub fn contains(s: impl Into<String>) -> Self {
-        Self {
-            pattern: SourceMatch::Contains(s.into()),
-        }
-    }
-
-    /// Passes entries whose source starts with `s`.
-    pub fn prefix(s: impl Into<String>) -> Self {
-        Self {
-            pattern: SourceMatch::Prefix(s.into()),
+    fn test(&self, s: &str) -> bool {
+        match self {
+            StrMatch::Exact(p)    => s == p.as_str(),
+            StrMatch::Contains(p) => s.contains(p.as_str()),
+            StrMatch::Prefix(p)   => s.starts_with(p.as_str()),
+            StrMatch::Suffix(p)   => s.ends_with(p.as_str()),
+            StrMatch::Regex(re)   => re.is_match(s),
         }
     }
 }
 
-impl LogFilter for SourceFilter {
+/// Passes when a single extracted string satisfies a [`StrMatch`] rule.
+///
+/// Use [`source`] for the common case of matching on `log.source`.
+pub struct StrMatchesFilter {
+    field: Box<dyn Fn(&Log) -> String + Send + Sync>,
+    pub pattern: StrMatch,
+}
+
+impl StrMatchesFilter {
+    pub fn new(
+        field: impl Fn(&Log) -> String + Send + Sync + 'static,
+        pattern: StrMatch,
+    ) -> Self {
+        Self { field: Box::new(field), pattern }
+    }
+}
+
+impl LogFilter for StrMatchesFilter {
     fn matches(&self, log: &Log) -> bool {
-        match &self.pattern {
-            SourceMatch::Exact(s) => &log.source == s,
-            SourceMatch::Contains(s) => log.source.contains(s.as_str()),
-            SourceMatch::Prefix(s) => log.source.starts_with(s.as_str()),
-        }
+        self.pattern.test(&(self.field)(log))
     }
 }
 
-// ── Tag filter ────────────────────────────────────────────────────────────────
-
-/// Passes log entries that carry a specific tag (exact, case-sensitive match).
-pub struct TagFilter {
-    pub tag: String,
+/// Passes when **any** string in the extracted list satisfies a [`StrMatch`] rule.
+///
+/// Use [`tag`] for the common case of checking `log.tags`.
+pub struct StrAnyMatchesFilter {
+    field: Box<dyn Fn(&Log) -> Vec<String> + Send + Sync>,
+    pub pattern: StrMatch,
 }
 
-impl TagFilter {
-    pub fn new(tag: impl Into<String>) -> Self {
-        Self { tag: tag.into() }
+impl StrAnyMatchesFilter {
+    pub fn new(
+        field: impl Fn(&Log) -> Vec<String> + Send + Sync + 'static,
+        pattern: StrMatch,
+    ) -> Self {
+        Self { field: Box::new(field), pattern }
     }
 }
 
-impl LogFilter for TagFilter {
+impl LogFilter for StrAnyMatchesFilter {
     fn matches(&self, log: &Log) -> bool {
-        log.tags.iter().any(|t| t == &self.tag)
+        (self.field)(log).iter().any(|s| self.pattern.test(s))
     }
 }
 
@@ -171,26 +200,17 @@ pub struct DateTimeFilter {
 impl DateTimeFilter {
     /// Passes entries timestamped at or after `t` (open upper bound).
     pub fn after(t: DateTime<Utc>) -> Self {
-        Self {
-            after: Some(t),
-            before: None,
-        }
+        Self { after: Some(t), before: None }
     }
 
     /// Passes entries timestamped at or before `t` (open lower bound).
     pub fn before(t: DateTime<Utc>) -> Self {
-        Self {
-            after: None,
-            before: Some(t),
-        }
+        Self { after: None, before: Some(t) }
     }
 
     /// Passes entries timestamped between `after` and `before` (inclusive).
     pub fn between(after: DateTime<Utc>, before: DateTime<Utc>) -> Self {
-        Self {
-            after: Some(after),
-            before: Some(before),
-        }
+        Self { after: Some(after), before: Some(before) }
     }
 }
 
@@ -257,9 +277,7 @@ pub struct NotFilter {
 
 impl NotFilter {
     pub fn new(inner: impl LogFilter + 'static) -> Self {
-        Self {
-            inner: Box::new(inner),
-        }
+        Self { inner: Box::new(inner) }
     }
 }
 
@@ -267,6 +285,28 @@ impl LogFilter for NotFilter {
     fn matches(&self, log: &Log) -> bool {
         !self.inner.matches(log)
     }
+}
+
+// ── Log-field convenience constructors ───────────────────────────────────────
+
+/// Passes when `log.level` is **at or above** `min`.
+pub fn level_min(min: Level) -> IntMinFilter {
+    IntMinFilter::new(|log| log.level.0 as i64, min.0 as i64)
+}
+
+/// Passes when `log.level` is **at or below** `max`.
+pub fn level_max(max: Level) -> IntMaxFilter {
+    IntMaxFilter::new(|log| log.level.0 as i64, max.0 as i64)
+}
+
+/// Passes when `log.source` satisfies the given [`StrMatch`] rule.
+pub fn source(pattern: StrMatch) -> StrMatchesFilter {
+    StrMatchesFilter::new(|log| log.source.clone(), pattern)
+}
+
+/// Passes when **any** element of `log.tags` satisfies the given [`StrMatch`] rule.
+pub fn tag(pattern: StrMatch) -> StrAnyMatchesFilter {
+    StrAnyMatchesFilter::new(|log| log.tags.clone(), pattern)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -277,64 +317,79 @@ mod tests {
     use crate::logging::{level::Level, log::Log};
     use chrono::{Duration, Utc};
 
-    fn make(level: Level, source: &str, tags: Vec<String>, msg: &str) -> Log {
-        Log::new(level, source, tags, msg)
+    fn make(level: Level, src: &str, tags: Vec<String>, msg: &str) -> Log {
+        Log::new(level, src, tags, msg)
     }
 
-    // ── Level ──────────────────────────────────────────────────────────────────
+    // ── IntMinFilter / IntMaxFilter ────────────────────────────────────────────
 
     #[test]
-    fn min_level_passes_at_and_above() {
-        let f = MinLevel::new(Level::INFO);
-        assert!(f.matches(&make(Level::INFO, "s", vec![], "m")));
-        assert!(f.matches(&make(Level::WARN, "s", vec![], "m")));
+    fn int_min_passes_at_and_above() {
+        let f = level_min(Level::INFO);
+        assert!(f.matches(&make(Level::INFO,  "s", vec![], "m")));
+        assert!(f.matches(&make(Level::WARN,  "s", vec![], "m")));
         assert!(f.matches(&make(Level::ERROR, "s", vec![], "m")));
         assert!(!f.matches(&make(Level::DEBUG, "s", vec![], "m")));
         assert!(!f.matches(&make(Level::TRACE, "s", vec![], "m")));
     }
 
     #[test]
-    fn max_level_passes_at_and_below() {
-        let f = MaxLevel::new(Level::WARN);
+    fn int_max_passes_at_and_below() {
+        let f = level_max(Level::WARN);
         assert!(f.matches(&make(Level::WARN, "s", vec![], "m")));
         assert!(f.matches(&make(Level::INFO, "s", vec![], "m")));
         assert!(!f.matches(&make(Level::ERROR, "s", vec![], "m")));
     }
 
-    // ── Source ─────────────────────────────────────────────────────────────────
+    // ── StrMatchesFilter ───────────────────────────────────────────────────────
 
     #[test]
-    fn source_exact_matches_only_exact() {
-        let f = SourceFilter::exact("auth");
+    fn str_exact_matches_only_exact() {
+        let f = source(StrMatch::Exact("auth".into()));
         assert!(f.matches(&make(Level::INFO, "auth", vec![], "m")));
         assert!(!f.matches(&make(Level::INFO, "auth::sub", vec![], "m")));
     }
 
     #[test]
-    fn source_contains_matches_substring() {
-        let f = SourceFilter::contains("auth");
+    fn str_contains_matches_substring() {
+        let f = source(StrMatch::Contains("auth".into()));
         assert!(f.matches(&make(Level::INFO, "my::auth::service", vec![], "m")));
         assert!(!f.matches(&make(Level::INFO, "other", vec![], "m")));
     }
 
     #[test]
-    fn source_prefix_matches_start() {
-        let f = SourceFilter::prefix("orkester::server");
+    fn str_prefix_matches_start() {
+        let f = source(StrMatch::Prefix("orkester::server".into()));
         assert!(f.matches(&make(Level::INFO, "orkester::server::rest", vec![], "m")));
         assert!(!f.matches(&make(Level::INFO, "orkester::plugin", vec![], "m")));
     }
 
-    // ── Tags ───────────────────────────────────────────────────────────────────
+    #[test]
+    fn str_suffix_matches_end() {
+        let f = source(StrMatch::Suffix("::rest".into()));
+        assert!(f.matches(&make(Level::INFO, "orkester::server::rest", vec![], "m")));
+        assert!(!f.matches(&make(Level::INFO, "orkester::server::grpc", vec![], "m")));
+    }
 
     #[test]
-    fn tag_filter_requires_tag_presence() {
-        let f = TagFilter::new("api");
+    fn str_regex_matches_pattern() {
+        let f = source(StrMatch::regex(r"^orkester::server::(rest|grpc)$").unwrap());
+        assert!(f.matches(&make(Level::INFO, "orkester::server::rest", vec![], "m")));
+        assert!(f.matches(&make(Level::INFO, "orkester::server::grpc", vec![], "m")));
+        assert!(!f.matches(&make(Level::INFO, "orkester::server::metrics", vec![], "m")));
+    }
+
+    // ── StrAnyMatchesFilter ────────────────────────────────────────────────────
+
+    #[test]
+    fn str_any_requires_matching_tag() {
+        let f = tag(StrMatch::Exact("api".into()));
         assert!(f.matches(&make(Level::INFO, "s", vec!["api".into()], "m")));
         assert!(!f.matches(&make(Level::INFO, "s", vec!["other".into()], "m")));
         assert!(!f.matches(&make(Level::INFO, "s", vec![], "m")));
     }
 
-    // ── DateTime ───────────────────────────────────────────────────────────────
+    // ── DateTimeFilter ─────────────────────────────────────────────────────────
 
     #[test]
     fn datetime_after_rejects_old_entries() {
@@ -355,7 +410,6 @@ mod tests {
         let past = Utc::now() - Duration::hours(2);
         let also_past = Utc::now() - Duration::hours(1);
         let f = DateTimeFilter::between(past, also_past);
-        // A freshly-created log is after `also_past`.
         assert!(!f.matches(&make(Level::INFO, "s", vec![], "m")));
     }
 
@@ -364,28 +418,28 @@ mod tests {
     #[test]
     fn all_requires_every_filter() {
         let f = AllFilter::new(vec![
-            Box::new(MinLevel::new(Level::INFO)),
-            Box::new(TagFilter::new("api")),
+            Box::new(level_min(Level::INFO)),
+            Box::new(tag(StrMatch::Exact("api".into()))),
         ]);
-        assert!(f.matches(&make(Level::INFO, "s", vec!["api".into()], "m")));
+        assert!(f.matches(&make(Level::INFO,  "s", vec!["api".into()], "m")));
         assert!(!f.matches(&make(Level::DEBUG, "s", vec!["api".into()], "m")));
-        assert!(!f.matches(&make(Level::INFO, "s", vec![], "m")));
+        assert!(!f.matches(&make(Level::INFO,  "s", vec![], "m")));
     }
 
     #[test]
     fn any_requires_at_least_one_filter() {
         let f = AnyFilter::new(vec![
-            Box::new(MinLevel::new(Level::ERROR)),
-            Box::new(TagFilter::new("critical")),
+            Box::new(level_min(Level::ERROR)),
+            Box::new(tag(StrMatch::Exact("critical".into()))),
         ]);
         assert!(f.matches(&make(Level::ERROR, "s", vec![], "m")));
-        assert!(f.matches(&make(Level::INFO, "s", vec!["critical".into()], "m")));
-        assert!(!f.matches(&make(Level::INFO, "s", vec![], "m")));
+        assert!(f.matches(&make(Level::INFO,  "s", vec!["critical".into()], "m")));
+        assert!(!f.matches(&make(Level::INFO,  "s", vec![], "m")));
     }
 
     #[test]
     fn not_inverts_result() {
-        let f = NotFilter::new(TagFilter::new("noisy"));
+        let f = NotFilter::new(tag(StrMatch::Exact("noisy".into())));
         assert!(f.matches(&make(Level::INFO, "s", vec![], "m")));
         assert!(!f.matches(&make(Level::INFO, "s", vec!["noisy".into()], "m")));
     }

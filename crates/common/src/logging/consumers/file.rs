@@ -2,18 +2,22 @@ use std::{
     fs::{File, OpenOptions},
     io::{BufWriter, Write},
     path::Path,
-    sync::Mutex,
+    sync::{Mutex, RwLock},
 };
 
 use crate::logging::consumer::LogConsumer;
+use crate::logging::filter::LogFilter;
 use crate::logging::log::Log;
 
 /// Appends each log entry as a plain-text line to a file.
 ///
 /// The file is created if it does not exist, and appended to if it does.
 /// Writes are flushed immediately so no entries are lost on crash.
+///
+/// Call [`FileConsumer::set_filter`] at any time to install or remove a filter.
 pub struct FileConsumer {
     writer: Mutex<BufWriter<File>>,
+    filter: RwLock<Option<Box<dyn LogFilter>>>,
 }
 
 impl FileConsumer {
@@ -23,12 +27,23 @@ impl FileConsumer {
         let file = OpenOptions::new().create(true).append(true).open(path)?;
         Ok(Self {
             writer: Mutex::new(BufWriter::new(file)),
+            filter: RwLock::new(None),
         })
+    }
+
+    fn passes(&self, log: &Log) -> bool {
+        match &*self.filter.read().unwrap() {
+            Some(f) => f.matches(log),
+            None => true,
+        }
     }
 }
 
 impl LogConsumer for FileConsumer {
     fn consume(&self, log: &Log) {
+        if !self.passes(log) {
+            return;
+        }
         let tags = if log.tags.is_empty() {
             String::new()
         } else {
@@ -46,6 +61,10 @@ impl LogConsumer for FileConsumer {
             let _ = writer.write_all(line.as_bytes());
             let _ = writer.flush();
         }
+    }
+
+    fn set_filter(&self, filter: Option<Box<dyn LogFilter + 'static>>) {
+        *self.filter.write().unwrap() = filter;
     }
 }
 

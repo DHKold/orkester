@@ -3,4 +3,8 @@ pub mod file;
 
 pub use console::{ConsoleConsumer, ConsoleJsonConsumer};
 pub use file::FileConsumer;
-pub use super::filter::{AllFilter, AnyFilter, DateTimeFilter, MaxLevel, MinLevel, NotFilter, SourceFilter, TagFilter};
+pub use super::filter::{
+    AllFilter, AnyFilter, DateTimeFilter, IntMaxFilter, IntMinFilter,
+    NotFilter, StrAnyMatchesFilter, StrMatch, StrMatchesFilter,
+    level_max, level_min, source, tag,
+};

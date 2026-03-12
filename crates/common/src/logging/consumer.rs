@@ -1,4 +1,5 @@
 use super::log::Log;
+use super::filter::LogFilter;
 
 /// Receives a [`Log`] entry and does something with it — prints it, forwards it,
 /// persists it, etc.
@@ -8,4 +9,5 @@ use super::log::Log;
 /// through the shared global logger.
 pub trait LogConsumer: Send + Sync {
     fn consume(&self, log: &Log);
+    fn set_filter(&self, filter: Option<Box<dyn LogFilter + 'static>>);
 }

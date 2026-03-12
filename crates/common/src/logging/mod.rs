@@ -6,7 +6,9 @@
 //! use orkester_common::logging::{Logger, Level, consumers::{ConsoleConsumer, MinLevel}};
 //!
 //! // Register one or more consumers once at startup.
-//! Logger::add_consumer(ConsoleConsumer::new().with_filter(MinLevel::new(Level::INFO)));
+//! let consumer = ConsoleConsumer::new();
+//! consumer.set_filter(Some(MinLevel::new(Level::INFO)));
+//! Logger::add_consumer(consumer);
 //!
 //! // Static helpers — source defaults to the crate name.
 //! Logger::log(Level::INFO, "hello");

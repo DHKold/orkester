@@ -48,6 +48,15 @@ impl Logger {
         global().register(Box::new(consumer));
     }
 
+    /// Removes all consumers from the global logger.
+    pub fn clear_consumers() {
+        global()
+            .consumers
+            .write()
+            .expect("logging consumer list poisoned")
+            .clear();
+    }
+
     /// Emits a log entry through the global logger.
     pub fn log(level: impl Into<Level>, message: impl Into<String>) {
         global().emit(level.into(), message.into());

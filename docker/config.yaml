@@ -1,3 +1,14 @@
+logging:
+  console:
+    enabled: true # default true
+    filter:
+      level: "INFO" # TRACE/DEBUG/INFO/WARN/ERROR; absent = no level filter
+  file:
+    enabled: true
+    path: "orkester.log"
+    filter:
+      level: "TRACE"
+      source: "orkester::server::.*"
 plugins:
   dir: ./docker/plugins # directory to scan for .so plugin files
   recursive: false # scan sub-directories?

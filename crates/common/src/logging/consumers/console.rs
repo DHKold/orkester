@@ -12,19 +12,17 @@ use crate::logging::log::Log;
 /// [2026-03-11T14:22:01.042Z] INFO  [auth] (request-id:abc) user authenticated
 /// ```
 ///
-/// Set a filter with [`ConsoleConsumer::with_filter`] (at construction) or
-/// [`ConsoleConsumer::set_filter`] (at any time); a log is printed only when
-/// the active filter accepts it. Use [`AllFilter`][crate::logging::filter::AllFilter] /
+/// Call [`ConsoleConsumer::set_filter`] at any time to install or remove a
+/// filter. Use [`AllFilter`][crate::logging::filter::AllFilter] /
 /// [`AnyFilter`][crate::logging::filter::AnyFilter] to compose multiple conditions.
-/// Call [`ConsoleConsumer::clear_filter`] to remove the active filter.
 ///
 /// # Example
 /// ```no_run
 /// use orkester_common::logging::consumers::{ConsoleConsumer, MinLevel};
 /// use orkester_common::logging::Level;
 ///
-/// let consumer = ConsoleConsumer::new()
-///     .with_filter(MinLevel::new(Level::INFO));
+/// let consumer = ConsoleConsumer::new();
+/// consumer.set_filter(Some(MinLevel::new(Level::INFO)));
 /// ```
 pub struct ConsoleConsumer {
     filter: RwLock<Option<Box<dyn LogFilter>>>,
@@ -36,27 +34,6 @@ impl ConsoleConsumer {
         Self {
             filter: RwLock::new(None),
         }
-    }
-
-    /// Sets the filter at construction time (builder-style).
-    ///
-    /// Replaces any previously set filter.
-    pub fn with_filter(self, filter: impl LogFilter + 'static) -> Self {
-        *self.filter.write().unwrap() = Some(Box::new(filter));
-        self
-    }
-
-    /// Replaces the active filter at runtime.
-    ///
-    /// Takes effect for the next `consume` call.
-    pub fn set_filter(&self, filter: impl LogFilter + 'static) {
-        *self.filter.write().unwrap() = Some(Box::new(filter));
-    }
-
-    /// Removes the active filter — all log entries are accepted until a new
-    /// filter is set.
-    pub fn clear_filter(&self) {
-        *self.filter.write().unwrap() = None;
     }
 
     fn passes(&self, log: &Log) -> bool {
@@ -92,6 +69,10 @@ impl LogConsumer for ConsoleConsumer {
             log.message,
         );
     }
+
+    fn set_filter(&self, filter: Option<Box<dyn LogFilter + 'static>>) {
+        *self.filter.write().unwrap() = filter;
+    }
 }
 
 // ── ConsoleJsonConsumer ───────────────────────────────────────────────────────
@@ -114,14 +95,6 @@ impl ConsoleJsonConsumer {
         Self {
             filter: RwLock::new(None),
         }
-    }
-
-    /// Sets or removes the active filter.
-    ///
-    /// Pass `Some(filter)` to install a new filter, or `None` to accept every
-    /// log entry again.
-    pub fn set_filter(&self, filter: Option<impl LogFilter + 'static>) {
-        *self.filter.write().unwrap() = filter.map(|f| Box::new(f) as Box<dyn LogFilter>);
     }
 
     fn passes(&self, log: &Log) -> bool {
@@ -147,6 +120,10 @@ impl LogConsumer for ConsoleJsonConsumer {
             Ok(json) => println!("{}", json),
             Err(e) => eprintln!("[logging] failed to serialize log entry: {}", e),
         }
+    }
+
+    fn set_filter(&self, filter: Option<Box<dyn LogFilter + 'static>>) {
+        *self.filter.write().unwrap() = filter;
     }
 }
 
