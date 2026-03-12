@@ -1,4 +1,7 @@
+use std::sync::RwLock;
+
 use crate::logging::consumer::LogConsumer;
+use crate::logging::filter::LogFilter;
 use crate::logging::log::Log;
 
 // ── ConsoleConsumer ───────────────────────────────────────────────────────────
@@ -8,10 +11,73 @@ use crate::logging::log::Log;
 /// ```text
 /// [2026-03-11T14:22:01.042Z] INFO  [auth] (request-id:abc) user authenticated
 /// ```
-pub struct ConsoleConsumer;
+///
+/// Set a filter with [`ConsoleConsumer::with_filter`] (at construction) or
+/// [`ConsoleConsumer::set_filter`] (at any time); a log is printed only when
+/// the active filter accepts it. Use [`AllFilter`][crate::logging::filter::AllFilter] /
+/// [`AnyFilter`][crate::logging::filter::AnyFilter] to compose multiple conditions.
+/// Call [`ConsoleConsumer::clear_filter`] to remove the active filter.
+///
+/// # Example
+/// ```no_run
+/// use orkester_common::logging::consumers::{ConsoleConsumer, MinLevel};
+/// use orkester_common::logging::Level;
+///
+/// let consumer = ConsoleConsumer::new()
+///     .with_filter(MinLevel::new(Level::INFO));
+/// ```
+pub struct ConsoleConsumer {
+    filter: RwLock<Option<Box<dyn LogFilter>>>,
+}
+
+impl ConsoleConsumer {
+    /// Creates a new consumer with no filter (accepts every log entry).
+    pub fn new() -> Self {
+        Self {
+            filter: RwLock::new(None),
+        }
+    }
+
+    /// Sets the filter at construction time (builder-style).
+    ///
+    /// Replaces any previously set filter.
+    pub fn with_filter(self, filter: impl LogFilter + 'static) -> Self {
+        *self.filter.write().unwrap() = Some(Box::new(filter));
+        self
+    }
+
+    /// Replaces the active filter at runtime.
+    ///
+    /// Takes effect for the next `consume` call.
+    pub fn set_filter(&self, filter: impl LogFilter + 'static) {
+        *self.filter.write().unwrap() = Some(Box::new(filter));
+    }
+
+    /// Removes the active filter — all log entries are accepted until a new
+    /// filter is set.
+    pub fn clear_filter(&self) {
+        *self.filter.write().unwrap() = None;
+    }
+
+    fn passes(&self, log: &Log) -> bool {
+        match &*self.filter.read().unwrap() {
+            Some(f) => f.matches(log),
+            None => true,
+        }
+    }
+}
+
+impl Default for ConsoleConsumer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl LogConsumer for ConsoleConsumer {
     fn consume(&self, log: &Log) {
+        if !self.passes(log) {
+            return;
+        }
         let tags = if log.tags.is_empty() {
             String::new()
         } else {
@@ -35,10 +101,48 @@ impl LogConsumer for ConsoleConsumer {
 /// ```json
 /// {"datetime":"2026-03-11T14:22:01.042Z","level":20,"source":"auth","tags":[],"message":"user authenticated"}
 /// ```
-pub struct ConsoleJsonConsumer;
+///
+/// Call [`ConsoleJsonConsumer::set_filter`] at any time to install or remove a
+/// filter.
+pub struct ConsoleJsonConsumer {
+    filter: RwLock<Option<Box<dyn LogFilter>>>,
+}
+
+impl ConsoleJsonConsumer {
+    /// Creates a new consumer with no filter.
+    pub fn new() -> Self {
+        Self {
+            filter: RwLock::new(None),
+        }
+    }
+
+    /// Sets or removes the active filter.
+    ///
+    /// Pass `Some(filter)` to install a new filter, or `None` to accept every
+    /// log entry again.
+    pub fn set_filter(&self, filter: Option<impl LogFilter + 'static>) {
+        *self.filter.write().unwrap() = filter.map(|f| Box::new(f) as Box<dyn LogFilter>);
+    }
+
+    fn passes(&self, log: &Log) -> bool {
+        match &*self.filter.read().unwrap() {
+            Some(f) => f.matches(log),
+            None => true,
+        }
+    }
+}
+
+impl Default for ConsoleJsonConsumer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl LogConsumer for ConsoleJsonConsumer {
     fn consume(&self, log: &Log) {
+        if !self.passes(log) {
+            return;
+        }
         match serde_json::to_string(log) {
             Ok(json) => println!("{}", json),
             Err(e) => eprintln!("[logging] failed to serialize log entry: {}", e),

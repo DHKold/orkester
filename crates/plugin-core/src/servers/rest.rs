@@ -10,7 +10,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use orkester_common::log_info;
+use orkester_common::{log_debug, log_info, log_trace};
 use orkester_common::messaging::{Message, ServerSide};
 use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
 use serde_json::{json, Value};
@@ -50,6 +50,7 @@ async fn list_routes_handler(State(state): State<Arc<AppState>>) -> impl IntoRes
         .iter()
         .map(|(k, v)| json!({ "method": k.method, "path": k.path, "registrant": v.target }))
         .collect();
+    log_trace!("REST GET /v1/routes — listing {} route(s)", list.len());
     Json(json!({ "routes": list }))
 }
 
@@ -58,13 +59,19 @@ async fn dynamic_route_handler(
     method: Method,
     uri: Uri,
 ) -> impl IntoResponse {
+    let method_str = method.to_string();
+    let path = uri.path().to_string();
+
+    log_debug!("REST {} {} received", method_str, path);
+
     let key = RouteKey {
-        method: method.to_string(),
-        path: uri.path().to_string(),
+        method: method_str.clone(),
+        path: path.clone(),
     };
 
     let reg = match state.routes.read().unwrap().get(&key).cloned() {
         None => {
+            log_debug!("REST {} {} → 404 (no registered route)", method_str, path);
             return (
                 StatusCode::NOT_FOUND,
                 Json(json!({ "error": "route not found" })),
@@ -78,6 +85,11 @@ async fn dynamic_route_handler(
     let (tx, rx) = tokio::sync::oneshot::channel::<Message>();
     state.pending.lock().unwrap().insert(corr_id, tx);
 
+    log_trace!(
+        "REST dispatching to '{}' (method={} path={} correlation_id={})",
+        reg.target, method_str, path, corr_id
+    );
+
     let msg = Message::new(
         corr_id,
         "", // hub stamps source
@@ -85,13 +97,14 @@ async fn dynamic_route_handler(
         "http_request",
         json!({
             "correlation_id": corr_id,
-            "method": method.to_string(),
-            "path": uri.path().to_string(),
+            "method": method_str,
+            "path": path,
         }),
     );
 
     if state.to_hub.lock().unwrap().send(msg).is_err() {
         state.pending.lock().unwrap().remove(&corr_id);
+        log_debug!("REST {} {} → hub disconnected (correlation_id={})", method_str, path, corr_id);
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({ "error": "hub disconnected" })),
@@ -108,16 +121,26 @@ async fn dynamic_route_handler(
                 .and_then(|s| StatusCode::from_u16(s as u16).ok())
                 .unwrap_or(StatusCode::OK);
             let body = reply.content.get("body").cloned().unwrap_or(Value::Null);
+            log_trace!(
+                "REST {} {} ← {} from '{}' (correlation_id={}, body={} bytes)",
+                method_str, path, status.as_u16(), reply.source, corr_id,
+                body.to_string().len()
+            );
+            log_debug!("REST {} {} → {}", method_str, path, status.as_u16());
             (status, Json(body)).into_response()
         }
-        Ok(Err(_)) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "error": "upstream disconnected" })),
-        )
-            .into_response(),
+        Ok(Err(_)) => {
+            log_debug!("REST {} {} → upstream disconnected (correlation_id={})", method_str, path, corr_id);
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "error": "upstream disconnected" })),
+            )
+                .into_response()
+        }
         Err(_) => {
             // Timed out — clean up the pending slot.
             state.pending.lock().unwrap().remove(&corr_id);
+            log_debug!("REST {} {} → timeout (correlation_id={})", method_str, path, corr_id);
             (
                 StatusCode::GATEWAY_TIMEOUT,
                 Json(json!({ "error": "upstream timeout" })),

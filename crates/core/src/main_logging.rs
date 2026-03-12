@@ -4,7 +4,7 @@ use orkester_common::log_info;
 use orkester_common::logging::{consumers::ConsoleConsumer, Logger};
 
 pub(crate) fn init_logging() {
-    Logger::add_consumer(ConsoleConsumer);
+    Logger::add_consumer(ConsoleConsumer::new());
 }
 
 /// Load additional logging configuration from the config tree, if present.
