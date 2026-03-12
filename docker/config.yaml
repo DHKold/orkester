@@ -2,7 +2,7 @@ logging:
   console:
     enabled: true # default true
     filter:
-      level: "INFO" # TRACE/DEBUG/INFO/WARN/ERROR; absent = no level filter
+      level: "DEBUG" # TRACE/DEBUG/INFO/WARN/ERROR; absent = no level filter
   file:
     enabled: false
     path: "orkester.log"
@@ -24,3 +24,12 @@ servers:
       server: no-metrics-server
     rest_server: rest_api
     enabled: true
+  workspace:
+    component:
+      plugin: orkester-plugin-core
+      server: workspace-server
+    enabled: true
+    rest_target: rest_api
+    loaders:
+      - type: local
+        dir: /orkester/docker/samples

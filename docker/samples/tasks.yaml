@@ -1,0 +1,143 @@
+# ── Command executor task ────────────────────────────────────────────────────
+# Runs a shell command locally on the Orkester host.
+apiVersion: orkester.io/v1
+kind: Task
+name: echo-hello
+version: "1.0.0"
+metadata:
+  namespace: default
+  description: "Simple echo command — useful for smoke-testing the pipeline"
+  labels:
+    category: utility
+spec:
+  executor: command
+  config:
+    command: ["echo", "Hello from Orkester!"]
+  timeout_seconds: 30
+  retries: 0
+
+---
+# ── EKS Pod executor task ────────────────────────────────────────────────────
+# Submits a Kubernetes pod to an EKS cluster and waits for completion.
+apiVersion: orkester.io/v1
+kind: Task
+name: spark-extract
+version: "1.0.0"
+metadata:
+  namespace: data-platform
+  description: "Extract raw data from S3 and write to the staging layer"
+  labels:
+    stage: extract
+    team: data-engineering
+spec:
+  executor: eks-pod
+  config:
+    image: apache/spark:3.5.1
+    command:
+      - spark-submit
+      - --class
+      - com.acme.etl.Extract
+      - s3://my-bucket/jars/etl.jar
+    resources:
+      cpu: "4"
+      memory: "8Gi"
+    serviceAccount: spark-sa
+    namespace: spark-jobs
+  inputs:
+    source_date: "Date to extract data for (YYYY-MM-DD)"
+    source_bucket: "Source S3 bucket"
+  outputs:
+    staging_path: "S3 path of the extracted staging data"
+  timeout_seconds: 3600
+  retries: 2
+
+---
+apiVersion: orkester.io/v1
+kind: Task
+name: spark-transform
+version: "1.0.0"
+metadata:
+  namespace: data-platform
+  description: "Apply business logic transformations on staged data"
+  labels:
+    stage: transform
+    team: data-engineering
+spec:
+  executor: eks-pod
+  config:
+    image: apache/spark:3.5.1
+    command:
+      - spark-submit
+      - --class
+      - com.acme.etl.Transform
+      - s3://my-bucket/jars/etl.jar
+    resources:
+      cpu: "8"
+      memory: "16Gi"
+    serviceAccount: spark-sa
+    namespace: spark-jobs
+  inputs:
+    staging_path: "S3 path of the staged data"
+    target_date: "Processing date (YYYY-MM-DD)"
+  outputs:
+    curated_path: "S3 path of the transformed output"
+  timeout_seconds: 7200
+  retries: 1
+
+---
+apiVersion: orkester.io/v1
+kind: Task
+name: spark-load
+version: "1.0.0"
+metadata:
+  namespace: data-platform
+  description: "Load curated data into the serving layer (Iceberg / Redshift)"
+  labels:
+    stage: load
+    team: data-engineering
+spec:
+  executor: eks-pod
+  config:
+    image: apache/spark:3.5.1
+    command:
+      - spark-submit
+      - --class
+      - com.acme.etl.Load
+      - s3://my-bucket/jars/etl.jar
+    resources:
+      cpu: "4"
+      memory: "8Gi"
+    serviceAccount: spark-sa
+    namespace: spark-jobs
+  inputs:
+    curated_path: "S3 path of the curated data"
+    target_table: "Target Iceberg table name"
+  timeout_seconds: 1800
+  retries: 1
+
+---
+apiVersion: orkester.io/v1
+kind: Task
+name: notify-slack
+version: "1.0.0"
+metadata:
+  namespace: data-platform
+  description: "Send a Slack notification on pipeline completion or failure"
+  labels:
+    category: notification
+spec:
+  executor: command
+  config:
+    command:
+      - curl
+      - -X
+      - POST
+      - -H
+      - "Content-type: application/json"
+      - --data
+      - '{"text":"Pipeline completed: {{message}}"}'
+      - "https://hooks.slack.com/services/PLACEHOLDER"
+  inputs:
+    message: "Message body to include in the Slack notification"
+  timeout_seconds: 30
+  retries: 3

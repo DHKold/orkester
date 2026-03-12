@@ -42,6 +42,23 @@ struct AppState {
     next_id: AtomicU64,
 }
 
+// ── Path template matching ───────────────────────────────────────────────────
+
+/// Returns `true` when `template` (e.g. `/v1/namespaces/{name}`) matches the
+/// concrete request `path` (e.g. `/v1/namespaces/default`).
+///
+/// Segments wrapped in `{…}` are treated as single-segment wildcards.
+fn match_path_template(template: &str, path: &str) -> bool {
+    let t: Vec<&str> = template.trim_start_matches('/').split('/').collect();
+    let p: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    if t.len() != p.len() {
+        return false;
+    }
+    t.iter().zip(p.iter()).all(|(ts, ps)| {
+        (ts.starts_with('{') && ts.ends_with('}')) || ts == ps
+    })
+}
+
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 async fn list_routes_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -69,7 +86,22 @@ async fn dynamic_route_handler(
         path: path.clone(),
     };
 
-    let reg = match state.routes.read().unwrap().get(&key).cloned() {
+    let reg = {
+        let routes = state.routes.read().unwrap();
+        // 1. Try an exact match (fast path, e.g. /v1/namespaces).
+        // 2. Fall back to template matching for parameterised routes
+        //    (e.g. registered "/v1/namespaces/{name}" must match "/v1/namespaces/default").
+        routes.get(&key).cloned().or_else(|| {
+            routes
+                .iter()
+                .find(|(k, _)| {
+                    k.method == method_str && match_path_template(&k.path, &path)
+                })
+                .map(|(_, v)| v.clone())
+        })
+    };
+
+    let reg = match reg {
         None => {
             log_debug!("REST {} {} → 404 (no registered route)", method_str, path);
             return (
@@ -175,7 +207,7 @@ async fn hub_message_task(
                     .unwrap_or("/")
                     .to_string();
 
-                log_info!("[rest] Registering route {} {} (requested by '{}').", method, path, msg.source);
+                log_info!("Registering route {} {} (requested by '{}').", method, path, msg.source);
 
                 state.routes.write().unwrap().insert(
                     RouteKey {
@@ -236,7 +268,7 @@ impl Server for AxumRestServer {
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
-                .expect("[rest] Failed to build Tokio runtime");
+                .expect("Failed to build Tokio runtime");
 
             rt.block_on(async move {
                 let state = Arc::new(AppState {
@@ -267,19 +299,19 @@ impl Server for AxumRestServer {
 
                 let listener = tokio::net::TcpListener::bind(&bind_addr)
                     .await
-                    .expect("[rest] Bind failed");
+                    .expect("Bind failed");
 
-                log_info!("[rest] Listening on {}.", bind_addr);
+                log_info!("Listening on {}.", bind_addr);
 
                 axum::serve(listener, router)
                     .with_graceful_shutdown(async move {
                         let _ = shutdown_rx.await;
-                        log_info!("[rest] Shutdown signal received.");
+                        log_info!("Shutdown signal received.");
                     })
                     .await
-                    .expect("[rest] Server error");
+                    .expect("Server error");
 
-                log_info!("[rest] Server stopped.");
+                log_info!("Server stopped.");
             });
         });
 

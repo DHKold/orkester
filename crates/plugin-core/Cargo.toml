@@ -17,3 +17,5 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 axum = "0.7"
+serde_yaml = "0.9"
+notify = "6"

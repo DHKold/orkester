@@ -11,7 +11,11 @@ use crate::{
     executor::DummyExecutorBuilder,
     persistence::MemoryPersistenceBuilder,
     registry::LocalRegistryBuilder,
-    servers::{metrics::NoMetricsServerBuilder, rest::AxumRestServerBuilder},
+    servers::{
+        metrics::NoMetricsServerBuilder,
+        rest::AxumRestServerBuilder,
+        workspace::WorkspaceServerBuilder,
+    },
 };
 use orkester_common::plugin::{ComponentMetadata, Plugin, PluginComponent, PluginMetadata};
 use orkester_common::logging::Logger;
@@ -75,6 +79,12 @@ pub fn core_plugin() -> Plugin {
                 id: "axum-rest-server".to_string(),
                 description: "HTTP REST server built on Axum.".to_string(),
                 builder: PluginComponent::Server(Box::new(AxumRestServerBuilder)),
+            },
+            ComponentMetadata {
+                kind: "server".to_string(),
+                id: "workspace-server".to_string(),
+                description: "Loads and exposes Namespace, Task, and Work objects.".to_string(),
+                builder: PluginComponent::Server(Box::new(WorkspaceServerBuilder)),
             },
         ],
     }
