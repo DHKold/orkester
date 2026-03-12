@@ -1,3 +1,4 @@
+use orkester_common::{log_debug, log_error, log_info, log_warn};
 use orkester_common::messaging::{Message, ServerSide};
 use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
 use serde_json::{json, Value};
@@ -19,9 +20,9 @@ impl Server for NoMetricsServer {
                 "register_route",
                 json!({ "method": "GET", "path": "/v1/metrics" }),
             );
-            println!("[metrics] Sending register_route to '{}'.", rest_target);
+            log_info!("[metrics] Sending register_route to '{}'.", rest_target);
             if channel.to_hub.send(msg).is_err() {
-                println!("[metrics] Hub channel closed — could not send.");
+                log_error!("[metrics] Hub channel closed — could not send.");
                 return;
             }
 
@@ -30,7 +31,7 @@ impl Server for NoMetricsServer {
                 match channel.from_hub.recv() {
                     Ok(msg) => match msg.message_type.as_str() {
                         "route_registered" => {
-                            println!(
+                            log_info!(
                                 "[metrics] Route confirmed by '{}': {}",
                                 msg.source, msg.content
                             );
@@ -41,10 +42,7 @@ impl Server for NoMetricsServer {
                                 .get("correlation_id")
                                 .and_then(|v| v.as_u64())
                                 .unwrap_or(0);
-                            println!(
-                                "[metrics] Handling HTTP request (correlation_id={}).",
-                                corr_id
-                            );
+                            log_debug!("[metrics] Handling HTTP request (correlation_id={}).", corr_id);
                             let reply = Message::new(
                                 0,
                                 "", // hub stamps source
@@ -60,16 +58,16 @@ impl Server for NoMetricsServer {
                                 }),
                             );
                             if channel.to_hub.send(reply).is_err() {
-                                println!("[metrics] Hub channel closed.");
+                                log_error!("[metrics] Hub channel closed.");
                                 return;
                             }
                         }
                         other => {
-                            println!("[metrics] Unhandled message type '{}'.", other);
+                            log_warn!("[metrics] Unhandled message type '{}'.", other);
                         }
                     },
                     Err(_) => {
-                        println!("[metrics] Hub channel disconnected — stopping.");
+                        log_info!("[metrics] Hub channel disconnected — stopping.");
                         break;
                     }
                 }

@@ -3,7 +3,7 @@
 use crate::config::ConfigTree;
 use serde_json::Value;
 
-use orkester_common::logging;
+use orkester_common::{log_debug, log_error, log_info};
 
 /// A single server entry parsed from the `servers` config block.
 pub struct ServerEntry {
@@ -23,7 +23,7 @@ pub fn parse(config: &ConfigTree) -> Vec<ServerEntry> {
     let servers_value = match config.get("servers") {
         Some(v) => v,
         None => {
-            logging::Logger::info("No `servers` block in config — nothing to start.");
+            log_info!("No `servers` block in config — nothing to start.");
             return Vec::new();
         }
     };
@@ -31,7 +31,7 @@ pub fn parse(config: &ConfigTree) -> Vec<ServerEntry> {
     let servers_map = match servers_value.as_object() {
         Some(m) => m,
         None => {
-            logging::Logger::error("`servers` config entry must be an object map.");
+            log_error!("`servers` config entry must be an object map.");
             return Vec::new();
         }
     };
@@ -45,10 +45,7 @@ pub fn parse(config: &ConfigTree) -> Vec<ServerEntry> {
             .unwrap_or(true);
 
         if !enabled {
-            logging::Logger::debug(format!(
-                "Server '{}' has enabled=false — skipping.",
-                instance_name
-            ));
+            log_debug!("Server '{}' has enabled=false — skipping.", instance_name);
             continue;
         }
 
@@ -66,10 +63,7 @@ pub fn parse(config: &ConfigTree) -> Vec<ServerEntry> {
         {
             Some(n) => n.to_string(),
             None => {
-                logging::Logger::error(format!(
-                    "Server entry '{}' is missing `component.server` — skipping.",
-                    instance_name
-                ));
+                log_error!("Server entry '{}' is missing `component.server` — skipping.", instance_name);
                 continue;
             }
         };
@@ -84,10 +78,7 @@ pub fn parse(config: &ConfigTree) -> Vec<ServerEntry> {
             cfg
         };
 
-        logging::Logger::debug(format!(
-            "Parsed server entry '{}' → plugin='{}' server='{}'",
-            instance_name, plugin_id, server_id
-        ));
+        log_debug!("Parsed server entry '{}' → plugin='{}' server='{}'", instance_name, plugin_id, server_id);
 
         entries.push(ServerEntry {
             instance_name: instance_name.clone(),
@@ -97,10 +88,7 @@ pub fn parse(config: &ConfigTree) -> Vec<ServerEntry> {
         });
     }
 
-    logging::Logger::info(format!(
-        "Config contains {} enabled server(s).",
-        entries.len()
-    ));
+    log_info!("Config contains {} enabled server(s).", entries.len());
 
     entries
 }

@@ -10,6 +10,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use orkester_common::log_info;
 use orkester_common::messaging::{Message, ServerSide};
 use orkester_common::plugin::servers::{Server, ServerBuilder, ServerError};
 use serde_json::{json, Value};
@@ -151,10 +152,7 @@ async fn hub_message_task(
                     .unwrap_or("/")
                     .to_string();
 
-                println!(
-                    "[rest] Registering route {} {} (requested by '{}').",
-                    method, path, msg.source
-                );
+                log_info!("[rest] Registering route {} {} (requested by '{}').", method, path, msg.source);
 
                 state.routes.write().unwrap().insert(
                     RouteKey {
@@ -248,17 +246,17 @@ impl Server for AxumRestServer {
                     .await
                     .expect("[rest] Bind failed");
 
-                println!("[rest] Listening on {}.", bind_addr);
+                log_info!("[rest] Listening on {}.", bind_addr);
 
                 axum::serve(listener, router)
                     .with_graceful_shutdown(async move {
                         let _ = shutdown_rx.await;
-                        println!("[rest] Shutdown signal received.");
+                        log_info!("[rest] Shutdown signal received.");
                     })
                     .await
                     .expect("[rest] Server error");
 
-                println!("[rest] Server stopped.");
+                log_info!("[rest] Server stopped.");
             });
         });
 

@@ -9,22 +9,18 @@ use super::json_loader::JsonConfigLoader;
 use super::toml_loader::TomlConfigLoader;
 use super::yaml_loader::YamlConfigLoader;
 
-use orkester_common::logging;
+use orkester_common::{log_debug, log_error, log_info, log_trace, log_warn};
 
 /// Load and merge a list of config files, applying CLI overrides last.
 /// Returns a merged [`ConfigTree`].
 pub fn load_config_files(paths: &[&str], overrides: &[&str]) -> ConfigTree {
-    logging::Logger::info(format!(
-        "Loading config: {} file(s), {} override(s).",
-        paths.len(),
-        overrides.len()
-    ));
+    log_info!("Loading config: {} file(s), {} override(s).", paths.len(), overrides.len());
 
     let mut merged = Value::Object(serde_json::Map::new());
     let mut loaded_count = 0usize;
 
     for path in paths {
-        logging::Logger::debug(format!("Reading config file: {}", path));
+        log_debug!("Reading config file: {}", path);
 
         let ext = Path::new(path)
             .extension()
@@ -36,41 +32,32 @@ pub fn load_config_files(paths: &[&str], overrides: &[&str]) -> ConfigTree {
             "yaml" | "yml" => YamlConfigLoader::load(path),
             "toml" => TomlConfigLoader::load(path),
             _ => {
-                logging::Logger::warn(format!("Unknown config extension: {} (skipping)", ext));
+                log_warn!("Unknown config extension: {} (skipping)", ext);
                 continue;
             }
         };
         match loaded {
             Ok(val) => {
-                logging::Logger::debug(format!("Config file '{}' loaded successfully.", path));
+                log_debug!("Config file '{}' loaded successfully.", path);
                 merge_values(&mut merged, &val);
                 loaded_count += 1;
             }
-            Err(e) => logging::Logger::error(format!("Failed to load config '{}': {}", path, e)),
+            Err(e) => log_error!("Failed to load config '{}': {}", path, e),
         }
     }
 
     // Apply CLI overrides
     for ov in overrides {
         if let Some((k, v)) = ov.split_once('=') {
-            logging::Logger::trace(format!("Applying config override: {} = {}", k, v));
+            log_trace!("Applying config override: {} = {}", k, v);
             apply_override(&mut merged, k, v);
         } else {
-            logging::Logger::warn(format!("Invalid override '{}', expected key=value", ov));
+            log_warn!("Invalid override '{}', expected key=value", ov);
         }
     }
 
-    logging::Logger::info(format!(
-        "Config loading complete: {}/{} file(s) merged, {} override(s) applied.",
-        loaded_count,
-        paths.len(),
-        overrides.len()
-    ));
-    logging::Logger::debug(format!(
-        "Final config:\n{}",
-        serde_json::to_string_pretty(&merged)
-            .unwrap_or_else(|_| "<serialization error>".to_string())
-    ));
+    log_info!("Config loading complete: {}/{} file(s) merged, {} override(s) applied.", loaded_count, paths.len(), overrides.len());
+    log_debug!("Final config:\n{}", serde_json::to_string_pretty(&merged).unwrap_or_else(|_| "<serialization error>".to_string()));
 
     ConfigTree(merged)
 }

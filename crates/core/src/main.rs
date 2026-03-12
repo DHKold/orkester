@@ -13,12 +13,12 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use orkester_common::logging;
+use orkester_common::{log_error, log_info};
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Register a console consumer so logs are visible from the start.
     main_logging::init_logging();
-    logging::Logger::info("Starting orkester...");
+    log_info!("Starting orkester...");
 
     // Parse CLI arguments
     let matches = clap::Command::new("orkester")
@@ -69,14 +69,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     for hub_side in hub_sides {
         hub.register(hub_side);
     }
-    logging::Logger::info("Message hub ready.");
+    log_info!("Message hub ready.");
 
     // Setup graceful shutdown
     let running = Arc::new(AtomicBool::new(true));
     {
         let running = running.clone();
         ctrlc::set_handler(move || {
-            logging::Logger::info("Shutdown signal received");
+            log_info!("Shutdown signal received");
             running.store(false, Ordering::SeqCst);
         })?;
     }
@@ -87,9 +87,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         thread::sleep(Duration::from_millis(10));
     }
 
-    logging::Logger::info("Shutting down orkester...");
+    log_info!("Shutting down orkester...");
     if let Err(e) = server::cleanup_servers(&servers) {
-        logging::Logger::error(&format!("Error during server cleanup: {}", e));
+        log_error!("Error during server cleanup: {}", e);
     }
     Ok(())
 }
