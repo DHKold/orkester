@@ -22,7 +22,7 @@ export async function renderWorkflows({ ns, query = {} }) {
           <span class="toggle-track"><span class="toggle-thumb"></span></span>
         </label>
         <button id="btn-refresh-now" class="outline btn-xs" title="Refresh now" style="font-size:1.1rem;line-height:1;padding:0.18rem 0.5rem">⟳</button>
-        <button id="btn-new-workflow">+ New Workflow</button>
+        <button id="btn-new-workflow" class="outline btn-sm">New Workflow</button>
       </div>
     </div>
     <div id="wf-list"><p aria-busy="true">Loading workflows…</p></div>
@@ -87,7 +87,7 @@ async function loadList(ns, preWork = null, preVer = null, openPreModal = false)
       const wfEnc  = encodeURIComponent(wf.id)
       const status = wf.status ?? 'waiting'
       const dur    = TERMINAL.has(status)
-        ? fmtDuration(wf.started_at, wf.finished_at)
+        ? fmtDuration(wf.started_at, wf.finished_at, wf.metrics?.duration_seconds)
         : wf.started_at ? fmtDuration(wf.started_at) + ' ⏱' : '—'
 
       const metrics  = wf.metrics ?? {}

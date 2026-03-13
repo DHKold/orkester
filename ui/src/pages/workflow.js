@@ -74,6 +74,17 @@ function renderDetail(ns, wf, work) {
       {label: wf.id.substring(0,8)+'…'},
     ])}
 
+    <!-- Actions bar -->
+    <div class="row-between" style="margin-bottom:1rem">
+      <div></div>
+      <div class="row" style="gap:0.5rem">
+        ${!TERMINAL.has(status)
+          ? `<button class="outline btn-xs" id="btn-cancel">Cancel</button>`
+          : `<button class="btn-xs btn-danger" id="btn-delete">Delete</button>`
+        }
+      </div>
+    </div>
+
     <!-- Header card -->
     <article id="wf-header-card">
       ${headerCardInner(wf)}
@@ -94,15 +105,6 @@ function renderDetail(ns, wf, work) {
     <h4>Steps</h4>
     <div id="steps-list">
       ${stepsInner(stepsOrdered, ns, wf.id)}
-    </div>
-
-    <!-- Actions -->
-    <div class="row" style="margin-top:1rem">
-      ${!TERMINAL.has(status)
-        ? `<button class="secondary outline" id="btn-cancel">Cancel Workflow</button>`
-        : `<button class="secondary outline" id="btn-delete">Delete Workflow</button>`
-      }
-      <a href="#/namespaces/${nsEnc}/workflows" class="secondary">← Back to list</a>
     </div>
   `)
 
@@ -135,6 +137,19 @@ function renderDetail(ns, wf, work) {
 }
 
 function headerCardInner(wf) {
+  const dur = fmtDuration(wf.started_at, wf.finished_at, wf.metrics?.duration_seconds)
+  const context = wf.work_context && Object.keys(wf.work_context).length > 0
+    ? `<details style="margin-top:0.75rem">
+        <summary class="muted" style="font-size:0.85rem;cursor:pointer">Context (${Object.keys(wf.work_context).length} params)</summary>
+        <table style="margin-top:0.4rem;font-size:0.84rem">
+          <tbody>
+            ${Object.entries(wf.work_context).map(([k,v]) =>
+              `<tr><td style="padding-right:1.5rem"><code>${esc(k)}</code></td><td>${esc(String(v))}</td></tr>`
+            ).join('')}
+          </tbody>
+        </table>
+      </details>`
+    : ''
   return `
     <header>
       <div class="row-between">
@@ -150,9 +165,10 @@ function headerCardInner(wf) {
       <span><span class="muted">Created:</span> ${fmtDate(wf.created_at)}</span>
       ${wf.started_at  ? `<span><span class="muted">Started:</span>  ${fmtDate(wf.started_at)}</span>` : ''}
       ${wf.finished_at ? `<span><span class="muted">Finished:</span> ${fmtDate(wf.finished_at)}</span>` : ''}
-      ${wf.started_at  ? `<span><span class="muted">Duration:</span> ${fmtDuration(wf.started_at, wf.finished_at)}</span>` : ''}
+      ${wf.started_at  ? `<span><span class="muted">Duration:</span> ${dur}</span>` : ''}
     </div>
     ${wf.triggers?.cron_id ? `<p class="muted" style="margin-top:0.5rem;margin-bottom:0">Triggered by cron: <code>${esc(wf.triggers.cron_id)}</code></p>` : ''}
+    ${context}
   `
 }
 

@@ -52,7 +52,7 @@ async function load(ns) {
         <h3 style="margin:0">Crons
           <span class="muted" style="font-size:0.85rem">(${crons.length})</span>
         </h3>
-        <button id="btn-new-cron">+ New Cron</button>
+        <button id="btn-new-cron" class="outline btn-sm">New Cron</button>
       </div>
 
       ${crons.length === 0

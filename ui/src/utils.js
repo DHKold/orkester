@@ -28,14 +28,25 @@ export function fmtDateShort(iso) {
   })
 }
 
-export function fmtDuration(startIso, endIso) {
+export function fmtDuration(startIso, endIso, durationSeconds) {
+  // Prefer the pre-computed float from metrics (preserves ms precision)
+  if (durationSeconds != null) {
+    const s = durationSeconds
+    if (s < 1)   return `${(s * 1000).toFixed(0)}ms`
+    if (s < 60)  return `${s.toFixed(2).replace(/\.?0+$/, '')}s`
+    const m = Math.floor(s / 60); const rs = s % 60
+    if (m < 60)  return `${m}m ${Math.round(rs)}s`
+    const h = Math.floor(m / 60); const rm = m % 60
+    return `${h}h ${rm}m`
+  }
   if (!startIso) return '—'
   const ms = (endIso ? new Date(endIso) : new Date()) - new Date(startIso)
   if (ms < 0) return '—'
-  const s = Math.floor(ms / 1000)
-  if (s < 60) return `${s}s`
+  const s = ms / 1000
+  if (s < 1)   return `${ms}ms`
+  if (s < 60)  return `${s.toFixed(2).replace(/\.?0+$/, '')}s`
   const m = Math.floor(s / 60); const rs = s % 60
-  if (m < 60) return `${m}m ${rs}s`
+  if (m < 60)  return `${m}m ${Math.round(rs)}s`
   const h = Math.floor(m / 60); const rm = m % 60
   return `${h}h ${rm}m`
 }
