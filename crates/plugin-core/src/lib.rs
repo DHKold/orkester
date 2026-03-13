@@ -12,7 +12,7 @@ use crate::{
     persistence::MemoryPersistenceBuilder,
     registry::LocalRegistryBuilder,
     servers::{
-        metrics::NoMetricsServerBuilder, rest::AxumRestServerBuilder,
+        metrics::MetricsServerBuilder, rest::AxumRestServerBuilder,
         workflows::WorkflowsServerBuilder, workspace::WorkspaceServerBuilder,
     },
 };
@@ -27,7 +27,7 @@ pub fn core_plugin() -> Plugin {
             version: env!("CARGO_PKG_VERSION").to_string(),
             description: "Built-in default implementations: NoAuth, BasicAuthz, Dummy executor, \
                           in-memory persistence, local workflow registry, BasicStateServer, \
-                          BasicWorkflowServer, NoMetricsServer, and AxumRestServer."
+                          BasicWorkflowServer, MetricsServer, and AxumRestServer."
                 .to_string(),
             authors: vec!["Orkester Contributors".to_string()],
         },
@@ -75,10 +75,10 @@ pub fn core_plugin() -> Plugin {
             // ── Servers ─────────────────────────────────────────────────────
             ComponentMetadata {
                 kind: "server".to_string(),
-                id: "no-metrics-server".to_string(),
-                description: "Discards all metrics; exposes an empty /metrics endpoint."
+                id: "metrics-server".to_string(),
+                description: "Exposes runtime counters (uptime, request counts) at GET /v1/metrics."
                     .to_string(),
-                builder: PluginComponent::Server(Box::new(NoMetricsServerBuilder)),
+                builder: PluginComponent::Server(Box::new(MetricsServerBuilder)),
             },
             ComponentMetadata {
                 kind: "server".to_string(),
