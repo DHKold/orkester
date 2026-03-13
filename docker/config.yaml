@@ -1,13 +1,17 @@
 logging:
   console:
     enabled: true # default true
-    filter:
-      level: "DEBUG" # TRACE/DEBUG/INFO/WARN/ERROR; absent = no level filter
+    filters:
+      - level: "DEBUG"
+      - source: "orkester_plugin_core::.*"
+        level: "INFO"
+      - source: "orkester_plugin_core::servers"
+        level: "WARN"
   file:
     enabled: false
     path: "orkester.log"
-    filter:
-      source: "orkester_plugin.*"
+    filters:
+      - source: "orkester_plugin.*"
 plugins:
   dir: ./docker/plugins # directory to scan for .so plugin files
   recursive: false # scan sub-directories?

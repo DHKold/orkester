@@ -4,7 +4,7 @@ use crate::config::ConfigTree;
 
 use orkester_common::logging::{
     consumers::{ConsoleConsumer, FileConsumer},
-    filter::{level_min, source, AllFilter, LogFilter, StrMatch},
+    filter::{level_min, source, AllFilter, FilterChain, FilterRule, LogFilter, StrMatch},
     Level, LogConsumer, Logger,
 };
 
@@ -25,14 +25,27 @@ pub(crate) fn init_logging() {
 /// ```yaml
 /// logging:
 ///   console:
-///     enabled: true          # default true
-///     level:   "INFO"        # TRACE/DEBUG/INFO/WARN/ERROR; absent = no level filter
-///     source:  "orkester"    # prefix match on source; absent or empty = no source filter
+///     enabled: true
+///     # Ordered filter chain (last-match-wins).  Each rule has an optional
+///     # `source` prefix/regex and an optional minimum `level`.  The verdict
+///     # of the last rule whose source selector matches the entry is used;
+///     # if no rule matches the default is to accept.
+///     filters:
+///       - level: "DEBUG"                       # baseline: DEBUG+
+///       - source: "noisy::module"
+///         level: "WARN"                        # override: WARN+ from noisy
 ///   file:
 ///     enabled: true
 ///     path:    "/var/log/orkester.log"
-///     level:   "WARN"
-///     source:  ""            # no source filter
+///     filters:
+///       - level: "WARN"
+/// ```
+///
+/// A single-object `filter:` key is also accepted for backward compatibility:
+/// ```yaml
+///     filter:
+///       level: "INFO"
+///       source: "orkester"
 /// ```
 pub(crate) fn load_logging_config(config_tree: &ConfigTree) {
     Logger::clear_consumers();
@@ -41,7 +54,7 @@ pub(crate) fn load_logging_config(config_tree: &ConfigTree) {
     if let Some(cfg) = config_tree.get("logging.console") {
         if cfg.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true) {
             let consumer = ConsoleConsumer::new();
-            consumer.set_filter(build_filter(&cfg));
+            consumer.set_filter(build_consumer_filter(&cfg));
             Logger::add_consumer(consumer);
             added += 1;
         }
@@ -53,7 +66,7 @@ pub(crate) fn load_logging_config(config_tree: &ConfigTree) {
                 "" => eprintln!("[logging] file consumer configured but `path` is missing"),
                 path => match FileConsumer::open(path) {
                     Ok(consumer) => {
-                        consumer.set_filter(build_filter(&cfg));
+                        consumer.set_filter(build_consumer_filter(&cfg));
                         Logger::add_consumer(consumer);
                         added += 1;
                     }
@@ -64,7 +77,44 @@ pub(crate) fn load_logging_config(config_tree: &ConfigTree) {
     }
 }
 
-/// Build a filter from the optional `filter` sub-object of a consumer config block.
+/// Resolve the filter for a consumer config block.
+///
+/// Tries `filters:` (ordered array) first; falls back to the legacy
+/// single-object `filter:` key.  Returns `None` if neither is present.
+fn build_consumer_filter(cfg: &Value) -> Option<Box<dyn LogFilter>> {
+    if let Some(arr) = cfg.get("filters").and_then(|v| v.as_array()) {
+        return Some(Box::new(build_filter_chain(arr)));
+    }
+    build_filter(cfg)
+}
+
+/// Build a [`FilterChain`] from a YAML array of rule objects.
+///
+/// Each item may have:
+/// - `source`: prefix/regex matched against `log.source`
+/// - `level`:  minimum level string (TRACE/DEBUG/INFO/WARN/ERROR)
+fn build_filter_chain(arr: &[Value]) -> FilterChain {
+    let rules = arr
+        .iter()
+        .map(|item| {
+            let source = item
+                .get("source")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| {
+                    StrMatch::regex(s).unwrap_or_else(|e| {
+                        eprintln!("[logging] invalid source regex '{}': {}", s, e);
+                        StrMatch::Prefix(s.to_string())
+                    })
+                });
+            let level = item.get("level").and_then(|v| v.as_str()).and_then(parse_level);
+            FilterRule::new(source, level)
+        })
+        .collect();
+    FilterChain::new(rules)
+}
+
+/// Build a filter from the optional legacy `filter:` sub-object of a consumer config block.
 fn build_filter(cfg: &Value) -> Option<Box<dyn LogFilter>> {
     let filter_cfg = cfg.get("filter")?;
 

@@ -307,6 +307,97 @@ impl LogFilter for NotFilter {
     }
 }
 
+// ── FilterChain ─────────────────────────────────────────────────────────────
+
+/// A single rule in a [`FilterChain`].
+///
+/// A rule has an optional source selector and an optional minimum level.
+/// The rule **applies** to a log entry when the source selector matches
+/// (or the rule has no source selector). Its verdict is:
+/// - `true`  (pass)  if no level is set, or `log.level >= level`
+/// - `false` (block) if `log.level < level`
+pub struct FilterRule {
+    source: Option<StrMatch>,
+    level: Option<Level>,
+}
+
+impl FilterRule {
+    /// Creates a new rule.
+    ///
+    /// - `source` — if `Some`, the rule only applies to entries whose
+    ///   `source` field satisfies the pattern.  `None` matches every source.
+    /// - `level`  — if `Some`, the rule passes when `log.level >= level`.
+    ///   `None` passes unconditionally.
+    pub fn new(source: Option<StrMatch>, level: Option<Level>) -> Self {
+        Self { source, level }
+    }
+
+    fn applies_to(&self, log: &Log) -> bool {
+        match &self.source {
+            Some(pattern) => pattern.test(&log.source),
+            None => true,
+        }
+    }
+
+    fn verdict(&self, log: &Log) -> bool {
+        match self.level {
+            Some(min) => log.level.0 >= min.0,
+            None => true,
+        }
+    }
+}
+
+/// An ordered chain of [`FilterRule`]s with **last-match-wins** semantics.
+///
+/// Rules are evaluated in order.  The verdict of the **last** rule whose
+/// selector (source pattern) matches the log entry is the final outcome.
+/// If no rule matches at all, the entry passes (default: accept).
+///
+/// This lets you define a baseline rule followed by targeted overrides:
+///
+/// ```yaml
+/// filters:
+///   - level: "DEBUG"                       # base: show DEBUG+ from everything
+///   - source: "noisy::module"
+///     level: "WARN"                        # override: only WARN+ from noisy::module
+/// ```
+///
+/// In code:
+/// ```no_run
+/// use orkester_common::logging::filter::{FilterChain, FilterRule, StrMatch};
+/// use orkester_common::logging::Level;
+///
+/// let chain = FilterChain::new(vec![
+///     FilterRule::new(None, Some(Level::DEBUG)),
+///     FilterRule::new(
+///         Some(StrMatch::Prefix("noisy::module".into())),
+///         Some(Level::WARN),
+///     ),
+/// ]);
+/// ```
+pub struct FilterChain {
+    rules: Vec<FilterRule>,
+}
+
+impl FilterChain {
+    pub fn new(rules: Vec<FilterRule>) -> Self {
+        Self { rules }
+    }
+}
+
+impl LogFilter for FilterChain {
+    fn matches(&self, log: &Log) -> bool {
+        // Default: accept when no rule applies.
+        let mut verdict = true;
+        for rule in &self.rules {
+            if rule.applies_to(log) {
+                verdict = rule.verdict(log);
+            }
+        }
+        verdict
+    }
+}
+
 // ── Log-field convenience constructors ───────────────────────────────────────
 
 /// Passes when `log.level` is **at or above** `min`.
