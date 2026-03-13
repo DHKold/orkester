@@ -1,5 +1,9 @@
 import { listNamespaces } from '../api.js'
 
+const STORAGE_KEY = 'orkester-sidebar-width'
+const MIN_WIDTH   = 140
+const MAX_WIDTH   = 480
+
 let cachedNamespaces = []
 
 /** Load namespaces and render sidebar. Call once at startup. */
@@ -10,8 +14,46 @@ export async function initSidebar() {
   } catch (_) {
     cachedNamespaces = []
   }
+  initResizer()
   renderSidebar()
   window.addEventListener('hashchange', updateSidebarActive)
+}
+
+function initResizer() {
+  const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10)
+  if (saved >= MIN_WIDTH && saved <= MAX_WIDTH) {
+    document.body.style.setProperty('--sidebar-width', `${saved}px`)
+  }
+
+  const resizer = document.getElementById('sidebar-resizer')
+  if (!resizer) return
+
+  resizer.addEventListener('mousedown', (e) => {
+    e.preventDefault()
+    resizer.classList.add('dragging')
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+
+    const onMove = (ev) => {
+      const w = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, ev.clientX))
+      document.body.style.setProperty('--sidebar-width', `${w}px`)
+    }
+
+    const onUp = () => {
+      resizer.classList.remove('dragging')
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+      const current = parseInt(
+        getComputedStyle(document.body).getPropertyValue('--sidebar-width'), 10
+      )
+      if (current) localStorage.setItem(STORAGE_KEY, current)
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup',   onUp)
+    }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup',   onUp)
+  })
 }
 
 function renderSidebar() {

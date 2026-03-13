@@ -2,7 +2,7 @@
 html, body { height: 100%; margin: 0; padding: 0 !important; max-width: 100% !important; }
 body {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: var(--sidebar-width, 220px) 1fr;
   grid-template-rows: 1fr;
   min-height: 100vh;
 }
@@ -17,10 +17,25 @@ body {
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
   box-sizing: border-box;
   border: none !important;
   border-radius: 0 !important;
+  min-width: 140px;
+  max-width: 480px;
 }
+#sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+#sidebar-resizer:hover, #sidebar-resizer.dragging { background: #3b82f6; }
 #page-wrap {
   grid-column: 2;
   padding: 1.5rem 2rem;

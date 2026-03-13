@@ -1,6 +1,6 @@
 apiVersion: orkester.io/v1
 kind: Namespace
-name: default
+name: testing
 version: "1.0.0"
 metadata:
   description: "Default namespace for general-purpose workflows"
@@ -8,36 +8,36 @@ spec: {}
 ---
 apiVersion: orkester.io/v1
 kind: Namespace
-name: data-platform
+name: client-nsi-production
 version: "1.0.0"
 metadata:
-  description: "Data platform pipelines — ingestion, transformation, and delivery"
+  description: "Namespace for client NSI production workflows"
   labels:
-    team: data-engineering
+    team: nsi
     env: production
 spec:
   max_concurrent_workflows: 10
 ---
 apiVersion: orkester.io/v1
 kind: Namespace
-name: sandbox
+name: client-nsi-development
 version: "1.0.0"
 metadata:
-  description: "Sandbox namespace for development and testing"
+  description: "Namespace for client NSI development and testing workflows"
   labels:
-    team: data-engineering
+    team: nsi
     env: dev
 spec:
   max_concurrent_workflows: 3
 ---
 apiVersion: orkester.io/v1
 kind: Namespace
-name: acme
+name: mss-production
 version: "1.0.0"
 metadata:
-  description: "Acme Corp — production workflows"
+  description: "Namespace for MSS production workflows"
   labels:
-    team: acme
+    team: mss
     env: production
 spec:
   max_concurrent_workflows: 5
