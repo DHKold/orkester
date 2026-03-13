@@ -44,6 +44,7 @@ pub const ROUTES: &[(&str, &str)] = &[
 pub struct ApiHandler {
     pub store: WorkflowsStore,
     pub to_hub: mpsc::Sender<Message>,
+    pub spawn_tx: tokio::sync::mpsc::UnboundedSender<Workflow>,
 }
 
 impl ApiHandler {
@@ -101,7 +102,10 @@ impl ApiHandler {
                         wf.status = WorkflowStatus::Waiting;
 
                         match self.store.put_workflow(&wf).await {
-                            Ok(()) => (201, json!(wf)),
+                            Ok(()) => {
+                                let _ = self.spawn_tx.send(wf.clone());
+                                (201, json!(wf))
+                            }
                             Err(e) => server_error(e),
                         }
                     }

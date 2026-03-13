@@ -9,8 +9,10 @@ use orkester_common::{log_error, log_info, log_warn};
 use serde_json::{json, Value};
 
 use super::api::{self, ApiHandler};
+use super::model::Workflow;
 use super::scheduler;
 use super::store::WorkflowsStore;
+use super::worker::{LocalWorker, Worker};
 use super::workspace_client::WorkspaceClient;
 use crate::persistence::MemoryPersistenceProvider;
 
@@ -59,9 +61,11 @@ pub async fn run(config: Value, ctx: ServerContext) {
     log_info!("Route registrations sent to '{}'.", rest_target);
 
     // ── Build components ──────────────────────────────────────────────────
+    let (spawn_tx, mut spawn_rx) = tokio::sync::mpsc::unbounded_channel::<Workflow>();
     let handler = ApiHandler {
         store: store.clone(),
         to_hub: channel.to_hub.clone(),
+        spawn_tx,
     };
     let workspace_client = WorkspaceClient::new(workspace_target, channel.to_hub.clone());
 
@@ -105,6 +109,25 @@ pub async fn run(config: Value, ctx: ServerContext) {
                     other => {
                         log_warn!("Unexpected message type '{}'", other);
                     }
+                }
+            }
+
+            Some(wf) = spawn_rx.recv() => {
+                // Only start immediately when there is no future start_datetime.
+                // Workflows with a future start_datetime will be picked up by
+                // the scheduler once their time arrives (future work).
+                let defer = wf.schedule.start_datetime
+                    .map(|t| t > chrono::Utc::now())
+                    .unwrap_or(false);
+                if !defer {
+                    let store_c = store.clone();
+                    let workspace_c = workspace_client.clone();
+                    let executors_c = Arc::clone(&executor_registry);
+                    tokio::spawn(async move {
+                        LocalWorker { executor_registry: executors_c }
+                            .run(wf, store_c, workspace_c)
+                            .await;
+                    });
                 }
             }
 
