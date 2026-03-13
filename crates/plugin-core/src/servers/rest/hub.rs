@@ -53,6 +53,10 @@ fn handle_register_route(msg: Message, state: &AppState) {
 
     state.register_route(method.clone(), path.clone(), msg.source.clone(), openapi);
 
+    // Emit current registered-routes count as a gauge.
+    let routes_count = state.routes.read().unwrap().len() as f64;
+    state.send_metric("rest.routes_registered", "set", routes_count);
+
     let ack = Message::new(
         0,
         "", // hub stamps source

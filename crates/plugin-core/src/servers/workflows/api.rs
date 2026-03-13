@@ -45,6 +45,7 @@ pub struct ApiHandler {
     pub store: WorkflowsStore,
     pub to_hub: mpsc::Sender<Message>,
     pub spawn_tx: tokio::sync::mpsc::UnboundedSender<Workflow>,
+    pub metrics_target: String,
 }
 
 impl ApiHandler {
@@ -104,6 +105,7 @@ impl ApiHandler {
                         match self.store.put_workflow(&wf).await {
                             Ok(()) => {
                                 let _ = self.spawn_tx.send(wf.clone());
+                                self.send_metric("workflows.created_total", "increment", 1.0);
                                 (201, json!(wf))
                             }
                             Err(e) => server_error(e),
@@ -286,6 +288,20 @@ impl ApiHandler {
         if self.to_hub.send(msg).is_err() {
             log_warn!("Could not send response — hub disconnected");
         }
+    }
+
+    pub(super) fn send_metric(&self, name: &str, operation: &str, value: f64) {
+        if self.metrics_target.is_empty() {
+            return;
+        }
+        let msg = Message::new(
+            0,
+            "",
+            &self.metrics_target,
+            "update_metric",
+            json!({ "name": name, "operation": operation, "value": value }),
+        );
+        let _ = self.to_hub.send(msg);
     }
 }
 

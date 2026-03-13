@@ -5,7 +5,7 @@
 //! the internal lock fields directly.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Mutex, RwLock};
 
 use orkester_common::messaging::Message;
@@ -39,15 +39,19 @@ pub(super) struct AppState {
     pending: Mutex<HashMap<u64, tokio::sync::oneshot::Sender<Message>>>,
     to_hub: Mutex<std::sync::mpsc::Sender<Message>>,
     next_id: AtomicU64,
+    metrics_target: String,
+    active_requests: AtomicI64,
 }
 
 impl AppState {
-    pub(super) fn new(to_hub: std::sync::mpsc::Sender<Message>) -> Self {
+    pub(super) fn new(to_hub: std::sync::mpsc::Sender<Message>, metrics_target: String) -> Self {
         Self {
             routes: RwLock::new(HashMap::new()),
             pending: Mutex::new(HashMap::new()),
             to_hub: Mutex::new(to_hub),
             next_id: AtomicU64::new(1),
+            metrics_target,
+            active_requests: AtomicI64::new(0),
         }
     }
 
@@ -90,6 +94,42 @@ impl AppState {
     /// Send a message to the hub. Returns `false` if the hub channel is closed.
     pub(super) fn send_to_hub(&self, msg: Message) -> bool {
         self.to_hub.lock().unwrap().send(msg).is_ok()
+    }
+
+    /// Emit an `update_metric` message to the configured metrics server.
+    ///
+    /// Does nothing when `metrics_target` is empty (metrics disabled).
+    pub(super) fn send_metric(&self, name: &str, operation: &str, value: f64) {
+        if self.metrics_target.is_empty() {
+            return;
+        }
+        let msg = Message::new(
+            0,
+            "",
+            &self.metrics_target,
+            "update_metric",
+            json!({ "name": name, "operation": operation, "value": value }),
+        );
+        // Fire-and-forget — metric loss on hub disconnect is acceptable.
+        let _ = self.to_hub.lock().unwrap().send(msg);
+    }
+
+    /// Increment the active-request counter and emit a `set` metric.
+    pub(super) fn active_request_start(&self) {
+        let active = self.active_requests.fetch_add(1, Ordering::Relaxed) + 1;
+        self.send_metric("rest.requests_active", "set", active as f64);
+    }
+
+    /// Decrement the active-request counter and emit a `set` metric.
+    pub(super) fn active_request_end(&self) {
+        let active = self.active_requests.fetch_sub(1, Ordering::Relaxed) - 1;
+        self.send_metric("rest.requests_active", "set", active as f64);
+    }
+
+    /// Returns `true` when `target` is the metrics server itself, meaning
+    /// requests to it should not be counted in REST metrics.
+    pub(super) fn is_metrics_target(&self, target: &str) -> bool {
+        !self.metrics_target.is_empty() && target == self.metrics_target
     }
 
     /// Insert or overwrite a route registration.

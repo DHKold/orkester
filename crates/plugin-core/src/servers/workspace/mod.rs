@@ -138,6 +138,12 @@ async fn run(config: Value, channel: ServerSide) {
         .unwrap_or("rest_api")
         .to_string();
 
+    let metrics_target = config
+        .get("metrics_target")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
     for (method, path) in api::ROUTES {
         let msg = Message::new(
             0,
@@ -152,6 +158,9 @@ async fn run(config: Value, channel: ServerSide) {
         }
     }
     log_info!("Route registrations sent to '{}'.", rest_target);
+
+    // ── Emit initial object counts ────────────────────────────────────────
+    emit_workspace_counts(&store, &channel.to_hub, &metrics_target).await;
 
     // ── Build API handler ─────────────────────────────────────────────────
     let handler = ApiHandler {
@@ -180,7 +189,11 @@ async fn run(config: Value, channel: ServerSide) {
             Some(msg) = hub_rx.recv() => {
                 match msg.message_type.as_str() {
                     "http_request" => {
-                        handler.handle(msg).await;
+                        let status = handler.handle(msg).await;
+                        send_metric(&channel.to_hub, &metrics_target, "workspace.reads_total", "increment", 1.0);
+                        if status == 404 {
+                            send_metric(&channel.to_hub, &metrics_target, "workspace.not_found_total", "increment", 1.0);
+                        }
                     }
                     "workspace_request" => {
                         handle_workspace_request(&store, msg, &channel.to_hub).await;
@@ -213,12 +226,14 @@ async fn run(config: Value, channel: ServerSide) {
                         if let Err(e) = handler.store.upsert(&obj).await {
                             log_error!("Store error on reload: {}", e);
                         }
+                        emit_workspace_counts(&handler.store, &channel.to_hub, &metrics_target).await;
                     }
                     LoaderEvent::Removed(obj) => {
                         log_info!("Removing {} '{}'", obj.kind(), obj.name());
                         if let Err(e) = handler.store.remove(&obj).await {
                             log_error!("Store error on remove: {}", e);
                         }
+                        emit_workspace_counts(&handler.store, &channel.to_hub, &metrics_target).await;
                     }
                 }
             }
@@ -297,6 +312,59 @@ async fn handle_workspace_request(
     if let Err(e) = to_hub.send(reply) {
         log_warn!("Failed to send workspace_response: {}", e);
     }
+}
+
+// ── Metrics helpers ───────────────────────────────────────────────────────────
+
+fn send_metric(
+    to_hub: &std::sync::mpsc::Sender<Message>,
+    metrics_target: &str,
+    name: &str,
+    operation: &str,
+    value: f64,
+) {
+    if metrics_target.is_empty() {
+        return;
+    }
+    let msg = Message::new(
+        0,
+        "",
+        metrics_target,
+        "update_metric",
+        json!({ "name": name, "operation": operation, "value": value }),
+    );
+    let _ = to_hub.send(msg);
+}
+
+async fn emit_workspace_counts(
+    store: &WorkspaceStore,
+    to_hub: &std::sync::mpsc::Sender<Message>,
+    metrics_target: &str,
+) {
+    if metrics_target.is_empty() {
+        return;
+    }
+    if let Ok(ns) = store.list_namespaces().await {
+        send_metric(to_hub, metrics_target, "workspace.namespaces_count", "set", ns.len() as f64);
+    }
+    // Tasks and works span all namespaces; we sum across namespaces we know.
+    let namespaces: Vec<String> = store
+        .list_namespaces()
+        .await
+        .map(|ns| ns.into_iter().map(|n| n.meta.name.clone()).collect())
+        .unwrap_or_default();
+    let mut tasks_total = 0usize;
+    let mut works_total = 0usize;
+    for ns in &namespaces {
+        if let Ok(t) = store.list_tasks(ns).await {
+            tasks_total += t.len();
+        }
+        if let Ok(w) = store.list_works(ns).await {
+            works_total += w.len();
+        }
+    }
+    send_metric(to_hub, metrics_target, "workspace.tasks_count", "set", tasks_total as f64);
+    send_metric(to_hub, metrics_target, "workspace.works_count", "set", works_total as f64);
 }
 
 // ── Builder ────────────────────────────────────────────────────────────────────

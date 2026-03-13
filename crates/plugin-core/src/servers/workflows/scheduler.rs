@@ -18,6 +18,8 @@ pub async fn run_tick(
     store: &WorkflowsStore,
     workspace: &WorkspaceClient,
     executors: &Arc<ExecutorRegistry>,
+    to_hub: &std::sync::mpsc::Sender<orkester_common::messaging::Message>,
+    metrics_target: &str,
 ) {
     let crons = match store.list_all_enabled_crons().await {
         Ok(c) => c,
@@ -121,8 +123,14 @@ pub async fn run_tick(
                     let wf_clone = wf.clone();
                     let workspace_clone = workspace.clone();
                     let executors_clone = Arc::clone(executors);
+                    let to_hub_clone = to_hub.clone();
+                    let metrics_clone = metrics_target.to_string();
                     tokio::spawn(async move {
-                        LocalWorker { executor_registry: executors_clone }
+                        LocalWorker {
+                            executor_registry: executors_clone,
+                            to_hub: to_hub_clone,
+                            metrics_target: metrics_clone,
+                        }
                             .run(wf_clone, store_clone, workspace_clone)
                             .await;
                     });

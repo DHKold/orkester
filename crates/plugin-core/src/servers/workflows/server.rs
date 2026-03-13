@@ -37,6 +37,12 @@ pub async fn run(config: Value, ctx: ServerContext) {
         .unwrap_or("workspace")
         .to_string();
 
+    let metrics_target = config
+        .get("metrics_target")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
     let scheduler_interval = Duration::from_secs(
         config
             .get("scheduler_interval_seconds")
@@ -66,6 +72,7 @@ pub async fn run(config: Value, ctx: ServerContext) {
         store: store.clone(),
         to_hub: channel.to_hub.clone(),
         spawn_tx,
+        metrics_target: metrics_target.clone(),
     };
     let workspace_client = WorkspaceClient::new(workspace_target, channel.to_hub.clone());
 
@@ -123,8 +130,14 @@ pub async fn run(config: Value, ctx: ServerContext) {
                     let store_c = store.clone();
                     let workspace_c = workspace_client.clone();
                     let executors_c = Arc::clone(&executor_registry);
+                    let to_hub_c = channel.to_hub.clone();
+                    let metrics_c = metrics_target.clone();
                     tokio::spawn(async move {
-                        LocalWorker { executor_registry: executors_c }
+                        LocalWorker {
+                            executor_registry: executors_c,
+                            to_hub: to_hub_c,
+                            metrics_target: metrics_c,
+                        }
                             .run(wf, store_c, workspace_c)
                             .await;
                     });
@@ -132,7 +145,7 @@ pub async fn run(config: Value, ctx: ServerContext) {
             }
 
             _ = scheduler_tick.tick() => {
-                scheduler::run_tick(&store, &workspace_client, &executor_registry).await;
+                scheduler::run_tick(&store, &workspace_client, &executor_registry, &channel.to_hub, &metrics_target).await;
             }
 
             else => break,

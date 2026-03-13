@@ -18,7 +18,9 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::Utc;
 use orkester_common::domain::Work;
+use orkester_common::messaging::Message;
 use orkester_common::plugin::providers::executor::ExecutorRegistry;
+use serde_json::json;
 
 use super::dag;
 use super::super::model::{StepState, StepStatus, Workflow, WorkflowStatus};
@@ -30,6 +32,8 @@ use super::traits::Worker;
 
 pub struct LocalWorker {
     pub executor_registry: Arc<ExecutorRegistry>,
+    pub to_hub: std::sync::mpsc::Sender<Message>,
+    pub metrics_target: String,
 }
 
 // ── Worker trait impl ─────────────────────────────────────────────────────────
@@ -49,21 +53,43 @@ impl Worker for LocalWorker {
             return;
         }
 
+        // Workflow transitioned to Running — emit started + active metrics.
+        self.send_metric("workflows.started_total", "increment", 1.0);
+        self.send_metric("workflows.active", "increment", 1.0);
+
         let work = match Self::resolve_work(&workflow, &workspace).await {
             Ok(w) => w,
             Err(reason) => {
                 dag::fail_workflow(&mut workflow, reason, &store).await;
+                self.send_metric("workflows.failed_total", "increment", 1.0);
+                self.send_metric("workflows.active", "increment", -1.0);
                 return;
             }
         };
 
         if Self::init_steps(&mut workflow, &work, &store).await.is_err() {
+            self.send_metric("workflows.failed_total", "increment", 1.0);
+            self.send_metric("workflows.active", "increment", -1.0);
             return;
         }
 
         let result = self.run_dag(&mut workflow, &work, &store, &workspace).await;
 
         Self::finalize(&mut workflow, result, &store).await;
+
+        // Emit the terminal-state metric.
+        match workflow.status {
+            WorkflowStatus::Succeeded => {
+                self.send_metric("workflows.succeeded_total", "increment", 1.0);
+            }
+            WorkflowStatus::Cancelled => {
+                self.send_metric("workflows.cancelled_total", "increment", 1.0);
+            }
+            _ => {
+                self.send_metric("workflows.failed_total", "increment", 1.0);
+            }
+        }
+        self.send_metric("workflows.active", "increment", -1.0);
     }
 
     async fn cancel(&self, workflow_id: &str, namespace: &str, store: WorkflowsStore) {
@@ -78,6 +104,9 @@ impl Worker for LocalWorker {
                         workflow_id,
                         e,
                     );
+                } else {
+                    self.send_metric("workflows.cancelled_total", "increment", 1.0);
+                    self.send_metric("workflows.active", "increment", -1.0);
                 }
             }
             Ok(wf) => orkester_common::log_warn!(
@@ -97,6 +126,20 @@ impl Worker for LocalWorker {
 // ── Private lifecycle phases ──────────────────────────────────────────────────
 
 impl LocalWorker {
+    fn send_metric(&self, name: &str, operation: &str, value: f64) {
+        if self.metrics_target.is_empty() {
+            return;
+        }
+        let msg = Message::new(
+            0,
+            "",
+            &self.metrics_target,
+            "update_metric",
+            json!({ "name": name, "operation": operation, "value": value }),
+        );
+        let _ = self.to_hub.send(msg);
+    }
+
     /// Transition the workflow to `Running` and persist the initial state.
     async fn start_workflow(workflow: &mut Workflow, store: &WorkflowsStore) -> Result<(), ()> {
         workflow.status = WorkflowStatus::Running;

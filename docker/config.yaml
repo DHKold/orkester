@@ -18,10 +18,11 @@ servers:
       server: axum-rest-server
     enabled: true
     port: 8080
+    metrics_target: metrics
   metrics:
     component:
       plugin: orkester-plugin-core
-      server: no-metrics-server
+      server: metrics-server
     rest_server: rest_api
     enabled: true
   workspace:
@@ -30,6 +31,7 @@ servers:
       server: workspace-server
     enabled: true
     rest_target: rest_api
+    metrics_target: metrics
     loaders:
       - type: local
         dir: /orkester/docker/samples
@@ -39,5 +41,6 @@ servers:
       server: workflows-server
     enabled: true
     rest_target: rest_api
+    metrics_target: metrics
     # How often the scheduler checks for due Crons (seconds).
     scheduler_interval_seconds: 30

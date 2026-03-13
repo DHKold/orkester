@@ -33,13 +33,18 @@ impl Server for AxumRestServer {
     fn start(&self, ctx: ServerContext) -> Result<(), ServerError> {
         let channel = ctx.channel;
         let bind_addr = self.bind_address();
+        let metrics_target = self.config
+            .get("metrics_target")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
         *self.shutdown_tx.lock().unwrap() = Some(shutdown_tx);
 
         let handle = std::thread::spawn(move || {
             Self::build_runtime().block_on(async move {
-                let state = Arc::new(AppState::new(channel.to_hub));
+                let state = Arc::new(AppState::new(channel.to_hub, metrics_target));
                 let hub_rx = Self::bridge_hub_channel(channel.from_hub);
                 tokio::spawn(hub_message_task(hub_rx, state.clone()));
                 let router = Self::build_router(state);

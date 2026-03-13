@@ -42,7 +42,7 @@ pub struct ApiHandler {
 }
 
 impl ApiHandler {
-    pub async fn handle(&self, msg: Message) {
+    pub async fn handle(&self, msg: Message) -> u16 {
         let path = msg
             .content
             .get("path")
@@ -60,6 +60,7 @@ impl ApiHandler {
 
         let (status, body) = self.dispatch(&path).await;
         self.reply(&source, corr_id, status, body);
+        status
     }
 
     async fn dispatch(&self, path: &str) -> (u16, Value) {

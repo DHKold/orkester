@@ -62,18 +62,34 @@ pub(super) async fn dynamic_route_handler(
         Some(r) => r,
         None => {
             log_debug!("REST {} {} → 404 (no registered route)", method_str, path);
+            // Don't emit metrics for unrecognised paths — they may be probes.
+            state.send_metric("rest.requests_total", "increment", 1.0);
+            state.send_metric("rest.responses_4xx", "increment", 1.0);
             return (StatusCode::NOT_FOUND, Json(json!({ "error": "route not found" })))
                 .into_response();
         }
     };
 
+    // Skip instrumentation for metrics-server routes to avoid self-observation noise.
+    let instrument = !state.is_metrics_target(&reg.target);
+
+    if instrument {
+        state.send_metric("rest.requests_total", "increment", 1.0);
+        state.active_request_start();
+    }
+
     let (corr_id, rx) =
         match send_hub_request(&state, &reg, &method_str, &path, parse_body(&body)) {
             Ok(pair) => pair,
-            Err(response) => return response,
+            Err(response) => {
+                if instrument { state.active_request_end(); }
+                return response;
+            }
         };
 
-    await_hub_response(&state, rx, &method_str, &path, corr_id).await
+    let response = await_hub_response(&state, rx, &method_str, &path, corr_id, instrument).await;
+    if instrument { state.active_request_end(); }
+    response
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
@@ -126,6 +142,8 @@ fn send_hub_request(
             "REST {} {} → hub disconnected (correlation_id={})",
             method, path, corr_id,
         );
+        state.send_metric("rest.hub_disconnected", "increment", 1.0);
+        state.send_metric("rest.responses_5xx", "increment", 1.0);
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({ "error": "hub disconnected" })),
@@ -143,6 +161,7 @@ async fn await_hub_response(
     method: &str,
     path: &str,
     corr_id: u64,
+    instrument: bool,
 ) -> Response {
     match tokio::time::timeout(Duration::from_secs(30), rx).await {
         Ok(Ok(reply)) => {
@@ -159,6 +178,16 @@ async fn await_hub_response(
                 body.to_string().len(),
             );
             log_debug!("REST {} {} → {}", method, path, status.as_u16());
+            let status_code = status.as_u16();
+            if instrument {
+                if status_code < 400 {
+                    state.send_metric("rest.responses_2xx", "increment", 1.0);
+                } else if status_code < 500 {
+                    state.send_metric("rest.responses_4xx", "increment", 1.0);
+                } else {
+                    state.send_metric("rest.responses_5xx", "increment", 1.0);
+                }
+            }
             (status, Json(body)).into_response()
         }
         Ok(Err(_)) => {
@@ -166,6 +195,10 @@ async fn await_hub_response(
                 "REST {} {} → upstream disconnected (correlation_id={})",
                 method, path, corr_id,
             );
+            if instrument {
+                state.send_metric("rest.hub_disconnected", "increment", 1.0);
+                state.send_metric("rest.responses_5xx", "increment", 1.0);
+            }
             (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(json!({ "error": "upstream disconnected" })),
@@ -178,6 +211,10 @@ async fn await_hub_response(
                 "REST {} {} → timeout (correlation_id={})",
                 method, path, corr_id,
             );
+            if instrument {
+                state.send_metric("rest.hub_timeouts", "increment", 1.0);
+                state.send_metric("rest.responses_5xx", "increment", 1.0);
+            }
             (
                 StatusCode::GATEWAY_TIMEOUT,
                 Json(json!({ "error": "upstream timeout" })),
