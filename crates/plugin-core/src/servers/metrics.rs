@@ -19,7 +19,41 @@ impl Server for NoMetricsServer {
                 "", // hub stamps source
                 rest_target.as_str(),
                 "register_route",
-                json!({ "method": "GET", "path": "/v1/metrics" }),
+                json!({
+                    "method": "GET",
+                    "path": "/v1/metrics",
+                    "openapi": {
+                        "summary": "Runtime metrics",
+                        "description": "Returns lightweight health and throughput counters \
+                                        for the running Orkester instance. \
+                                        No authentication is required.",
+                        "tags": ["observability"],
+                        "responses": {
+                            "200": {
+                                "description": "Current metrics snapshot.",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "uptime_seconds": {
+                                                    "type": "integer",
+                                                    "description": "Seconds since the server started.",
+                                                    "example": 3600
+                                                },
+                                                "requests_total": {
+                                                    "type": "integer",
+                                                    "description": "Total HTTP requests handled since startup.",
+                                                    "example": 42
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }),
             );
             log_info!("Sending register_route to '{}'.", rest_target);
             if channel.to_hub.send(msg).is_err() {

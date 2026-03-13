@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, RwLock};
 
 use orkester_common::messaging::Message;
+use serde_json::{json, Value};
 
 // ── Route registry types ──────────────────────────────────────────────────────
 
@@ -16,6 +17,13 @@ use orkester_common::messaging::Message;
 pub(super) struct RouteRegistration {
     /// Instance name of the server that owns this route.
     pub(super) target: String,
+    /// Optional OpenAPI 3.0 [Operation Object] supplied by the registrant.
+    ///
+    /// Supported fields: `summary`, `description`, `tags`, `parameters`,
+    /// `requestBody`, `responses`, `deprecated`, and any extension (`x-*`).
+    ///
+    /// [Operation Object]: https://spec.openapis.org/oas/v3.0.3#operation-object
+    pub(super) openapi: Option<Value>,
 }
 
 #[derive(Hash, Eq, PartialEq, Clone)]
@@ -85,11 +93,99 @@ impl AppState {
     }
 
     /// Insert or overwrite a route registration.
-    pub(super) fn register_route(&self, method: String, path: String, source: String) {
+    ///
+    /// `openapi` is an optional OpenAPI 3.0 Operation Object the registrant can
+    /// supply to enrich the spec served at `GET /v1/openapi.json`.
+    pub(super) fn register_route(
+        &self,
+        method: String,
+        path: String,
+        source: String,
+        openapi: Option<Value>,
+    ) {
         self.routes.write().unwrap().insert(
             RouteKey { method, path },
-            RouteRegistration { target: source },
+            RouteRegistration { target: source, openapi },
         );
+    }
+
+    /// Assemble a live OpenAPI 3.0.3 document from all currently registered routes.
+    ///
+    /// Path parameters are inferred from `{name}` segments in the path template.
+    /// Per-operation metadata (summary, description, schemas, …) is taken from the
+    /// `openapi` field that registrants may supply in their `register_route` message.
+    /// Inferred path parameters are merged with any explicitly declared ones,
+    /// deduplicating by name so registrants can override the defaults.
+    pub(super) fn build_openapi_spec(&self) -> Value {
+        let routes = self.routes.read().unwrap();
+        let mut paths: serde_json::Map<String, Value> = serde_json::Map::new();
+
+        for (key, reg) in routes.iter() {
+            // Infer path parameters from {name} segments.
+            let inferred_params: Vec<Value> = key
+                .path
+                .split('/')
+                .filter(|s| s.starts_with('{') && s.ends_with('}'))
+                .map(|s| {
+                    json!({
+                        "name": &s[1..s.len() - 1],
+                        "in": "path",
+                        "required": true,
+                        "schema": { "type": "string" }
+                    })
+                })
+                .collect();
+
+            // Start from the plugin-supplied operation object or an empty one.
+            let mut op: serde_json::Map<String, Value> = reg
+                .openapi
+                .as_ref()
+                .and_then(|v| v.as_object().cloned())
+                .unwrap_or_default();
+
+            // Apply defaults for required OpenAPI fields when not provided.
+            op.entry("tags".to_owned())
+                .or_insert_with(|| json!([reg.target]));
+            op.entry("responses".to_owned()).or_insert_with(|| {
+                json!({
+                    "200":     { "description": "Success" },
+                    "default": { "description": "Unexpected error" }
+                })
+            });
+
+            // Merge inferred path params, skipping any already declared by name.
+            if !inferred_params.is_empty() {
+                let existing = op
+                    .entry("parameters".to_owned())
+                    .or_insert_with(|| json!([]));
+                if let Some(arr) = existing.as_array_mut() {
+                    let declared: std::collections::HashSet<String> = arr
+                        .iter()
+                        .filter_map(|p| {
+                            p.get("name").and_then(|n| n.as_str()).map(str::to_owned)
+                        })
+                        .collect();
+                    for p in &inferred_params {
+                        let name = p.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                        if !declared.contains(name) {
+                            arr.push(p.clone());
+                        }
+                    }
+                }
+            }
+
+            let method = key.method.to_lowercase();
+            let path_entry = paths.entry(key.path.clone()).or_insert_with(|| json!({}));
+            if let Some(obj) = path_entry.as_object_mut() {
+                obj.insert(method, Value::Object(op));
+            }
+        }
+
+        json!({
+            "openapi": "3.0.3",
+            "info": { "title": "Orkester API", "version": "1.0.0" },
+            "paths": paths
+        })
     }
 }
 

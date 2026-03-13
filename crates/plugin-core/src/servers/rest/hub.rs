@@ -44,12 +44,14 @@ fn handle_register_route(msg: Message, state: &AppState) {
         .unwrap_or("/")
         .to_string();
 
+    let openapi = msg.content.get("openapi").cloned();
+
     log_info!(
         "Registering route {} {} (requested by '{}').",
         method, path, msg.source,
     );
 
-    state.register_route(method.clone(), path.clone(), msg.source.clone());
+    state.register_route(method.clone(), path.clone(), msg.source.clone(), openapi);
 
     let ack = Message::new(
         0,

@@ -15,7 +15,7 @@ use orkester_common::plugin::servers::{Server, ServerBuilder, ServerContext, Ser
 use orkester_common::log_info;
 use serde_json::Value;
 
-use super::handlers::{dynamic_route_handler, list_routes_handler};
+use super::handlers::{dynamic_route_handler, list_routes_handler, openapi_handler};
 use super::hub::hub_message_task;
 use super::state::AppState;
 
@@ -97,6 +97,7 @@ impl AxumRestServer {
 
     fn build_router(state: Arc<AppState>) -> Router {
         Router::new()
+            .route("/v1/openapi.json", get(openapi_handler))
             .route("/v1/routes", get(list_routes_handler))
             .fallback(dynamic_route_handler)
             .with_state(state)

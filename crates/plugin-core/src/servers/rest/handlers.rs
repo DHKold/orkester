@@ -24,6 +24,14 @@ use serde_json::{json, Value};
 
 use super::state::{AppState, RouteRegistration};
 
+// ── GET /v1/openapi.json ─────────────────────────────────────────────────────
+
+pub(super) async fn openapi_handler(
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    Json(state.build_openapi_spec())
+}
+
 // ── GET /v1/routes ────────────────────────────────────────────────────────────
 
 pub(super) async fn list_routes_handler(
