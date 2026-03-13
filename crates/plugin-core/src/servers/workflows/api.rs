@@ -32,6 +32,9 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("GET", "/v1/namespaces/{ns}/workflows/{id}"),
     ("PUT", "/v1/namespaces/{ns}/workflows/{id}"),
     ("DELETE", "/v1/namespaces/{ns}/workflows/{id}"),
+    ("GET", "/v1/namespaces/{ns}/workflows/{id}/steps"),
+    ("GET", "/v1/namespaces/{ns}/workflows/{id}/steps/{step_id}"),
+    ("GET", "/v1/namespaces/{ns}/workflows/{id}/steps/{step_id}/logs"),
     ("GET", "/v1/namespaces/{ns}/crons"),
     ("POST", "/v1/namespaces/{ns}/crons"),
     ("GET", "/v1/namespaces/{ns}/crons/{id}"),
@@ -170,7 +173,34 @@ impl ApiHandler {
                     Err(e) => not_found_or_error(e),
                 }
             }
+            // ── Workflow steps ────────────────────────────────────────────────────────
 
+            ("GET", ["v1", "namespaces", ns, "workflows", id, "steps"]) => {
+                match self.store.get_workflow(ns, id).await {
+                    Ok(wf) => (200, json!({ "steps": wf.steps })),
+                    Err(e) => not_found_or_error(e),
+                }
+            }
+
+            ("GET", ["v1", "namespaces", ns, "workflows", id, "steps", step_id]) => {
+                match self.store.get_workflow(ns, id).await {
+                    Ok(wf) => match wf.steps.get(*step_id) {
+                        Some(state) => (200, json!(state)),
+                        None => (404, json!({ "error": "step not found" })),
+                    },
+                    Err(e) => not_found_or_error(e),
+                }
+            }
+
+            ("GET", ["v1", "namespaces", ns, "workflows", id, "steps", step_id, "logs"]) => {
+                match self.store.get_workflow(ns, id).await {
+                    Ok(wf) => match wf.steps.get(*step_id) {
+                        Some(state) => (200, json!({ "logs": state.logs })),
+                        None => (404, json!({ "error": "step not found" })),
+                    },
+                    Err(e) => not_found_or_error(e),
+                }
+            }
             // ── Crons ─────────────────────────────────────────────────────
             ("GET", ["v1", "namespaces", ns, "crons"]) => match self.store.list_crons(ns).await {
                 Ok(list) => (200, json!({ "crons": list })),

@@ -113,7 +113,7 @@ pub(super) async fn execute(
         let _ = store.put_workflow(workflow).await;
 
         // Spawn all steps in the wave in parallel.
-        let mut join_set: tokio::task::JoinSet<(String, Result<HashMap<String, Value>, String>)> =
+        let mut join_set: tokio::task::JoinSet<(String, Result<HashMap<String, Value>, String>, Vec<String>)> =
             tokio::task::JoinSet::new();
 
         for step_id in &wave {
@@ -124,7 +124,7 @@ pub(super) async fn execute(
                     let id = step_id.clone();
                     let name = wstep.task.clone();
                     join_set.spawn(async move {
-                        (id, Err(format!("task '{name}' not found in workspace")))
+                        (id, Err(format!("task '{name}' not found in workspace")), vec![])
                     });
                     continue;
                 }
@@ -132,14 +132,14 @@ pub(super) async fn execute(
             let inputs = step::build_inputs(&wstep, &workflow.work_context, &step_outputs);
             let executors_c = Arc::clone(executors);
             join_set.spawn(async move {
-                let result = step::execute(&wstep, task, inputs, &executors_c).await;
-                (wstep.id.clone(), result)
+                let (result, logs) = step::execute(&wstep, task, inputs, &executors_c).await;
+                (wstep.id.clone(), result, logs)
             });
         }
 
         // Collect results and update workflow state.
         while let Some(join_res) = join_set.join_next().await {
-            let (step_id, result) = join_res.unwrap_or_else(|e| ("unknown".into(), Err(e.to_string())));
+            let (step_id, result, logs) = join_res.unwrap_or_else(|e| ("unknown".into(), Err(e.to_string()), vec![]));
             let now = Utc::now();
             match result {
                 Ok(outputs) => {
@@ -147,6 +147,7 @@ pub(super) async fn execute(
                         state.status = StepStatus::Succeeded;
                         state.finished_at = Some(now);
                         state.outputs = outputs.clone();
+                        state.logs = logs;
                     }
                     step_outputs.insert(step_id.clone(), outputs);
                     workflow.metrics.steps_succeeded += 1;
@@ -157,6 +158,7 @@ pub(super) async fn execute(
                         state.status = StepStatus::Failed;
                         state.finished_at = Some(now);
                         state.error = Some(msg.clone());
+                        state.logs = logs;
                     }
                     workflow.metrics.steps_failed += 1;
 

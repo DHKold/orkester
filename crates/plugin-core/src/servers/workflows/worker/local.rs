@@ -182,6 +182,7 @@ impl LocalWorker {
                     finished_at: None,
                     outputs: HashMap::new(),
                     error: None,
+                    logs: Vec::new(),
                     attempt: 1,
                 },
             );

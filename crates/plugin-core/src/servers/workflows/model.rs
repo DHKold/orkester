@@ -230,6 +230,9 @@ pub struct StepState {
     pub outputs: HashMap<String, Value>,
     /// Error message if the step failed.
     pub error: Option<String>,
+    /// Log lines captured during execution (all attempts, all streams).
+    #[serde(default)]
+    pub logs: Vec<String>,
     /// Number of attempts made (1-based).
     #[serde(default = "default_one")]
     pub attempt: u32,

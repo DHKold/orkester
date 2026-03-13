@@ -18,15 +18,20 @@ use uuid::Uuid;
 
 /// Execute a single workflow step, applying the task's retry and timeout policy.
 ///
+/// Returns `(result, logs)` — logs are accumulated across all retry attempts
+/// and are always present regardless of success or failure.
+///
 /// `task` is already resolved — no workspace lookup is performed here.
 pub(super) async fn execute(
     step: &WorkStep,
     task: Task,
     inputs: HashMap<String, Value>,
     executors: &Arc<ExecutorRegistry>,
-) -> Result<HashMap<String, Value>, String> {
+) -> (Result<HashMap<String, Value>, String>, Vec<String>) {
     let max_attempts = task.spec.retries + 1;
     let timeout = task.spec.timeout_seconds.map(Duration::from_secs);
+
+    let mut all_logs: Vec<String> = Vec::new();
 
     for attempt in 1..=max_attempts {
         orkester_common::log_info!(
@@ -38,23 +43,25 @@ pub(super) async fn execute(
             max_attempts,
         );
 
-        let outcome = match timeout {
+        let (outcome, logs) = match timeout {
             Some(t) => {
                 tokio::time::timeout(t, dispatch(&task, inputs.clone(), executors))
                     .await
-                    .unwrap_or_else(|_| {
+                    .unwrap_or_else(|_| (
                         Err(format!(
                             "task '{}' timed out after {}s",
                             task.meta.name,
                             task.spec.timeout_seconds.unwrap_or(0),
-                        ))
-                    })
+                        )),
+                        vec![],
+                    ))
             }
             None => dispatch(&task, inputs.clone(), executors).await,
         };
+        all_logs.extend(logs);
 
         match outcome {
-            Ok(outputs) => return Ok(outputs),
+            Ok(outputs) => return (Ok(outputs), all_logs),
             Err(msg) if attempt < max_attempts => {
                 orkester_common::log_warn!(
                     "Worker: step '{}' attempt {}/{} failed: {} — retrying",
@@ -64,7 +71,7 @@ pub(super) async fn execute(
                     msg,
                 );
             }
-            Err(msg) => return Err(msg),
+            Err(msg) => return (Err(msg), all_logs),
         }
     }
 
@@ -105,30 +112,39 @@ async fn dispatch(
     task: &Task,
     inputs: HashMap<String, Value>,
     executors: &ExecutorRegistry,
-) -> Result<HashMap<String, Value>, String> {
-    let executor = executors.get(&task.spec.executor).ok_or_else(|| {
-        format!(
-            "no executor registered for '{}' (task '{}')",
-            task.spec.executor, task.meta.name,
-        )
-    })?;
+) -> (Result<HashMap<String, Value>, String>, Vec<String>) {
+    let executor = match executors.get(&task.spec.executor) {
+        Some(e) => e,
+        None => return (
+            Err(format!(
+                "no executor registered for '{}' (task '{}')",
+                task.spec.executor, task.meta.name,
+            )),
+            vec![],
+        ),
+    };
 
-    let result = executor
+    let result = match executor
         .execute(ExecutionRequest {
             id: Uuid::new_v4().to_string(),
             task_definition: task.spec.config.clone(),
             inputs,
         })
         .await
-        .map_err(|e| e.to_string())?;
+    {
+        Err(e) => return (Err(e.to_string()), vec![]),
+        Ok(r) => r,
+    };
 
     for line in &result.logs {
         orkester_common::log_info!("[{}] {}", task.meta.name, line);
     }
+    let logs = result.logs;
 
-    match result.status {
+    let outcome = match result.status {
         ExecutionStatus::Succeeded => Ok(result.outputs),
         ExecutionStatus::Failed(msg) => Err(msg),
         other => Err(format!("unexpected execution status: {other:?}")),
-    }
+    };
+    (outcome, logs)
 }

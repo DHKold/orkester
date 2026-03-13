@@ -159,14 +159,10 @@ impl TaskExecutor for CommandTaskExecutor {
         outputs.insert("stderr".to_string(), json!(stderr.trim()));
         outputs.insert("exit_code".to_string(), json!(exit_code));
 
-        if output.status.success() {
-            Ok(ExecutionResult {
-                status: ExecutionStatus::Succeeded,
-                outputs,
-                logs,
-            })
+        let status = if output.status.success() {
+            ExecutionStatus::Succeeded
         } else {
-            Err(ExecutorError::Failed(format!(
+            ExecutionStatus::Failed(format!(
                 "command '{}' exited with code {}{}",
                 program,
                 exit_code,
@@ -175,8 +171,9 @@ impl TaskExecutor for CommandTaskExecutor {
                 } else {
                     format!(": {}", stderr.trim())
                 }
-            )))
-        }
+            ))
+        };
+        Ok(ExecutionResult { status, outputs, logs })
     }
 
     async fn cancel(&self, _execution_id: &str) -> Result<(), ExecutorError> {
