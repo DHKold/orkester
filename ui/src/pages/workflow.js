@@ -1,5 +1,5 @@
 import { getWorkflow, getWork, deleteWorkflow, updateWorkflow } from '../api.js'
-import { esc, fmtDate, fmtDuration, badge, setApp, nsHeader } from '../utils.js'
+import { esc, fmtDate, fmtDuration, badge, setApp, breadcrumb } from '../utils.js'
 import { toastError, toastSuccess } from '../components/toast.js'
 import { renderDag, updateDagColors } from '../components/dag.js'
 import { setCleanup, navigate } from '../router.js'
@@ -9,7 +9,7 @@ const REFRESH_MS = 3000
 
 export async function renderWorkflow({ ns, id }) {
   setApp(`
-    ${nsHeader(ns, 'Workflows')}
+    ${breadcrumb([{label:'Namespaces',href:'#/namespaces'},{label:ns,href:`#/namespaces/${encodeURIComponent(ns)}`},{label:'Workflows'}])}
     <p aria-busy="true">Loading workflow…</p>
   `)
 
@@ -22,7 +22,7 @@ export async function renderWorkflow({ ns, id }) {
     wf = await getWorkflow(ns, id)
   } catch (e) {
     toastError(`Workflow not found: ${e.message}`)
-    setApp(`${nsHeader(ns, 'Workflows')}<div class="empty-state"><p>Workflow not found.</p></div>`)
+    setApp(`${breadcrumb([{label:'Namespaces',href:'#/namespaces'},{label:ns,href:`#/namespaces/${encodeURIComponent(ns)}`},{label:'Workflows',href:`#/namespaces/${encodeURIComponent(ns)}/workflows`}])}<div class="empty-state"><p>Workflow not found.</p></div>`)
     return
   }
 
@@ -67,13 +67,12 @@ function renderDetail(ns, wf, work) {
   const stepsOrdered = orderedSteps(work, wf.steps ?? {})
 
   setApp(`
-    ${nsHeader(ns, 'Workflows')}
-
-    <nav class="breadcrumb" style="margin-top:-0.5rem">
-      <a href="#/namespaces/${nsEnc}/workflows">Workflows</a>
-      <span class="sep">›</span>
-      <span><code style="font-size:0.85em">${esc(wf.id.substring(0, 8))}…</code></span>
-    </nav>
+    ${breadcrumb([
+      {label:'Namespaces', href:'#/namespaces'},
+      {label:ns,           href:`#/namespaces/${nsEnc}`},
+      {label:'Workflows',  href:`#/namespaces/${nsEnc}/workflows`},
+      {label: wf.id.substring(0,8)+'…'},
+    ])}
 
     <!-- Header card -->
     <article id="wf-header-card">

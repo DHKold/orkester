@@ -1,11 +1,11 @@
 import { listCrons, deleteCron, createCron, updateCron, listWorks, getWork } from '../api.js'
-import { esc, fmtDateShort, fmtDate, badge, setApp, nsHeader, renderKvEditor, readKv, kvToObject } from '../utils.js'
+import { esc, fmtDateShort, fmtDate, badge, setApp, breadcrumb, renderKvEditor, readKv, kvToObject } from '../utils.js'
 import { toastError, toastSuccess } from '../components/toast.js'
 import { openModal, closeModal } from '../components/modal.js'
 
 export async function renderCrons({ ns }) {
   setApp(`
-    ${nsHeader(ns, 'Crons')}
+    ${breadcrumb([{label:'Namespaces',href:'#/namespaces'},{label:ns,href:`#/namespaces/${encodeURIComponent(ns)}`},{label:'Crons'}])}
     <p aria-busy="true">Loading crons…</p>
   `)
   await load(ns)
@@ -47,7 +47,7 @@ async function load(ns) {
     }).join('')
 
     setApp(`
-      ${nsHeader(ns, 'Crons')}
+      ${breadcrumb([{label:'Namespaces',href:'#/namespaces'},{label:ns,href:`#/namespaces/${encodeURIComponent(ns)}`},{label:'Crons'}])}
       <div class="row-between" style="margin-bottom:1rem">
         <h3 style="margin:0">Crons
           <span class="muted" style="font-size:0.85rem">(${crons.length})</span>

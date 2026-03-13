@@ -64,15 +64,17 @@ export function setApp(html) {
   document.getElementById('app').innerHTML = html
 }
 
-/** Namespace breadcrumb — sub-nav tabs now live in the sidebar. */
-export function nsHeader(ns, activePage) {
-  return `
-    <nav class="breadcrumb">
-      <a href="#/namespaces">Namespaces</a>
-      <span class="sep">›</span>
-      <span>${esc(ns)}</span>
-    </nav>
-  `
+/**
+ * Render a breadcrumb bar.
+ * @param {Array<{label: string, href?: string}>} segments
+ */
+export function breadcrumb(segments) {
+  const parts = segments.map((s, i) => {
+    const isLast = i === segments.length - 1
+    if (isLast || !s.href) return `<span>${esc(s.label)}</span>`
+    return `<a href="${s.href}">${esc(s.label)}</a>`
+  })
+  return `<nav class="breadcrumb">${parts.join('<span class="sep">›</span>')}</nav>`
 }
 
 // ── KV pair editor ────────────────────────────────────────────────────────────

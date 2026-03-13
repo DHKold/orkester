@@ -1,34 +1,86 @@
 import { listWorkflows, deleteWorkflow, createWorkflow, listWorks, getWork } from '../api.js'
-import { esc, fmtDateShort, fmtDuration, badge, setApp, nsHeader, renderKvEditor, readKv, kvToObject } from '../utils.js'
+import { esc, fmtDateShort, fmtDuration, badge, setApp, breadcrumb, renderKvEditor, readKv, kvToObject } from '../utils.js'
 import { toastError, toastSuccess } from '../components/toast.js'
 import { openModal, closeModal } from '../components/modal.js'
-import { navigate } from '../router.js'
+import { navigate, setCleanup } from '../router.js'
 
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled'])
-const STATUS_ORDER = ['running', 'waiting', 'paused', 'failed', 'succeeded', 'cancelled']
+const REFRESH_INTERVAL = 30
 
 export async function renderWorkflows({ ns, query = {} }) {
-  setApp(`
-    ${nsHeader(ns, 'Workflows')}
-    <p aria-busy="true">Loading workflows…</p>
-  `)
-
-  // ?new=workName&ver=workVersion pre-selection from Catalog "Run" button
   const preWork = query['new'] ?? null
   const preVer  = query['ver'] ?? null
 
-  await load(ns, preWork, preVer)
+  setApp(`
+    ${breadcrumb([{label:'Namespaces',href:'#/namespaces'},{label:ns,href:`#/namespaces/${encodeURIComponent(ns)}`},{label:'Workflows'}])}
+    <div class="row-between" style="margin-bottom:1rem">
+      <h3 style="margin:0">Workflows <span class="muted" id="wf-count" style="font-size:0.85rem"></span></h3>
+      <div class="row" style="gap:0.75rem;align-items:center">
+        <span id="wf-refresh-status" class="muted" style="font-size:0.82rem"></span>
+        <label class="toggle-switch" title="Auto-refresh">
+          <input type="checkbox" id="chk-refresh-toggle" checked />
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        </label>
+        <button id="btn-refresh-now" class="outline btn-xs" title="Refresh now" style="font-size:1.1rem;line-height:1;padding:0.18rem 0.5rem">⟳</button>
+        <button id="btn-new-workflow">+ New Workflow</button>
+      </div>
+    </div>
+    <div id="wf-list"><p aria-busy="true">Loading workflows…</p></div>
+  `)
+
+  let countdown = REFRESH_INTERVAL
+  let paused    = false
+
+  const updateStatus = () => {
+    const el = document.getElementById('wf-refresh-status')
+    if (el) el.textContent = paused ? 'auto-refresh off' : `refresh in ${countdown}s`
+  }
+
+  const doRefresh = async () => {
+    countdown = REFRESH_INTERVAL
+    updateStatus()
+    await loadList(ns)
+    updateStatus()
+  }
+
+  const timer = setInterval(() => {
+    if (paused) return
+    countdown--
+    updateStatus()
+    if (countdown <= 0) doRefresh()
+  }, 1000)
+
+  setCleanup(() => clearInterval(timer))
+  updateStatus()
+
+  document.getElementById('chk-refresh-toggle').addEventListener('change', (e) => {
+    paused = !e.target.checked
+    if (!paused) { countdown = REFRESH_INTERVAL }
+    updateStatus()
+  })
+
+  document.getElementById('btn-refresh-now').addEventListener('click', () => doRefresh())
+
+  document.getElementById('btn-new-workflow')
+    .addEventListener('click', () => openCreateModal(ns, preWork, preVer))
+
+  await loadList(ns, preWork, preVer, /* openPreModal= */ true)
 }
 
-async function load(ns, preWork = null, preVer = null) {
+async function loadList(ns, preWork = null, preVer = null, openPreModal = false) {
+  const el = document.getElementById('wf-list')
+  if (!el) return
+
   try {
     const data      = await listWorkflows(ns)
     const workflows = (data.workflows ?? [])
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
-    const nsEnc     = encodeURIComponent(ns)
-    const filterTabs = STATUS_ORDER.concat(['all'])
-    const activeFilt = 'all' // could be persisted in hash later
+    const nsEnc = encodeURIComponent(ns)
+
+    // update count badge
+    const countEl = document.getElementById('wf-count')
+    if (countEl) countEl.textContent = `(${workflows.length})`
 
     const rows = workflows.map(wf => {
       const id     = esc(wf.id)
@@ -71,62 +123,49 @@ async function load(ns, preWork = null, preVer = null) {
       `
     }).join('')
 
-    setApp(`
-      ${nsHeader(ns, 'Workflows')}
-      <div class="row-between" style="margin-bottom:1rem">
-        <h3 style="margin:0">Workflows
-          <span class="muted" style="font-size:0.85rem">(${workflows.length})</span>
-        </h3>
-        <button id="btn-new-workflow">+ New Workflow</button>
-      </div>
+    el.innerHTML = workflows.length === 0
+      ? '<div class="empty-state"><p>No workflows yet. Create one to get started.</p></div>'
+      : `<figure><table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Work</th><th>Status</th>
+              <th>Created</th><th>Duration</th><th>Steps</th><th></th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table></figure>`
 
-      ${workflows.length === 0
-        ? '<div class="empty-state"><p>No workflows yet. Create one to get started.</p></div>'
-        : `<figure><table>
-            <thead>
-              <tr>
-                <th>ID</th><th>Work</th><th>Status</th>
-                <th>Created</th><th>Duration</th><th>Steps</th><th></th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table></figure>`
-      }
-    `)
-
-    document.getElementById('btn-new-workflow')
-      .addEventListener('click', () => openCreateModal(ns, preWork, preVer))
-
-    document.querySelectorAll('[data-delete]').forEach(btn => {
+    el.querySelectorAll('[data-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm(`Delete workflow ${btn.dataset.delete}?`)) return
         try {
           await deleteWorkflow(ns, btn.dataset.delete)
           toastSuccess('Workflow deleted.')
-          await load(ns)
+          await loadList(ns)
         } catch (e) { toastError(e.message) }
       })
     })
 
-    document.querySelectorAll('[data-cancel]').forEach(btn => {
+    el.querySelectorAll('[data-cancel]').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm(`Cancel workflow ${btn.dataset.cancel}?`)) return
         try {
           const { updateWorkflow } = await import('../api.js')
           await updateWorkflow(ns, btn.dataset.cancel, { status: 'cancelled' })
           toastSuccess('Workflow cancelled.')
-          await load(ns)
+          await loadList(ns)
         } catch (e) { toastError(e.message) }
       })
     })
 
-    // If pre-selected work from Catalog, open modal immediately
-    if (preWork) openCreateModal(ns, preWork, preVer)
+    if (openPreModal && preWork) openCreateModal(ns, preWork, preVer)
 
   } catch (e) {
     toastError(`Failed to load workflows: ${e.message}`)
+    if (el) el.innerHTML = '<div class="empty-state"><p>Failed to load workflows.</p></div>'
   }
 }
+
 
 // ── Create Workflow Modal ─────────────────────────────────────────────────────
 

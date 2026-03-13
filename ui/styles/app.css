@@ -116,6 +116,39 @@ button.plain-link {
 }
 button.plain-link:hover { opacity: 0.8; }
 
+/* ── Toggle switch ────────────────────────────────────── */
+.toggle-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+  padding: 0;
+}
+.toggle-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  background: var(--pico-muted-border-color, #cbd5e1);
+  border-radius: 9999px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.toggle-switch input:checked + .toggle-track { background: var(--pico-primary, #3b82f6); }
+.toggle-thumb {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 14px; height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle-switch input:checked + .toggle-track .toggle-thumb { transform: translateX(16px); }
+.toggle-label { font-size: 0.82rem; color: var(--pico-muted-color); }
+
 /* ── Variables ───────────────────────────────────────────────────── */
 :root {
   --status-waiting:   #8b5cf6;

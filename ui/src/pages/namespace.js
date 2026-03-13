@@ -1,5 +1,5 @@
 import { listTasks, listWorks } from '../api.js'
-import { esc, setApp, nsHeader } from '../utils.js'
+import { esc, setApp, breadcrumb } from '../utils.js'
 import { toastError } from '../components/toast.js'
 import { openModal } from '../components/modal.js'
 import { renderDag } from '../components/dag.js'
@@ -8,7 +8,7 @@ let worksCache = {}
 
 export async function renderNamespace({ ns }) {
   setApp(`
-    ${nsHeader(ns, 'Catalog')}
+    ${breadcrumb([{label:'Namespaces',href:'#/namespaces'},{label:ns}])}
     <p aria-busy="true">Loading catalog…</p>
   `)
 
@@ -59,7 +59,7 @@ export async function renderNamespace({ ns }) {
     }).join('')
 
     setApp(`
-      ${nsHeader(ns, 'Catalog')}
+      ${breadcrumb([{label:'Namespaces',href:'#/namespaces'},{label:ns}])}
 
       <section>
         <div class="row-between" style="margin-bottom:0.75rem">
