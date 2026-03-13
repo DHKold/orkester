@@ -163,3 +163,45 @@ export function kvToObject(pairs) {
   }
   return obj
 }
+
+// ── List utilities (filter / sort / paginate) ─────────────────────────────────
+
+export const PAGE_SIZE = 25
+
+/** Keep items where at least one getter's string value contains q (case-insensitive). */
+export function applyFilter(items, q, ...getters) {
+  if (!q || !q.trim()) return items
+  const ql = q.trim().toLowerCase()
+  return items.filter(item => getters.some(g => String(g(item) ?? '').toLowerCase().includes(ql)))
+}
+
+/** Return a sorted copy of items by keyFn; dir is 'asc' or 'desc'. */
+export function applySort(items, keyFn, dir = 'asc') {
+  if (!keyFn) return items
+  const s = [...items].sort((a, b) => {
+    const av = keyFn(a), bv = keyFn(b)
+    if (av == null) return 1
+    if (bv == null) return -1
+    if (typeof av === 'string') return av.localeCompare(bv)
+    return av < bv ? -1 : av > bv ? 1 : 0
+  })
+  return dir === 'desc' ? s.reverse() : s
+}
+
+/** Slice items for the given page. Returns { slice, page, pages, total }. */
+export function paginate(items, page) {
+  const total = items.length
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const p     = Math.max(1, Math.min(page, pages))
+  return { slice: items.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE), page: p, pages, total }
+}
+
+/** HTML for a pagination bar. Wire [data-page] buttons manually after inserting. */
+export function pagerHTML(page, pages, total) {
+  if (pages <= 1) return ''
+  return `<div class="pager">
+    <button class="outline btn-xs" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>‹ Prev</button>
+    <span class="pager-info">${page} / ${pages} &nbsp;·&nbsp; ${total} item${total !== 1 ? 's' : ''}</span>
+    <button class="outline btn-xs" data-page="${page + 1}" ${page >= pages ? 'disabled' : ''}>Next ›</button>
+  </div>`
+}

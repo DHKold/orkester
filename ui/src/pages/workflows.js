@@ -1,5 +1,5 @@
 import { listWorkflows, deleteWorkflow, createWorkflow, listWorks, getWork } from '../api.js'
-import { esc, fmtDateShort, fmtDuration, badge, setApp, breadcrumb, renderKvEditor, readKv, kvToObject } from '../utils.js'
+import { esc, fmtDateShort, fmtDuration, badge, setApp, breadcrumb, renderKvEditor, readKv, kvToObject, applyFilter, applySort, paginate, pagerHTML } from '../utils.js'
 import { toastError, toastSuccess } from '../components/toast.js'
 import { openModal, closeModal } from '../components/modal.js'
 import { navigate, setCleanup } from '../router.js'
@@ -7,14 +7,23 @@ import { navigate, setCleanup } from '../router.js'
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled'])
 const REFRESH_INTERVAL = 30
 
+let wfItems = []
+let wfState = { q: '', sortKey: 'created_at', sortDir: 'desc', page: 1 }
+
 export async function renderWorkflows({ ns, query = {} }) {
   const preWork = query['new'] ?? null
   const preVer  = query['ver'] ?? null
 
+  wfState = { q: '', sortKey: 'created_at', sortDir: 'desc', page: 1 }
+  wfItems = []
+
   setApp(`
     ${breadcrumb([{label:'Namespaces',href:'#/namespaces'},{label:ns,href:`#/namespaces/${encodeURIComponent(ns)}`},{label:'Workflows'}])}
     <div class="row-between" style="margin-bottom:1rem">
-      <h3 style="margin:0">Workflows <span class="muted" id="wf-count" style="font-size:0.85rem"></span></h3>
+      <div class="row" style="gap:0.75rem;align-items:center">
+        <h3 style="margin:0">Workflows <span class="muted" id="wf-count" style="font-size:0.85rem"></span></h3>
+        <input type="search" id="wf-filter" placeholder="Filter…" class="list-filter" />
+      </div>
       <div class="row" style="gap:0.75rem;align-items:center">
         <span id="wf-refresh-status" class="muted" style="font-size:0.82rem"></span>
         <label class="toggle-switch" title="Auto-refresh">
@@ -64,106 +73,126 @@ export async function renderWorkflows({ ns, query = {} }) {
   document.getElementById('btn-new-workflow')
     .addEventListener('click', () => openCreateModal(ns, preWork, preVer))
 
+  document.getElementById('wf-filter').addEventListener('input', (e) => {
+    wfState.q = e.target.value; wfState.page = 1; renderWfList(ns)
+  })
+
   await loadList(ns, preWork, preVer, /* openPreModal= */ true)
 }
 
 async function loadList(ns, preWork = null, preVer = null, openPreModal = false) {
+  try {
+    const data = await listWorkflows(ns)
+    wfItems    = data.workflows ?? []
+    renderWfList(ns)
+    if (openPreModal && preWork) openCreateModal(ns, preWork, preVer)
+  } catch (e) {
+    toastError(`Failed to load workflows: ${e.message}`)
+    const el = document.getElementById('wf-list')
+    if (el) el.innerHTML = '<div class="empty-state"><p>Failed to load workflows.</p></div>'
+  }
+}
+
+function renderWfList(ns) {
   const el = document.getElementById('wf-list')
   if (!el) return
 
-  try {
-    const data      = await listWorkflows(ns)
-    const workflows = (data.workflows ?? [])
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-
-    const nsEnc = encodeURIComponent(ns)
-
-    // update count badge
-    const countEl = document.getElementById('wf-count')
-    if (countEl) countEl.textContent = `(${workflows.length})`
-
-    const rows = workflows.map(wf => {
-      const id     = esc(wf.id)
-      const wfEnc  = encodeURIComponent(wf.id)
-      const status = wf.status ?? 'waiting'
-      const dur    = TERMINAL.has(status)
-        ? fmtDuration(wf.started_at, wf.finished_at, wf.metrics?.duration_seconds)
-        : wf.started_at ? fmtDuration(wf.started_at) + ' ⏱' : '—'
-
-      const metrics  = wf.metrics ?? {}
-      const progress = metrics.steps_total > 0
-        ? `${metrics.steps_succeeded}/${metrics.steps_total}`
-        : '—'
-
-      return `
-        <tr data-status="${esc(status)}">
-          <td>
-            <a href="#/namespaces/${nsEnc}/workflows/${wfEnc}">
-              <code style="font-size:0.78em">${id.substring(0, 8)}…</code>
-            </a>
-          </td>
-          <td>
-            <strong>${esc(wf.work_name)}</strong>
-            <span class="muted"> @ ${esc(wf.work_version)}</span>
-          </td>
-          <td>${badge(status)}</td>
-          <td class="muted">${fmtDateShort(wf.created_at)}</td>
-          <td class="muted">${dur}</td>
-          <td class="muted">${progress}</td>
-          <td>
-            <div style="display:flex;gap:0.4rem">
-              <a href="#/namespaces/${nsEnc}/workflows/${wfEnc}" role="button" class="outline btn-xs">View</a>
-              ${!TERMINAL.has(status)
-                ? `<button class="secondary outline btn-xs" data-cancel="${esc(wf.id)}">Cancel</button>`
-                : `<button class="secondary outline btn-xs" data-delete="${esc(wf.id)}">Delete</button>`
-              }
-            </div>
-          </td>
-        </tr>
-      `
-    }).join('')
-
-    el.innerHTML = workflows.length === 0
-      ? '<div class="empty-state"><p>No workflows yet. Create one to get started.</p></div>'
-      : `<figure><table>
-          <thead>
-            <tr>
-              <th>ID</th><th>Work</th><th>Status</th>
-              <th>Created</th><th>Duration</th><th>Steps</th><th></th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table></figure>`
-
-    el.querySelectorAll('[data-delete]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm(`Delete workflow ${btn.dataset.delete}?`)) return
-        try {
-          await deleteWorkflow(ns, btn.dataset.delete)
-          toastSuccess('Workflow deleted.')
-          await loadList(ns)
-        } catch (e) { toastError(e.message) }
-      })
-    })
-
-    el.querySelectorAll('[data-cancel]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm(`Cancel workflow ${btn.dataset.cancel}?`)) return
-        try {
-          const { updateWorkflow } = await import('../api.js')
-          await updateWorkflow(ns, btn.dataset.cancel, { status: 'cancelled' })
-          toastSuccess('Workflow cancelled.')
-          await loadList(ns)
-        } catch (e) { toastError(e.message) }
-      })
-    })
-
-    if (openPreModal && preWork) openCreateModal(ns, preWork, preVer)
-
-  } catch (e) {
-    toastError(`Failed to load workflows: ${e.message}`)
-    if (el) el.innerHTML = '<div class="empty-state"><p>Failed to load workflows.</p></div>'
+  const SORT_FNS = {
+    created_at: wf => wf.created_at,
+    work:       wf => wf.work_name,
+    status:     wf => wf.status,
   }
+
+  const filtered = applyFilter(wfItems, wfState.q, wf => wf.work_name, wf => wf.id)
+  const sorted   = applySort(filtered, SORT_FNS[wfState.sortKey], wfState.sortDir)
+  const { slice, page, pages, total } = paginate(sorted, wfState.page)
+  wfState.page = page
+
+  const countEl = document.getElementById('wf-count')
+  if (countEl) countEl.textContent = total < wfItems.length ? `(${total} of ${wfItems.length})` : `(${total})`
+
+  if (wfItems.length === 0) {
+    el.innerHTML = '<div class="empty-state"><p>No workflows yet. Create one to get started.</p></div>'
+    return
+  }
+  if (filtered.length === 0) {
+    el.innerHTML = '<div class="empty-state"><p>No workflows match the current filter.</p></div>'
+    return
+  }
+
+  const nsEnc   = encodeURIComponent(ns)
+  const sortInd   = k => k === wfState.sortKey ? (wfState.sortDir === 'asc' ? ' ▲' : ' ▼') : ' ⇅'
+  const activeCls = k => k === wfState.sortKey ? ' sort-active' : ''
+
+  const rows = slice.map(wf => {
+    const id     = esc(wf.id)
+    const wfEnc  = encodeURIComponent(wf.id)
+    const status = wf.status ?? 'waiting'
+    const dur    = TERMINAL.has(status)
+      ? fmtDuration(wf.started_at, wf.finished_at, wf.metrics?.duration_seconds)
+      : wf.started_at ? fmtDuration(wf.started_at) + ' ⏱' : '—'
+    const metrics  = wf.metrics ?? {}
+    const progress = metrics.steps_total > 0 ? `${metrics.steps_succeeded}/${metrics.steps_total}` : '—'
+    return `
+      <tr data-status="${esc(status)}">
+        <td><a href="#/namespaces/${nsEnc}/workflows/${wfEnc}"><code style="font-size:0.78em">${id.substring(0, 8)}…</code></a></td>
+        <td><strong>${esc(wf.work_name)}</strong><span class="muted"> @ ${esc(wf.work_version)}</span></td>
+        <td>${badge(status)}</td>
+        <td class="muted">${fmtDateShort(wf.created_at)}</td>
+        <td class="muted">${dur}</td>
+        <td class="muted">${progress}</td>
+        <td><div style="display:flex;gap:0.4rem">
+          <a href="#/namespaces/${nsEnc}/workflows/${wfEnc}" role="button" class="outline btn-xs">View</a>
+          ${!TERMINAL.has(status)
+            ? `<button class="secondary outline btn-xs" data-cancel="${esc(wf.id)}">Cancel</button>`
+            : `<button class="secondary outline btn-xs" data-delete="${esc(wf.id)}">Delete</button>`
+          }
+        </div></td>
+      </tr>`
+  }).join('')
+
+  el.innerHTML = `
+    <figure><table>
+      <thead><tr>
+        <th>ID</th>
+        <th class="sortable${activeCls('work')}" data-sort="work">Work<span class="sort-ind">${sortInd('work')}</span></th>
+        <th class="sortable${activeCls('status')}" data-sort="status">Status<span class="sort-ind">${sortInd('status')}</span></th>
+        <th class="sortable${activeCls('created_at')}" data-sort="created_at">Created<span class="sort-ind">${sortInd('created_at')}</span></th>
+        <th>Duration</th><th>Steps</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></figure>
+    <div id="wf-pager">${pagerHTML(page, pages, total)}</div>
+  `
+
+  el.querySelectorAll('th[data-sort]').forEach(th =>
+    th.addEventListener('click', () => {
+      const k = th.dataset.sort
+      if (wfState.sortKey === k) wfState.sortDir = wfState.sortDir === 'asc' ? 'desc' : 'asc'
+      else { wfState.sortKey = k; wfState.sortDir = 'asc' }
+      wfState.page = 1; renderWfList(ns)
+    })
+  )
+  el.querySelectorAll('[data-page]').forEach(btn =>
+    btn.addEventListener('click', () => { wfState.page = +btn.dataset.page; renderWfList(ns) })
+  )
+  el.querySelectorAll('[data-delete]').forEach(btn =>
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Delete workflow ${btn.dataset.delete}?`)) return
+      try { await deleteWorkflow(ns, btn.dataset.delete); toastSuccess('Workflow deleted.'); await loadList(ns) }
+      catch (e) { toastError(e.message) }
+    })
+  )
+  el.querySelectorAll('[data-cancel]').forEach(btn =>
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Cancel workflow ${btn.dataset.cancel}?`)) return
+      try {
+        const { updateWorkflow } = await import('../api.js')
+        await updateWorkflow(ns, btn.dataset.cancel, { status: 'cancelled' })
+        toastSuccess('Workflow cancelled.'); await loadList(ns)
+      } catch (e) { toastError(e.message) }
+    })
+  )
 }
 
 
@@ -252,7 +281,7 @@ async function openCreateModal(ns, preWorkName = null, preWorkVer = null) {
         await createWorkflow(ns, body)
         closeModal()
         toastSuccess('Workflow created.')
-        await load(ns)
+        await loadList(ns)
       } catch (err) {
         toastError(`Failed to create workflow: ${err.message}`)
       } finally {

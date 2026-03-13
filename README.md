@@ -1,6 +1,6 @@
 # Orkester
 
-Orkester is organized as a Rust cargo workspace to support modular development and extensibility.
+Orkester is a Workflow Plateform with a pluggin system made in Rust.
 
 ## Features
 

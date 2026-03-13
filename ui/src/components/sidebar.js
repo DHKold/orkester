@@ -60,7 +60,8 @@ function renderSidebar() {
   const nav = document.getElementById('sidebar-nav')
   if (!nav) return
 
-  const nsLinks = cachedNamespaces.map(ns => {
+  const sorted  = [...cachedNamespaces].sort((a, b) => a.name.localeCompare(b.name))
+  const nsLinks = sorted.map(ns => {
     const nsEnc = encodeURIComponent(ns.name)
     return `<a href="#/namespaces/${nsEnc}" class="sidebar-ns-link" data-ns="${ns.name}">
       <span class="sidebar-ns-dot"></span>${ns.name}
