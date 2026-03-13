@@ -7,6 +7,8 @@ logging:
         level: "INFO"
       - source: "orkester_plugin_core::servers"
         level: "WARN"
+      - source: "orkester::management"
+        level: "ERROR"
   file:
     enabled: false
     path: "orkester.log"
@@ -23,6 +25,13 @@ servers:
     enabled: true
     port: 8080
     metrics_target: metrics
+    statics:
+      - url_prefix: /ui
+        dir: /orkester/ui
+        filters:
+          - extension: ["html", "css", "js", "png", "jpg", "jpeg", "gif", "svg"]
+        headers:
+          Cache-Control: "no-cache"
   metrics:
     component:
       plugin: orkester-plugin-core

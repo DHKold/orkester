@@ -16,6 +16,7 @@
 pub(super) mod handlers;
 pub(super) mod hub;
 pub(super) mod server;
+pub(super) mod statics;
 pub(super) mod state;
 
 pub use server::{AxumRestServer, AxumRestServerBuilder};

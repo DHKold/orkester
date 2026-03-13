@@ -61,6 +61,14 @@ pub(super) async fn dynamic_route_handler(
     let reg = match state.resolve_route(&method_str, &path) {
         Some(r) => r,
         None => {
+            // Check static file mounts before giving up — they serve directly
+            // from disk without going through the hub.
+            for mount in &state.statics {
+                if let Some(resp) = mount.try_serve(&path).await {
+                    return resp;
+                }
+            }
+
             log_debug!("REST {} {} → 404 (no registered route)", method_str, path);
             // Don't emit metrics for unrecognised paths — they may be probes.
             state.send_metric("rest.requests_total", "increment", 1.0);

@@ -11,6 +11,8 @@ use std::sync::{Mutex, RwLock};
 use orkester_common::messaging::Message;
 use serde_json::{json, Value};
 
+use super::statics::StaticsMount;
+
 // ── Route registry types ──────────────────────────────────────────────────────
 
 #[derive(Clone)]
@@ -41,10 +43,16 @@ pub(super) struct AppState {
     next_id: AtomicU64,
     metrics_target: String,
     active_requests: AtomicI64,
+    /// Static file mounts — served directly without going through the hub.
+    pub(super) statics: Vec<StaticsMount>,
 }
 
 impl AppState {
-    pub(super) fn new(to_hub: std::sync::mpsc::Sender<Message>, metrics_target: String) -> Self {
+    pub(super) fn new(
+        to_hub: std::sync::mpsc::Sender<Message>,
+        metrics_target: String,
+        statics: Vec<StaticsMount>,
+    ) -> Self {
         Self {
             routes: RwLock::new(HashMap::new()),
             pending: Mutex::new(HashMap::new()),
@@ -52,6 +60,7 @@ impl AppState {
             next_id: AtomicU64::new(1),
             metrics_target,
             active_requests: AtomicI64::new(0),
+            statics,
         }
     }
 

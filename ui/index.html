@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orkester</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.fluid.classless.min.css" />
+  <link rel="stylesheet" href="styles/app.css" />
+  <!-- DAG libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+</head>
+<body>
+  <!--
+    To point to a different Orkester instance add before the module script:
+    <script>window.ORKESTER_API_BASE = 'http://your-host:8080'</script>
+  -->
+  <aside id="sidebar">
+    <a href="#/" class="sidebar-brand">⚙ Orkester</a>
+    <nav id="sidebar-nav" aria-label="Main navigation">
+      <p class="sidebar-loading" aria-busy="true"></p>
+    </nav>
+  </aside>
+
+  <div id="page-wrap">
+    <main id="app">
+      <p aria-busy="true">Loading…</p>
+    </main>
+  </div>
+
+  <div id="toast-container" aria-live="assertive" aria-atomic="true"></div>
+
+  <!-- Modal -->
+  <dialog id="modal">
+    <article>
+      <header>
+        <button id="modal-close-btn" aria-label="Close" class="close-btn">✕</button>
+        <strong id="modal-title"></strong>
+      </header>
+      <div id="modal-body"></div>
+    </article>
+  </dialog>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
