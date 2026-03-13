@@ -80,7 +80,7 @@ pub(super) async fn execute(
 
 /// Build the merged input map for a step.
 ///
-/// Priority (lowest → highest):
+/// Priority (highest to lowest):
 /// 1. Workflow-level `work_context`
 /// 2. Outputs from upstream dependency steps (keyed as `"<dep_id>.<output_key>"`)
 /// 3. Step-level static `inputs` overrides
@@ -89,18 +89,24 @@ pub(super) fn build_inputs(
     work_context: &HashMap<String, Value>,
     step_outputs: &HashMap<String, HashMap<String, Value>>,
 ) -> HashMap<String, Value> {
-    let mut inputs = work_context.clone();
+    // Start with step inputs
+    let mut inputs: HashMap<String, Value> = HashMap::new();
+    for (k, v) in &step.inputs {
+        inputs.insert(k.clone(), Value::String(v.clone()));
+    }
 
+    // Overlay with outputs from dependencies, keyed as "<dep_id>.<output_key>"
     for dep_id in &step.depends_on {
         if let Some(outputs) = step_outputs.get(dep_id) {
             for (k, v) in outputs {
-                inputs.insert(format!("{dep_id}.{k}"), v.clone());
+                inputs.insert(k.clone(), v.clone());
             }
         }
     }
 
-    for (k, v) in &step.inputs {
-        inputs.insert(k.clone(), Value::String(v.clone()));
+    // Overlay with workflow-level context
+    for (k, v) in work_context {
+        inputs.insert(k.clone(), v.clone());
     }
 
     inputs
@@ -129,6 +135,7 @@ async fn dispatch(
             id: Uuid::new_v4().to_string(),
             task_definition: task.spec.config.clone(),
             inputs,
+            outputs: task.spec.outputs.keys().cloned().collect(),
         })
         .await
     {

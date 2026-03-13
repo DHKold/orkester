@@ -10,11 +10,17 @@ metadata:
   labels:
     category: test
 spec:
-  inputs: {}
+  inputs:
+    DELAY_SECONDS: "How long to sleep between the two echo messages (seconds)."
   steps:
+    - id: set-delay
+      task: set-delay
+      dependsOn: []
     - id: run-echo
       task: echo-hello
-      dependsOn: []
-      inputs: {}
+      dependsOn: ["set-delay"]
+      inputs:
+        # Default value used when DELAY_SECONDS is not set in work_context.
+        DELAY_SECONDS: "3"
       allowFailure: false
 ---

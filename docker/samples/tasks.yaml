@@ -10,9 +10,31 @@ metadata:
   labels:
     category: utility
 spec:
-  executor: command
+  executor: commands
   config:
-    command: ["echo", "Hello from Orkester!"]
+    commands:
+      - ["echo", "Hello from Orkester!"]
+      - sleep $DELAY_SECONDS
+      - ["echo", "Done waiting for $DELAY_SECONDS seconds!"]
+  inputs:
+    DELAY_SECONDS: Waiting time in seconds before printing the second message. Adjust to test timeouts and retries.
   timeout_seconds: 30
   retries: 0
 ---
+apiVersion: orkester.io/v1
+kind: Task
+name: set-delay
+version: "1.0.0"
+metadata:
+  namespace: testing
+  description: "Utility task to set a delay value in the workflow context for testing input merging and overrides"
+  labels:
+    category: utility
+spec:
+  executor: commands
+  config:
+    commands:
+      - ["echo", "Setting DELAY_SECONDS to 5 in workflow context..."]
+      - export DELAY_SECONDS=5
+  outputs:
+    DELAY_SECONDS: "The delay value produced by this task."

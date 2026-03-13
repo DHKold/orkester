@@ -44,6 +44,8 @@ pub struct ExecutionRequest {
     pub task_definition: Value,
     /// Resolved runtime inputs (merged workflow context + step overrides).
     pub inputs: HashMap<String, Value>,
+    /// Outputs to capture from the execution and pass to downstream steps (executor-specific).
+    pub outputs: Vec<String>,
 }
 
 /// Trait that all Task Executor implementations must satisfy.
