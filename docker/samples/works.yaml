@@ -5,7 +5,7 @@ kind: Work
 name: smoke-test
 version: "1.0.0"
 metadata:
-  namespace: default
+  namespace: testing
   description: "Quick smoke-test: run echo-hello and verify the platform is reachable"
   labels:
     category: test
@@ -17,95 +17,4 @@ spec:
       dependsOn: []
       inputs: {}
       allowFailure: false
-
 ---
-# ── Full ETL pipeline Work ───────────────────────────────────────────────────
-# Demonstrates a three-stage DAG: extract → transform → load, with a parallel
-# Slack notification step that fires after load regardless of outcome.
-#
-#  extract ─→ transform ─→ load ─→ notify
-#
-apiVersion: orkester.io/v1
-kind: Work
-name: daily-etl-pipeline
-version: "1.0.0"
-metadata:
-  namespace: data-platform
-  description: "Daily ETL: extract raw S3 data, transform, load into Iceberg, then notify"
-  labels:
-    schedule: daily
-    team: data-engineering
-spec:
-  inputs:
-    source_date: "ISO date (YYYY-MM-DD) for which the pipeline should run"
-    source_bucket: "S3 bucket that contains the raw source data"
-    target_table: "Target Iceberg table to load into"
-    slack_channel: "Slack webhook URL (overrides the default in the task config)"
-  steps:
-    - id: extract
-      task: spark-extract
-      dependsOn: []
-      inputs:
-        source_date: "{{work.inputs.source_date}}"
-        source_bucket: "{{work.inputs.source_bucket}}"
-      allowFailure: false
-
-    - id: transform
-      task: spark-transform
-      dependsOn:
-        - extract
-      inputs:
-        staging_path: "{{steps.extract.outputs.staging_path}}"
-        target_date: "{{work.inputs.source_date}}"
-      allowFailure: false
-
-    - id: load
-      task: spark-load
-      dependsOn:
-        - transform
-      inputs:
-        curated_path: "{{steps.transform.outputs.curated_path}}"
-        target_table: "{{work.inputs.target_table}}"
-      allowFailure: false
-
-    - id: notify
-      task: notify-slack
-      dependsOn:
-        - load
-      inputs:
-        message: "daily-etl-pipeline finished for {{work.inputs.source_date}} — table: {{work.inputs.target_table}}"
-      allowFailure: true   # notification failure must not fail the whole Work
----
-# ── Acme nightly report Work ─────────────────────────────────────────────────
-# Two-step sequential pipeline: generate report → send report.
-#
-#  generate-report ─→ send-report
-#
-apiVersion: orkester.io/v1
-kind: Work
-name: nightly
-version: "1.0.0"
-metadata:
-  namespace: acme
-  description: "Nightly report: generate and distribute the daily summary"
-  labels:
-    team: acme
-    schedule: nightly
-spec:
-  inputs:
-    report_date: "Reporting date (YYYY-MM-DD); defaults to yesterday"
-  steps:
-    - id: generate
-      task: generate-report
-      dependsOn: []
-      inputs:
-        report_date: "{{work.inputs.report_date}}"
-      allowFailure: false
-
-    - id: send
-      task: send-report
-      dependsOn:
-        - generate
-      inputs:
-        report_path: "{{steps.generate.outputs.report_path}}"
-      allowFailure: false
