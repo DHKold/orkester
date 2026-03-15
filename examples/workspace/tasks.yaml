@@ -103,8 +103,6 @@ spec:
         print(f'RESULT={RESULT}')
         " | tee /tmp/out.txt
         RESULT=$(grep '^RESULT=' /tmp/out.txt | cut -d= -f2-)
-    env:
-      COUNT: "3"
   inputs:
     COUNT: "How many items to process."
   outputs:

@@ -47,7 +47,7 @@ servers:
     metrics_target: metrics
     loaders:
       - type: local
-        dir: /orkester/dev/examples/workspace
+        dir: /orkester/examples/workspace
   workflows:
     component:
       plugin: orkester-plugin-core

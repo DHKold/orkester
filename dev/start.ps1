@@ -17,6 +17,8 @@ $VolumeName    = "orkester-build-cache"
 Write-Host ">>> Building image '$ImageName' (target: dev)..."
 podman build --target dev -t $ImageName -f "$ScriptDir\Dockerfile" $ProjectRoot
 
+$NewImageId = (podman image inspect $ImageName --format "{{.Id}}" 2>$null)
+
 # ── 2. Ensure the build-cache volume exists ───────────────────────────────────
 $volumeExists = podman volume ls --format "{{.Name}}" | Select-String -Quiet "^$VolumeName$"
 if (-not $volumeExists) {
@@ -41,29 +43,36 @@ try {
     Write-Warning "Could not inspect Podman machine; container executor tasks will fail"
 }
 
-# Always (re)create the container so it picks up the freshly built image.
-Write-Host ">>> (Re)creating dev container '$ContainerName'..."
-podman rm -f $ContainerName 2>$null
+# Recreate the container only if the image changed or the container is gone.
+$RunningImageId = (podman inspect $ContainerName --format "{{.Image}}" 2>$null)
+$NeedsRecreate  = ($RunningImageId -ne $NewImageId)
 
-$RunArgs = @(
-    "run", "-d",
-    "--name", $ContainerName,
-    "-v", "${ProjectRoot}:/orkester:z",                            # Mount the project source as a volume so changes are reflected inside the container.
-    "-v", "${VolumeName}:/orkester/target:z"                       # Mount the build cache as a volume so it persists across container restarts.
-)
-if ($PodmanSock) {
-    Write-Host ">>> Mounting Podman socket: $PodmanSock"
-    $RunArgs += @("-v", "${PodmanSock}:/var/run/docker.sock:z")
+if ($NeedsRecreate) {
+    Write-Host ">>> Image changed — recreating dev container '$ContainerName'..."
+    podman rm -f $ContainerName 2>$null
+
+    $RunArgs = @(
+        "run", "-d",
+        "--name", $ContainerName,
+        "-v", "${ProjectRoot}:/orkester:z",
+        "-v", "${VolumeName}:/orkester/target:z"
+    )
+    if ($PodmanSock) {
+        Write-Host ">>> Mounting Podman socket: $PodmanSock"
+        $RunArgs += @("-v", "${PodmanSock}:/var/run/docker.sock:z")
+    } else {
+        Write-Warning "No Podman socket found; container executor tasks will fail"
+    }
+    $RunArgs += @(
+        "-p", "8080:8080",
+        "-w", "/orkester",
+        $ImageName,
+        "sleep", "infinity"
+    )
+    podman @RunArgs
 } else {
-    Write-Warning "No Podman socket found; container executor tasks will fail"
+    Write-Host ">>> Image unchanged — reusing existing container '$ContainerName'."
 }
-$RunArgs += @(
-    "-p", "8080:8080",
-    "-w", "/orkester",
-    $ImageName,
-    "sleep", "infinity"
-)
-podman @RunArgs
 
 # ── 4. Open a shell (or run the supplied command) ─────────────────────────────
 # You can run `cargo` commands here, or start Orkester with:
