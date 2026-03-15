@@ -15,7 +15,7 @@ logging:
     filters:
       - source: "orkester_plugin.*"
 plugins:
-  dir: ./docker/plugins # directory to scan for .so plugin files
+  dir: /orkester/plugins # directory to scan for .so plugin files
   recursive: false # scan sub-directories?
 servers:
   rest_api:
@@ -47,7 +47,7 @@ servers:
     metrics_target: metrics
     loaders:
       - type: local
-        dir: /orkester/docker/samples
+        dir: /orkester/samples
   workflows:
     component:
       plugin: orkester-plugin-core
