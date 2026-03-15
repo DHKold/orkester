@@ -28,13 +28,31 @@ if podman ps --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
     exit 0
 fi
 
+# Locate the host Podman socket (rootless first, then root).
+# Inside the container it is presented as /var/run/docker.sock so the Docker
+# CLI (and Orkester's container executor) can find it without extra config.
+_uid="$(id -u)"
+if [ -S "/run/user/${_uid}/podman/podman.sock" ]; then
+    PODMAN_SOCK="/run/user/${_uid}/podman/podman.sock"
+elif [ -S "/run/podman/podman.sock" ]; then
+    PODMAN_SOCK="/run/podman/podman.sock"
+else
+    echo "WARNING: no Podman socket found; container executor tasks will fail" >&2
+    PODMAN_SOCK=""
+fi
+
 # Otherwise start a new background container and exec into it.
 echo ">>> Starting dev container '${CONTAINER_NAME}'"
+
+_socket_mount=""
+[ -n "$PODMAN_SOCK" ] && _socket_mount="-v ${PODMAN_SOCK}:/var/run/docker.sock:z"
+
 podman run -d \
     --name "$CONTAINER_NAME" \
     --replace \
     -v "${PROJECT_ROOT}:/orkester:z" \
     -v "${VOLUME_NAME}:/orkester/target:z" \
+    ${_socket_mount} \
     -w /orkester \
     "$IMAGE_NAME" \
     sleep infinity

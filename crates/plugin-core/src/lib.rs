@@ -7,7 +7,7 @@ pub mod servers;
 use crate::{
     auth::NoAuthProviderBuilder,
     authz::BasicAuthzProviderBuilder,
-    executor::{CommandsExecutorBuilder, DummyExecutorBuilder},
+    executor::{CommandsExecutorBuilder, ContainerExecutorBuilder, DummyExecutorBuilder},
     persistence::{FilePersistenceBuilder, MemoryPersistenceBuilder},
     servers::{
         metrics::MetricsServerBuilder, rest::AxumRestServerBuilder,
@@ -57,6 +57,12 @@ pub fn core_plugin() -> Plugin {
                 description: "Runs shell commands locally; captures stdout/stderr as outputs."
                     .to_string(),
                 builder: PluginComponent::ExecutorProvider(Box::new(CommandsExecutorBuilder)),
+            },
+            ComponentMetadata {
+                kind: "executor".to_string(),
+                id: "container".to_string(),
+                description: "Runs tasks in an OCI container via Podman or Docker.".to_string(),
+                builder: PluginComponent::ExecutorProvider(Box::new(ContainerExecutorBuilder)),
             },
             ComponentMetadata {
                 kind: "persistence".to_string(),

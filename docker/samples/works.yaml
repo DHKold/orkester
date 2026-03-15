@@ -24,3 +24,35 @@ spec:
         DELAY_SECONDS: "3"
       allowFailure: false
 ---
+# ── Container smoke-test Work ─────────────────────────────────────────────────
+# Runs the two container tasks in sequence: first the Alpine echo (producing
+# GREETING), then the Python script (producing RESULT).  Demonstrates passing
+# an output from one container step to the next step's inputs.
+apiVersion: orkester.io/v1
+kind: Work
+name: container-smoke-test
+version: "1.0.0"
+metadata:
+  namespace: testing
+  description: "Smoke-test for the container executor: Alpine echo followed by Python processing"
+  labels:
+    category: test
+spec:
+  inputs:
+    MESSAGE: "A message to print inside the Alpine container."
+    COUNT: "How many items the Python step should process."
+  steps:
+    - id: alpine-echo
+      task: container-echo
+      dependsOn: []
+      inputs:
+        MESSAGE: "Hello from the workflow!"
+      allowFailure: false
+
+    - id: python-run
+      task: container-python
+      dependsOn: ["alpine-echo"]
+      inputs:
+        COUNT: "5"
+      allowFailure: false
+---

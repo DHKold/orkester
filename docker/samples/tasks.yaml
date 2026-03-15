@@ -38,3 +38,76 @@ spec:
       - export DELAY_SECONDS=5
   outputs:
     DELAY_SECONDS: "The delay value produced by this task."
+---
+# ── Container executor tasks ──────────────────────────────────────────────────
+# Runs a command inside an Alpine container.  Demonstrates basic image, env,
+# and output capture.
+apiVersion: orkester.io/v1
+kind: Task
+name: container-echo
+version: "1.0.0"
+metadata:
+  namespace: testing
+  description: "Run a simple echo inside an Alpine container"
+  labels:
+    category: container
+spec:
+  executor: container
+  config:
+    image: "alpine:3.19"
+    pull_policy: if-not-present
+    command:
+      - |
+        echo "Hello from inside the container!"
+        echo "Message is: $MESSAGE"
+        GREETING="Hello, $RECIPIENT!"
+    env:
+      RECIPIENT: "World"
+  inputs:
+    MESSAGE: "A message to print inside the container."
+  outputs:
+    GREETING: "The greeting string produced by the container."
+  timeout_seconds: 60
+  retries: 0
+---
+# Runs a Python one-liner inside a python:3.12-slim container.
+# Demonstrates command override, resource limits, and read-only rootfs.
+apiVersion: orkester.io/v1
+kind: Task
+name: container-python
+version: "1.0.0"
+metadata:
+  namespace: testing
+  description: "Run a Python script inside a python:3.12-slim container"
+  labels:
+    category: container
+spec:
+  executor: container
+  config:
+    image: "python:3.12-slim"
+    pull_policy: if-not-present
+    working_dir: "/app"
+    memory: "256m"
+    cpus: "0.5"
+    read_only: true
+    tmpfs:
+      - /tmp
+    command:
+      - |
+        python3 -c "
+        import os, sys
+        n = int(os.environ.get('COUNT', 3))
+        for i in range(1, n + 1):
+            print(f'Item {i} of {n}')
+        RESULT = f'processed {n} items'
+        print(f'RESULT={RESULT}')
+        " | tee /tmp/out.txt
+        RESULT=$(grep '^RESULT=' /tmp/out.txt | cut -d= -f2-)
+    env:
+      COUNT: "3"
+  inputs:
+    COUNT: "How many items to process."
+  outputs:
+    RESULT: "Summary string written by the Python script."
+  timeout_seconds: 120
+  retries: 1
