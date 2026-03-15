@@ -49,14 +49,12 @@ pub(crate) fn init_logging() {
 /// ```
 pub(crate) fn load_logging_config(config_tree: &ConfigTree) {
     Logger::clear_consumers();
-    let mut added = 0usize;
 
     if let Some(cfg) = config_tree.get("logging.console") {
         if cfg.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true) {
             let consumer = ConsoleConsumer::new();
             consumer.set_filter(build_consumer_filter(&cfg));
             Logger::add_consumer(consumer);
-            added += 1;
         }
     }
 
@@ -68,7 +66,6 @@ pub(crate) fn load_logging_config(config_tree: &ConfigTree) {
                     Ok(consumer) => {
                         consumer.set_filter(build_consumer_filter(&cfg));
                         Logger::add_consumer(consumer);
-                        added += 1;
                     }
                     Err(e) => eprintln!("[logging] could not open log file '{}': {}", path, e),
                 },

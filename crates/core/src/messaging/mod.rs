@@ -3,5 +3,5 @@
 mod channel;
 mod hub;
 
-pub use channel::{create, HubSide, ServerSide};
+pub use channel::{create, HubSide};
 pub use hub::Hub;

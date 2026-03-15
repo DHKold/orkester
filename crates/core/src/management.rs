@@ -63,7 +63,7 @@ impl ManagementApi {
     /// Returns `(api, hub_side)` — the caller must register `hub_side` with
     /// the [`Hub`](crate::messaging::Hub) before calling [`register_routes`].
     pub fn new(
-        registry: &Registry,
+        registry: &dyn Registry,
         config: &ConfigTree,
         running: &[RunningServer],
     ) -> (Self, HubSide) {
@@ -215,9 +215,9 @@ impl ManagementApi {
 
 // ── Snapshot builders ─────────────────────────────────────────────────────────
 
-fn build_plugins_json(registry: &Registry) -> Value {
+fn build_plugins_json(registry: &dyn Registry) -> Value {
     let list: Vec<Value> = registry
-        .plugins
+        .plugins()
         .iter()
         .map(|m| {
             json!({

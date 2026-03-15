@@ -14,14 +14,38 @@ use super::scheduler;
 use super::store::WorkflowsStore;
 use super::worker::{LocalWorker, Worker};
 use super::workspace_client::WorkspaceClient;
-use crate::persistence::MemoryPersistenceProvider;
 
 pub async fn run(config: Value, ctx: ServerContext) {
     let channel = ctx.channel;
+    let registry = ctx.registry;
     let executor_registry = ctx.executor_registry;
-    // ── Build persistence store ───────────────────────────────────────────
-    let provider: Arc<dyn orkester_common::plugin::providers::persistence::PersistenceProvider> =
-        Arc::new(MemoryPersistenceProvider::default());
+
+    // ── Build persistence store ────────────────────────────────────────────────────
+    let persistence_config = config.get("persistence").cloned().unwrap_or(Value::Null);
+    let provider_id = persistence_config
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("memory-persistence")
+        .to_string();
+    let provider = match registry.persistence_provider(&provider_id) {
+        Ok(orkester_common::plugin::PluginComponent::PersistenceProvider(builder)) => {
+            match builder.build(persistence_config) {
+                Ok(p) => Arc::from(p),
+                Err(e) => {
+                    log_error!("Failed to build persistence provider '{}': {}", provider_id, e);
+                    return;
+                }
+            }
+        }
+        Ok(_) => {
+            log_error!("Component '{}' is not a PersistenceProvider.", provider_id);
+            return;
+        }
+        Err(e) => {
+            log_error!("No persistence provider found for type '{}': {}", provider_id, e);
+            return;
+        }
+    };
     let store = WorkflowsStore::new(provider);
 
     // ── Config ────────────────────────────────────────────────────────────

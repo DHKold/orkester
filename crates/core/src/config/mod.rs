@@ -9,5 +9,4 @@ mod yaml_loader;
 
 // Public API
 pub use access::ConfigTree;
-pub use interface::ConfigLoader;
 pub use loader::load_config_files;

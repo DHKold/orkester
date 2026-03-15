@@ -5,16 +5,17 @@ mod runner;
 
 pub use runner::RunningServer;
 
-use orkester_common::plugin::Registry;
+use std::sync::Arc;
 
 use crate::config::ConfigTree;
 use crate::messaging::HubSide;
+use crate::registry::DynamicRegistry;
 
 /// Parse server config, build and start all enabled servers.
 /// Returns the running server handles and the hub sides of each channel.
 pub fn start_servers(
     config: &ConfigTree,
-    registry: &Registry,
+    registry: &Arc<DynamicRegistry>,
 ) -> Result<(Vec<RunningServer>, Vec<HubSide>), Box<dyn std::error::Error>> {
     let entries = config::parse(config);
     if entries.is_empty() {

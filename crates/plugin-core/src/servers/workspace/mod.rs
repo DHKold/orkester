@@ -47,7 +47,7 @@ pub mod store;
 use std::sync::Arc;
 
 use orkester_common::messaging::{Message, ServerSide};
-use orkester_common::plugin::providers::persistence::{EntityKey, PersistenceProvider};
+use orkester_common::plugin::providers::persistence::PersistenceProvider;
 use orkester_common::plugin::servers::{Server, ServerBuilder, ServerContext, ServerError};
 use orkester_common::{log_error, log_info, log_warn};
 use serde_json::{json, Value};

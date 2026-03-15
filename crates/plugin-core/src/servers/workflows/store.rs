@@ -12,7 +12,7 @@ use std::sync::Arc;
 use orkester_common::plugin::providers::persistence::{EntityKey, PersistenceProvider};
 use serde_json::Value;
 
-use super::model::{Cron, Workflow, WorkflowStatus};
+use super::model::{Cron, Workflow};
 
 pub type StoreResult<T> = Result<T, StoreError>;
 

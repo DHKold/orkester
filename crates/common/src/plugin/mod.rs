@@ -1,9 +1,6 @@
 pub mod providers;
 pub mod servers;
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use providers::{
     auth::AuthenticationProviderBuilder, authz::AuthorizationProviderBuilder,
     executor::ExecutorBuilder, persistence::PersistenceBuilder,
@@ -55,30 +52,15 @@ pub struct Plugin {
     pub components: Vec<ComponentMetadata>,
 }
 
-// ── Registry ──────────────────────────────────────────────────────────────────
-pub struct Registry {
-    /// Metadata for every successfully loaded plugin (populated by `register_plugins`).
-    pub plugins: Vec<PluginMetadata>,
-    pub authentication_providers: HashMap<String, ComponentMetadata>,
-    pub authorization_providers: HashMap<String, ComponentMetadata>,
-    pub executor_providers: HashMap<String, ComponentMetadata>,
-    pub persistence_providers: HashMap<String, ComponentMetadata>,
-    pub server_builders: HashMap<String, ComponentMetadata>,
-    _libs: Vec<Library>,
-}
+/// Registry of all loaded plugins and their components, used for dynamic lookup during server construction.
+pub trait Registry: Send + Sync {
+    fn plugins(&self) -> &[PluginMetadata];
 
-impl Registry {
-    fn new() -> Self {
-        Registry {
-            plugins: Vec::new(),
-            authentication_providers: HashMap::new(),
-            authorization_providers: HashMap::new(),
-            executor_providers: HashMap::new(),
-            persistence_providers: HashMap::new(),
-            server_builders: HashMap::new(),
-            _libs: Vec::new(),
-        }
-    }
+    fn authentication_provider(&self, id: &str) -> Result<&PluginComponent, String>;
+    fn authorization_provider(&self, id: &str) -> Result<&PluginComponent, String>;
+    fn executor_provider(&self, id: &str) -> Result<&PluginComponent, String>;
+    fn persistence_provider(&self, id: &str) -> Result<&PluginComponent, String>;
+    fn server_builder(&self, id: &str) -> Result<&PluginComponent, String>;
 }
 
 /// Type alias for the function pointer of the plugin entry point.

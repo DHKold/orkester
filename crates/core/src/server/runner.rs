@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use crate::messaging::{self, HubSide};
+use crate::registry::DynamicRegistry;
 use orkester_common::plugin::servers::{Server, ServerContext};
 use orkester_common::plugin::Registry;
 use orkester_common::{log_debug, log_error, log_info, log_warn};
@@ -32,7 +33,7 @@ pub struct RunningServer {
 ///
 /// Entries for which no matching builder is found are logged as errors and
 /// skipped — they do **not** abort startup of subsequent servers.
-pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer>, Vec<HubSide>) {
+pub fn start(entries: &[ServerEntry], registry: &Arc<DynamicRegistry>) -> (Vec<RunningServer>, Vec<HubSide>) {
     let mut running = Vec::with_capacity(entries.len());
     let mut hub_sides = Vec::with_capacity(entries.len());
 
@@ -48,21 +49,17 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
             component_key
         );
 
-        let comp = match registry.server_builders.get(&component_key) {
-            Some(c) => c,
-            None => {
-                log_error!("No builder registered for '{}' (instance '{}'). Is the plugin providing it loaded?", component_key, entry.instance_name);
-                continue;
-            }
-        };
-
-        let builder = match &comp.builder {
-            orkester_common::plugin::PluginComponent::Server(b) => b,
-            _ => {
+        let builder = match registry.server_builder(&entry.server_id) {
+            Ok(orkester_common::plugin::PluginComponent::Server(b)) => b,
+            Ok(_) => {
                 log_error!(
                     "Component '{}' is not a Server builder — skipping.",
                     component_key
                 );
+                continue;
+            }
+            Err(e) => {
+                log_error!("No builder registered for '{}' (instance '{}'). Is the plugin providing it loaded? ({})", component_key, entry.instance_name, e);
                 continue;
             }
         };
@@ -87,7 +84,7 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
 
         if let Err(e) = server.start(ServerContext {
             channel: server_side,
-            registry: Arc::clone(&registry),
+            registry: registry.clone() as Arc<dyn orkester_common::plugin::Registry>,
             executor_registry: Arc::clone(&executor_registry),
         }) {
             log_error!("Server '{}' failed to start: {}", entry.instance_name, e);

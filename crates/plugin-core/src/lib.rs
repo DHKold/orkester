@@ -2,7 +2,6 @@ pub mod auth;
 pub mod authz;
 pub mod executor;
 pub mod persistence;
-pub mod registry;
 pub mod servers;
 
 use crate::{
@@ -10,7 +9,6 @@ use crate::{
     authz::BasicAuthzProviderBuilder,
     executor::{CommandsExecutorBuilder, DummyExecutorBuilder},
     persistence::{FilePersistenceBuilder, MemoryPersistenceBuilder},
-    registry::LocalRegistryBuilder,
     servers::{
         metrics::MetricsServerBuilder, rest::AxumRestServerBuilder,
         workflows::WorkflowsServerBuilder, workspace::WorkspaceServerBuilder,
@@ -71,12 +69,6 @@ pub fn core_plugin() -> Plugin {
                 id: "file-persistence".to_string(),
                 description: "Durable file-based persistence backend; stores entities as JSON files on disk.".to_string(),
                 builder: PluginComponent::PersistenceProvider(Box::new(FilePersistenceBuilder)),
-            },
-            ComponentMetadata {
-                kind: "registry".to_string(),
-                id: "local-registry".to_string(),
-                description: "In-process workflow definition registry.".to_string(),
-                builder: PluginComponent::RegistryProvider(Box::new(LocalRegistryBuilder)),
             },
             // ── Servers ─────────────────────────────────────────────────────
             ComponentMetadata {

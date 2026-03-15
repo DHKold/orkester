@@ -23,7 +23,7 @@ pub struct ServerContext {
     /// The server's bi-directional hub channel.
     pub channel: ServerSide,
     /// Read-only reference to the plugin registry, for looking up other components.
-    pub registry: Arc<crate::plugin::Registry>,
+    pub registry: Arc<dyn crate::plugin::Registry>,
     /// Registry of available task executors (shared, thread-safe).
     pub executor_registry: Arc<ExecutorRegistry>,
 }
