@@ -21,12 +21,12 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use orkester_common::messaging::Message;
+use orkester_common::plugin::Registry;
 use orkester_common::{log_debug, log_info, log_warn};
 use serde_json::{json, Value};
 
 use crate::config::ConfigTree;
 use crate::messaging::{create, HubSide};
-use crate::registry::Registry;
 use crate::server::RunningServer;
 
 /// The hub participant name used by the management API.

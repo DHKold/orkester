@@ -5,9 +5,10 @@ mod runner;
 
 pub use runner::RunningServer;
 
+use orkester_common::plugin::Registry;
+
 use crate::config::ConfigTree;
 use crate::messaging::HubSide;
-use crate::registry::Registry;
 
 /// Parse server config, build and start all enabled servers.
 /// Returns the running server handles and the hub sides of each channel.

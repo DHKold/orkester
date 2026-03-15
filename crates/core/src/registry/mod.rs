@@ -12,37 +12,9 @@ use crate::plugin::LoadedPlugin;
 use libloading::Library;
 use orkester_common::plugin::{
     servers::{Server, ServerBuilder},
-    ComponentMetadata, PluginComponent, PluginMetadata,
+    ComponentMetadata, PluginComponent, PluginMetadata, Registry,
 };
 use orkester_common::{log_debug, log_error, log_info};
-
-// ── Registry ──────────────────────────────────────────────────────────────────
-pub struct Registry {
-    /// Metadata for every successfully loaded plugin (populated by `register_plugins`).
-    pub plugins: Vec<PluginMetadata>,
-    pub authentication_providers: HashMap<String, ComponentMetadata>,
-    pub authorization_providers: HashMap<String, ComponentMetadata>,
-    pub executor_providers: HashMap<String, ComponentMetadata>,
-    pub persistence_providers: HashMap<String, ComponentMetadata>,
-    pub registry_providers: HashMap<String, ComponentMetadata>,
-    pub server_builders: HashMap<String, ComponentMetadata>,
-    _libs: Vec<Library>,
-}
-
-impl Registry {
-    fn new() -> Self {
-        Registry {
-            plugins: Vec::new(),
-            authentication_providers: HashMap::new(),
-            authorization_providers: HashMap::new(),
-            executor_providers: HashMap::new(),
-            persistence_providers: HashMap::new(),
-            registry_providers: HashMap::new(),
-            server_builders: HashMap::new(),
-            _libs: Vec::new(),
-        }
-    }
-}
 
 // ── Registration ──────────────────────────────────────────────────────────────
 pub fn register_plugins(plugins: Vec<LoadedPlugin>) -> Registry {

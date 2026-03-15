@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use crate::messaging::{self, HubSide};
-use crate::registry::Registry;
 use orkester_common::plugin::servers::{Server, ServerContext};
+use orkester_common::plugin::Registry;
 use orkester_common::{log_debug, log_error, log_info, log_warn};
 
 use super::config::ServerEntry;
@@ -87,6 +87,7 @@ pub fn start(entries: &[ServerEntry], registry: &Registry) -> (Vec<RunningServer
 
         if let Err(e) = server.start(ServerContext {
             channel: server_side,
+            registry: Arc::clone(&registry),
             executor_registry: Arc::clone(&executor_registry),
         }) {
             log_error!("Server '{}' failed to start: {}", entry.instance_name, e);

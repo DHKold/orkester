@@ -1,6 +1,9 @@
 pub mod providers;
 pub mod servers;
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use providers::{
     auth::AuthenticationProviderBuilder, authz::AuthorizationProviderBuilder,
     executor::ExecutorBuilder, persistence::PersistenceBuilder,
@@ -50,6 +53,32 @@ pub struct ComponentMetadata {
 pub struct Plugin {
     pub metadata: PluginMetadata,
     pub components: Vec<ComponentMetadata>,
+}
+
+// ── Registry ──────────────────────────────────────────────────────────────────
+pub struct Registry {
+    /// Metadata for every successfully loaded plugin (populated by `register_plugins`).
+    pub plugins: Vec<PluginMetadata>,
+    pub authentication_providers: HashMap<String, ComponentMetadata>,
+    pub authorization_providers: HashMap<String, ComponentMetadata>,
+    pub executor_providers: HashMap<String, ComponentMetadata>,
+    pub persistence_providers: HashMap<String, ComponentMetadata>,
+    pub server_builders: HashMap<String, ComponentMetadata>,
+    _libs: Vec<Library>,
+}
+
+impl Registry {
+    fn new() -> Self {
+        Registry {
+            plugins: Vec::new(),
+            authentication_providers: HashMap::new(),
+            authorization_providers: HashMap::new(),
+            executor_providers: HashMap::new(),
+            persistence_providers: HashMap::new(),
+            server_builders: HashMap::new(),
+            _libs: Vec::new(),
+        }
+    }
 }
 
 /// Type alias for the function pointer of the plugin entry point.
