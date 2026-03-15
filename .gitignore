@@ -8,7 +8,9 @@ target/
 # Cargo.lock
 
 # ── Plugins (compiled .so/.dll/.dylib files) ──────────────────────────────────
-/docker/plugins/
+/dev/plugins/
+/dev/data/
+/dev/workspace/
 
 # ── IDE / Editor ──────────────────────────────────────────────────────────────
 .vscode/settings.json

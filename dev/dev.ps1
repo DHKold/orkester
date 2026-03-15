@@ -48,8 +48,8 @@ podman rm -f $ContainerName 2>$null
 $RunArgs = @(
     "run", "-d",
     "--name", $ContainerName,
-    "-v", "${ProjectRoot}:/orkester:z",
-    "-v", "${VolumeName}:/orkester/target:z"
+    "-v", "${ProjectRoot}:/orkester:z",                            # Mount the project source as a volume so changes are reflected inside the container.
+    "-v", "${VolumeName}:/orkester/target:z"                       # Mount the build cache as a volume so it persists across container restarts.
 )
 if ($PodmanSock) {
     Write-Host ">>> Mounting Podman socket: $PodmanSock"

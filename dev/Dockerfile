@@ -65,7 +65,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /orkester
-RUN mkdir -p plugins
+RUN mkdir -p plugins data workspace
 
 COPY --from=builder /orkester/target/release/orkester /usr/local/bin/orkester
 

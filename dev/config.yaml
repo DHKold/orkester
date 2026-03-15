@@ -15,7 +15,7 @@ logging:
     filters:
       - source: "orkester_plugin.*"
 plugins:
-  dir: /orkester/plugins # directory to scan for .so plugin files
+  dir: /orkester/dev/plugins # directory to scan for .so plugin files
   recursive: false # scan sub-directories?
 servers:
   rest_api:
@@ -47,7 +47,7 @@ servers:
     metrics_target: metrics
     loaders:
       - type: local
-        dir: /orkester/samples
+        dir: /orkester/dev/examples/workspace
   workflows:
     component:
       plugin: orkester-plugin-core
@@ -58,4 +58,4 @@ servers:
     scheduler_interval_seconds: 30
     persistence:
       type: file-persistence
-      root-dir: /orkester/data/workflows
+      root-dir: /orkester/dev/data/workflows
