@@ -1,0 +1,495 @@
+################################################################################
+# Global Deployment Settings
+################################################################################
+
+# -- Number of replicas.
+# Orkester uses file-based persistence by default; keep at 1 unless you have
+# configured an external persistence backend (e.g. a shared database).
+replicaCount: 1
+
+# -- Labels applied to every resource created by this chart.
+# Useful for cost-allocation, team ownership, or policy enforcement.
+# Example:
+#   commonLabels:
+#     team: platform
+#     cost-center: "12345"
+commonLabels: {}
+
+# -- Name overrides. Leave empty to use the chart name.
+nameOverride: ""
+fullnameOverride: ""
+
+################################################################################
+# Image
+################################################################################
+
+image:
+  # -- Container registry hostname. Override for air-gapped or mirrored environments.
+  # Example: 058264326535.dkr.ecr.eu-west-1.amazonaws.com
+  registry: ""
+
+  # -- Image repository (without registry prefix).
+  repository: orkester
+
+  # -- Image tag. Defaults to the chart's appVersion when left empty.
+  tag: ""
+
+  # -- Image digest. When set, takes precedence over `tag` for immutable deployments.
+  # Example: sha256:abc123...
+  digest: ""
+
+  # -- Image pull policy. Use `Always` in CI or when using a mutable tag like `latest`.
+  pullPolicy: IfNotPresent
+
+# -- List of image pull secrets for private registries.
+# Example:
+#   imagePullSecrets:
+#     - name: ecr-registry-credentials
+imagePullSecrets: []
+
+################################################################################
+# Service Account
+################################################################################
+
+serviceAccount:
+  # -- Whether to create a dedicated ServiceAccount for Orkester.
+  # Set to false to reuse an existing account (specify its name below).
+  create: true
+
+  # -- Name of the ServiceAccount to use.
+  # If empty and `create` is true, the name is derived from the release fullname.
+  name: ""
+
+  # -- Annotations added to the ServiceAccount.
+  # Use this to attach IAM Roles for Service Accounts (IRSA) on EKS:
+  # Example:
+  #   annotations:
+  #     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/orkester-role
+  annotations: {}
+
+  # -- Whether to auto-mount the ServiceAccount token into every Pod.
+  # Set to false if Orkester does not need to call the Kubernetes API directly.
+  automountServiceAccountToken: true
+
+################################################################################
+# RBAC
+################################################################################
+
+# RBAC grants the Orkester ServiceAccount the permissions it needs.
+# The `kubernetes` executor creates and deletes ephemeral Pods, so it requires
+# Pod-level CRUD access. Disable RBAC creation only if you manage permissions
+# out-of-band (e.g. via GitOps policy controllers).
+
+rbac:
+  # -- Whether to create RBAC resources (Role/ClusterRole + Binding).
+  create: true
+
+  # -- When true, a ClusterRole + ClusterRoleBinding is created, granting
+  # Orkester Pod management rights across all namespaces. Set to false to
+  # restrict access to specific namespaces only (see `allowedNamespaces`).
+  clusterScoped: true
+
+  # -- Namespaces where Orkester is allowed to create Pods.
+  # Only used when `clusterScoped` is false.
+  # Example:
+  #   allowedNamespaces:
+  #     - jobs
+  #     - etl
+  allowedNamespaces: []
+
+################################################################################
+# Pod Security
+################################################################################
+
+# -- Security context applied at the Pod level (shared by all containers).
+# Defines the user/group identity and filesystem ownership.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Security context applied to the Orkester container specifically.
+# Drops all Linux capabilities and enforces a read-only root filesystem.
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+################################################################################
+# Scheduling
+################################################################################
+
+# -- Node labels used to constrain which nodes this Pod can be scheduled on.
+# Example:
+#   nodeSelector:
+#     kubernetes.io/os: linux
+#     node-role.kubernetes.io/worker: "true"
+nodeSelector: {}
+
+# -- Tolerations for tainted nodes.
+# Example:
+#   tolerations:
+#     - key: "dedicated"
+#       operator: "Equal"
+#       value: "platform"
+#       effect: "NoSchedule"
+tolerations: []
+
+# -- Affinity rules for advanced scheduling (node affinity, pod anti-affinity, etc.).
+# Example — prefer spreading replicas across availability zones:
+#   affinity:
+#     podAntiAffinity:
+#       preferredDuringSchedulingIgnoredDuringExecution:
+#         - weight: 100
+#           podAffinityTerm:
+#             topologyKey: topology.kubernetes.io/zone
+#             labelSelector:
+#               matchLabels:
+#                 app.kubernetes.io/name: orkester
+affinity: {}
+
+# -- Topology spread constraints for fine-grained Pod distribution.
+# Example:
+#   topologySpreadConstraints:
+#     - maxSkew: 1
+#       topologyKey: topology.kubernetes.io/zone
+#       whenUnsatisfiable: DoNotSchedule
+topologySpreadConstraints: []
+
+################################################################################
+# Pod Metadata
+################################################################################
+
+# -- Annotations added to every Pod.
+# Example: inject Vault agent sidecar or Datadog APM tracing.
+#   podAnnotations:
+#     vault.hashicorp.com/agent-inject: "true"
+#     ad.datadoghq.com/orkester.logs: '[{"source":"orkester","service":"orkester"}]'
+podAnnotations: {}
+
+# -- Extra labels added to every Pod (merged with selector labels).
+podLabels: {}
+
+################################################################################
+# Container — Extra Configuration
+################################################################################
+
+# -- Extra CLI flags appended to the Orkester entrypoint.
+# Example:
+#   extraArgs:
+#     - --log-level=debug
+extraArgs: []
+
+# -- Extra environment variables injected into the Orkester container.
+# Example:
+#   extraEnv:
+#     - name: MY_CUSTOM_VAR
+#       value: "hello"
+#     - name: SECRET_VALUE
+#       valueFrom:
+#         secretKeyRef:
+#           name: my-secret
+#           key: value
+extraEnv: []
+
+# -- Extra envFrom entries (ConfigMap or Secret references).
+# Example:
+#   extraEnvFrom:
+#     - secretRef:
+#         name: orkester-db-credentials
+extraEnvFrom: []
+
+# -- Extra volumes added to the Pod spec.
+extraVolumes: []
+
+# -- Extra volume mounts added to the Orkester container.
+extraVolumeMounts: []
+
+################################################################################
+# Service
+################################################################################
+
+service:
+  # -- Kubernetes Service type. Use ClusterIP for internal access only.
+  # LoadBalancer or NodePort are not recommended; use an Ingress instead.
+  type: ClusterIP
+
+  # -- Port exposed by the Service (cluster-internal).
+  port: 80
+
+  # -- Port the Orkester process binds to inside the container.
+  # Must match `config.servers.rest_api.port`.
+  containerPort: 8080
+
+  # -- Annotations added to the Service resource.
+  # Example (AWS NLB):
+  #   annotations:
+  #     service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  annotations: {}
+
+  # -- Additional labels added to the Service resource.
+  labels: {}
+
+################################################################################
+# Ingress
+################################################################################
+
+ingress:
+  # -- Whether to create an Ingress resource.
+  enabled: false
+
+  # -- IngressClass name (e.g. nginx, traefik, alb).
+  className: ""
+
+  # -- Annotations forwarded to the Ingress resource.
+  # Example (nginx + cert-manager):
+  #   annotations:
+  #     nginx.ingress.kubernetes.io/rewrite-target: /
+  #     cert-manager.io/cluster-issuer: letsencrypt-prod
+  annotations: {}
+
+  # -- List of host rules.
+  # Example:
+  #   hosts:
+  #     - host: orkester.example.com
+  #       paths:
+  #         - path: /
+  #           pathType: Prefix
+  hosts: []
+
+  # -- TLS configuration.
+  # Example:
+  #   tls:
+  #     - secretName: orkester-tls
+  #       hosts:
+  #         - orkester.example.com
+  tls: []
+
+################################################################################
+# Resource Management
+################################################################################
+
+# -- Resource requests and limits for the Orkester container.
+# Adjust based on workload; workflow fan-out (kubernetes executor) adds burst CPU.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+################################################################################
+# Health Checks
+################################################################################
+
+# Orkester exposes a health endpoint at GET /v1/health.
+# All probes target this endpoint on the named port `http`.
+
+livenessProbe:
+  httpGet:
+    path: /v1/health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /v1/health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 2
+
+# -- Optional startup probe. Useful when workload startup takes longer than
+# `livenessProbe.initialDelaySeconds` allows (e.g. large plugin directory).
+startupProbe:
+  enabled: false
+  httpGet:
+    path: /v1/health
+    port: http
+  failureThreshold: 30
+  periodSeconds: 5
+
+################################################################################
+# Autoscaling
+################################################################################
+
+# Horizontal Pod Autoscaler. Note: autoscaling is only meaningful when Orkester
+# is configured with an external (non-file) persistence backend, otherwise
+# multiple replicas will conflict over local state.
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+################################################################################
+# Pod Disruption Budget
+################################################################################
+
+# Prevents Kubernetes from evicting all Orkester Pods simultaneously during
+# node drains or rolling upgrades. Enable in production.
+
+podDisruptionBudget:
+  enabled: false
+  # -- Minimum number of Pods that must remain available.
+  minAvailable: 1
+  # -- Alternative: maximum number of Pods that can be unavailable.
+  # maxUnavailable: 1
+
+################################################################################
+# Network Policy
+################################################################################
+
+# When enabled, a NetworkPolicy is created that:
+#   - Allows ingress only on the configured container port.
+#   - Allows egress to DNS (UDP/TCP 53) and HTTPS (TCP 443) only.
+# Enable in production for defence-in-depth.
+
+networkPolicy:
+  enabled: false
+
+  # -- Additional ingress rules appended to the policy.
+  # Example — allow Prometheus scraping from the monitoring namespace:
+  #   additionalIngress:
+  #     - from:
+  #         - namespaceSelector:
+  #             matchLabels:
+  #               kubernetes.io/metadata.name: monitoring
+  #       ports:
+  #         - port: 8080
+  #           protocol: TCP
+  additionalIngress: []
+
+  # -- Additional egress rules appended to the policy.
+  # Example — allow access to an internal bundle server:
+  #   additionalEgress:
+  #     - to:
+  #         - podSelector:
+  #             matchLabels:
+  #               app: bundle-server
+  #       ports:
+  #         - port: 8080
+  #           protocol: TCP
+  additionalEgress: []
+
+################################################################################
+# Persistence
+################################################################################
+
+# Orkester persists workflow state to disk by default (file-persistence backend).
+# A PersistentVolumeClaim is created and mounted at `mountPath`.
+# Set `enabled: false` only when using an external persistence backend.
+
+persistence:
+  enabled: true
+
+  # -- StorageClass for the PVC. Leave empty to use the cluster default.
+  # Set to "-" to request a PVC with no storageClassName (i.e. a pre-provisioned PV).
+  storageClass: ""
+
+  # -- Access mode for the PVC.
+  accessMode: ReadWriteOnce
+
+  # -- Size of the persistent volume.
+  size: 50Mi
+
+  # -- Mount path inside the Orkester container.
+  # Must match `config.servers.workflows.persistence.root-dir` (parent directory).
+  mountPath: /orkester/data
+
+################################################################################
+# Orkester Configuration
+################################################################################
+
+# The entire `config` block is serialised to YAML and rendered into a ConfigMap,
+# then mounted at /orkester/config.yaml inside the container.
+#
+# Override any key to customise Orkester behaviour without rebuilding the image.
+# Refer to the Orkester documentation for the full configuration reference.
+
+config:
+
+  # ---------------------------------------------------------------------------
+  # Logging
+  # ---------------------------------------------------------------------------
+  logging:
+    console:
+      enabled: true
+      filters:
+        # Minimum log level: debug | info | warn | error
+        - level: INFO
+
+  # ---------------------------------------------------------------------------
+  # Plugins
+  # ---------------------------------------------------------------------------
+  # Orkester loads plugins from the directory below at startup.
+  # The production image ships plugin-core and plugin-k8s here.
+  plugins:
+    dir: /orkester/plugins
+    recursive: false
+
+  # ---------------------------------------------------------------------------
+  # Servers
+  # ---------------------------------------------------------------------------
+  # Each server declares which plugin component it uses and which other server
+  # it publishes its endpoints to (rest_target / metrics_target).
+  servers:
+
+    rest_api:
+      component:
+        plugin: orkester-plugin-core
+        server: axum-rest-server
+      enabled: true
+      # Must match `service.containerPort`.
+      port: 8080
+      metrics_target: metrics
+
+    metrics:
+      component:
+        plugin: orkester-plugin-core
+        server: metrics-server
+      rest_server: rest_api
+      enabled: true
+
+    workspace:
+      component:
+        plugin: orkester-plugin-core
+        server: workspace-server
+      enabled: true
+      rest_target: rest_api
+      metrics_target: metrics
+      loaders:
+        # Local loader reads workflow definitions from a directory on disk.
+        # - type: local
+        #   dir: /orkester/samples
+        # S3 loader reads workflow definitions from an S3 bucket. Requires the AWS plugin.
+        # - type: s3
+        #   bucket: my-workflow-bucket
+        #   ... additional S3 connection config (region, credentials/secret, etc.)
+
+    workflows:
+      component:
+        plugin: orkester-plugin-core
+        server: workflows-server
+      enabled: true
+      rest_target: rest_api
+      metrics_target: metrics
+      # How often (in seconds) the scheduler polls for pending workflow runs.
+      scheduler_interval_seconds: 30
+      persistence:
+        # type: file-persistence stores state on the PVC mounted at `mountPath`.
+        # Switch to a database backend for multi-replica deployments.
+        type: file-persistence
+        root-dir: /orkester/data/workflows

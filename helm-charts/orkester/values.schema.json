@@ -1,0 +1,205 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Orkester Helm Chart Values",
+  "type": "object",
+  "properties": {
+    "replicaCount": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of replicas. Use 1 with file-persistence backend."
+    },
+    "commonLabels": {
+      "type": "object",
+      "description": "Labels applied to every resource created by this chart."
+    },
+    "nameOverride":     { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "image": {
+      "type": "object",
+      "description": "Container image configuration.",
+      "properties": {
+        "registry":   { "type": "string", "description": "Container registry hostname. Override for air-gapped environments." },
+        "repository": { "type": "string" },
+        "tag":        { "type": "string", "description": "Image tag. Defaults to Chart.appVersion when empty." },
+        "digest":     { "type": "string", "description": "Image digest. Takes precedence over tag when set." },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+      },
+      "required": ["repository"]
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create":      { "type": "boolean" },
+        "name":        { "type": "string"  },
+        "annotations": { "type": "object"  },
+        "automountServiceAccountToken": { "type": "boolean" }
+      }
+    },
+    "rbac": {
+      "type": "object",
+      "properties": {
+        "create":            { "type": "boolean" },
+        "clusterScoped":     { "type": "boolean" },
+        "allowedNamespaces": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "properties": {
+        "runAsNonRoot": { "type": "boolean" },
+        "runAsUser":    { "type": "integer" },
+        "runAsGroup":   { "type": "integer" },
+        "fsGroup":      { "type": "integer" },
+        "seccompProfile": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["RuntimeDefault", "Localhost", "Unconfined"] }
+          }
+        }
+      }
+    },
+    "containerSecurityContext": {
+      "type": "object",
+      "properties": {
+        "allowPrivilegeEscalation": { "type": "boolean" },
+        "readOnlyRootFilesystem":   { "type": "boolean" },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "drop": { "type": "array", "items": { "type": "string" } },
+            "add":  { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "nodeSelector":              { "type": "object" },
+    "tolerations":               { "type": "array"  },
+    "affinity":                  { "type": "object" },
+    "topologySpreadConstraints": { "type": "array"  },
+    "podAnnotations": { "type": "object" },
+    "podLabels":      { "type": "object" },
+    "extraArgs":         { "type": "array", "items": { "type": "string" } },
+    "extraEnv":          { "type": "array" },
+    "extraEnvFrom":      { "type": "array" },
+    "extraVolumes":      { "type": "array" },
+    "extraVolumeMounts": { "type": "array" },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type":          { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+        "port":          { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "containerPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "annotations":   { "type": "object" },
+        "labels":        { "type": "object" }
+      },
+      "required": ["type", "port", "containerPort"]
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled":     { "type": "boolean" },
+        "className":   { "type": "string"  },
+        "annotations": { "type": "object"  },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "host":  { "type": "string" },
+              "paths": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path":     { "type": "string" },
+                    "pathType": { "type": "string", "enum": ["Prefix", "Exact", "ImplementationSpecific"] }
+                  },
+                  "required": ["path"]
+                }
+              }
+            }
+          }
+        },
+        "tls": { "type": "array" }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "properties": {
+        "requests": {
+          "type": "object",
+          "properties": {
+            "cpu":    { "type": "string" },
+            "memory": { "type": "string" }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "cpu":    { "type": "string" },
+            "memory": { "type": "string" }
+          }
+        }
+      }
+    },
+    "livenessProbe":  { "type": "object" },
+    "readinessProbe": { "type": "object" },
+    "startupProbe": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" }
+      },
+      "required": ["enabled"]
+    },
+    "autoscaling": {
+      "type": "object",
+      "properties": {
+        "enabled":                           { "type": "boolean" },
+        "minReplicas":                       { "type": "integer", "minimum": 1 },
+        "maxReplicas":                       { "type": "integer", "minimum": 1 },
+        "targetCPUUtilizationPercentage":    { "type": "integer", "minimum": 1, "maximum": 100 },
+        "targetMemoryUtilizationPercentage": { "type": "integer", "minimum": 1, "maximum": 100 }
+      }
+    },
+    "podDisruptionBudget": {
+      "type": "object",
+      "properties": {
+        "enabled":        { "type": "boolean" },
+        "minAvailable":   {},
+        "maxUnavailable": {}
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled":           { "type": "boolean" },
+        "additionalIngress": { "type": "array"   },
+        "additionalEgress":  { "type": "array"   }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "properties": {
+        "enabled":      { "type": "boolean" },
+        "storageClass": { "type": "string"  },
+        "accessMode":   { "type": "string", "enum": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany"] },
+        "size":         { "type": "string"  },
+        "mountPath":    { "type": "string"  }
+      },
+      "required": ["enabled"]
+    },
+    "config": {
+      "type": "object",
+      "description": "Orkester config.yaml contents, rendered into a ConfigMap.",
+      "properties": {
+        "logging": { "type": "object" },
+        "plugins": { "type": "object" },
+        "servers": { "type": "object" }
+      }
+    }
+  }
+}
