@@ -29,6 +29,7 @@ echo ">>> Building plugins (${BUILD_DIR})..."
 # List all plugin crates (any workspace member whose name starts with orkester-plugin-)
 PLUGIN_CRATES=(
     orkester-plugin-core
+    orkester-plugin-k8s
 )
 
 for crate in "${PLUGIN_CRATES[@]}"; do

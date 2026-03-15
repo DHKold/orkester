@@ -4,6 +4,7 @@ members = [
     "crates/core",
     "crates/common",
     "crates/plugin-core",
+    "crates/plugin-k8s",
 ]
 
 [workspace.dependencies]
