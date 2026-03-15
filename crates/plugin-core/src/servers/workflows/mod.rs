@@ -12,6 +12,9 @@
 //!     rest_target: rest_api             # default: "rest_api"
 //!     workspace_target: workspace       # default: "workspace"
 //!     scheduler_interval_seconds: 30   # default: 30
+//!     persistence:
+//!       type: file-persistence         # default: "memory-persistence"
+//!       root-dir: /var/lib/orkester    # required for file-persistence
 //! ```
 //!
 //! # Architecture

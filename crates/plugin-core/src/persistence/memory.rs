@@ -7,15 +7,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+fn make_key(key: &EntityKey) -> String {
+    format!("{}/{}", key.namespace, key.id)
+}
+
 /// An in-memory persistence provider backed by a `HashMap`.
 /// All data is lost when the process exits. Suitable for development and testing.
 #[derive(Default)]
 pub struct MemoryPersistenceProvider {
     store: Arc<RwLock<HashMap<String, Value>>>,
-}
-
-fn make_key(key: &EntityKey) -> String {
-    format!("{}/{}", key.namespace, key.id)
 }
 
 #[async_trait]

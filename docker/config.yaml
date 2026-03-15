@@ -55,5 +55,7 @@ servers:
     enabled: true
     rest_target: rest_api
     metrics_target: metrics
-    # How often the scheduler checks for due Crons (seconds).
     scheduler_interval_seconds: 30
+    persistence:
+      type: file-persistence
+      root-dir: /orkester/data/workflows

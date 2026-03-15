@@ -9,7 +9,7 @@ use crate::{
     auth::NoAuthProviderBuilder,
     authz::BasicAuthzProviderBuilder,
     executor::{CommandsExecutorBuilder, DummyExecutorBuilder},
-    persistence::MemoryPersistenceBuilder,
+    persistence::{FilePersistenceBuilder, MemoryPersistenceBuilder},
     registry::LocalRegistryBuilder,
     servers::{
         metrics::MetricsServerBuilder, rest::AxumRestServerBuilder,
@@ -65,6 +65,12 @@ pub fn core_plugin() -> Plugin {
                 id: "memory-persistence".to_string(),
                 description: "Volatile in-memory persistence backend.".to_string(),
                 builder: PluginComponent::PersistenceProvider(Box::new(MemoryPersistenceBuilder)),
+            },
+            ComponentMetadata {
+                kind: "persistence".to_string(),
+                id: "file-persistence".to_string(),
+                description: "Durable file-based persistence backend; stores entities as JSON files on disk.".to_string(),
+                builder: PluginComponent::PersistenceProvider(Box::new(FilePersistenceBuilder)),
             },
             ComponentMetadata {
                 kind: "registry".to_string(),

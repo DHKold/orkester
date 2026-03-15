@@ -56,7 +56,7 @@ use api::ApiHandler;
 use loader::{loader_from_config, LoaderEvent, ObjectLoader};
 use store::WorkspaceStore;
 
-use crate::persistence::MemoryPersistenceProvider;
+use crate::persistence::memory::MemoryPersistenceProvider;
 
 // ── WorkspaceServer ────────────────────────────────────────────────────────────
 
