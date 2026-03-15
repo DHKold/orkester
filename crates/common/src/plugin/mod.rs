@@ -3,7 +3,7 @@ pub mod servers;
 
 use providers::{
     auth::AuthenticationProviderBuilder, authz::AuthorizationProviderBuilder,
-    executor::ExecutorBuilder, persistence::PersistenceBuilder, registry::RegistryBuilder,
+    executor::ExecutorBuilder, persistence::PersistenceBuilder,
 };
 use servers::ServerBuilder;
 
@@ -16,7 +16,6 @@ pub enum PluginComponent {
     AuthorizationProvider(Box<dyn AuthorizationProviderBuilder>),
     ExecutorProvider(Box<dyn ExecutorBuilder>),
     PersistenceProvider(Box<dyn PersistenceBuilder>),
-    RegistryProvider(Box<dyn RegistryBuilder>),
 
     // ── Servers ────────────────────────────────────────────────────────────
     Server(Box<dyn ServerBuilder>),
