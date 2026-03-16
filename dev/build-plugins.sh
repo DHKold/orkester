@@ -19,7 +19,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-cd "$PROJECT_ROOT/src"
+cd "$PROJECT_ROOT/rust"
 
 PLUGINS_DIR="${PROJECT_ROOT}/dev/plugins"
 mkdir -p "$PLUGINS_DIR"

@@ -6,9 +6,9 @@ logging:
       - source: "orkester_plugin_core::.*"
         level: "INFO"
       - source: "orkester_plugin_core::servers"
-        level: "WARN"
-      - source: "orkester::management"
         level: "ERROR"
+      - source: "orkester::management"
+        level: "INFO"
   file:
     enabled: false
     path: "orkester.log"

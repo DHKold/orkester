@@ -10,6 +10,7 @@
 use std::sync::{Arc, Mutex};
 
 use axum::{routing::get, Router};
+use axum::middleware::from_fn;
 use orkester_common::messaging::Message;
 use orkester_common::plugin::servers::{Server, ServerBuilder, ServerContext, ServerError};
 use orkester_common::log_info;
@@ -19,6 +20,7 @@ use super::handlers::{dynamic_route_handler, list_routes_handler, openapi_handle
 use super::hub::hub_message_task;
 use super::state::AppState;
 use super::statics::StaticsMount;
+use super::auth::auth_middleware;
 
 // ── AxumRestServer ────────────────────────────────────────────────────────────
 
@@ -108,6 +110,7 @@ impl AxumRestServer {
             .route("/v1/routes", get(list_routes_handler))
             .fallback(dynamic_route_handler)
             .with_state(state)
+            .layer(from_fn(auth_middleware))
     }
 
     async fn serve(

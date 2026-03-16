@@ -505,11 +505,6 @@ fn container_name(execution_id: &str) -> String {
     format!("orkester-{}", execution_id.replace(':', "-"))
 }
 
-/// Wrap `s` in single quotes, escaping embedded single quotes as `'\''`.
-fn shell_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', r"'\''"))
-}
-
 /// Parse stdout for the sentinel line; return `(outputs_map, log_portion)`.
 fn parse_outputs(
     stdout: &str,

@@ -13,6 +13,7 @@
 //! | `hub`      | Hub-message processing task and route registration.          |
 //! | `server`   | `AxumRestServer` lifecycle, Tokio runtime, Axum wiring.      |
 
+pub(super) mod auth;
 pub(super) mod handlers;
 pub(super) mod hub;
 pub(super) mod server;
