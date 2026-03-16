@@ -14,9 +14,10 @@ TODO
 
 ### Global
 
-- [ ] Produce a release rootless and distroless image
+- [x] Produce a release rootless and distroless image
 - [ ] Create documentation
-- [ ] Push to Github ?
+- [x] Push to Github ?
+- [ ] Refactor Plugins to ABI abstraction
 
 ### Commons
 
@@ -36,7 +37,7 @@ Workspace:
 - [ ] Historization : Ability to keep track of changes to Works and Tasks
 
 Workflow:
-- [ ] ContainerTaskExecutor : Ability to run tasks in docker / podman
+- [x] ContainerTaskExecutor : Ability to run tasks in docker / podman
 - [ ] OrkesterTaskExecutor : Ability to trigger Orkester commands (e.g. create workflows)
 - [ ] Workflow archiving : Ability to archive workflows (remove logs, keep state and metrics)
 - [ ] ThreadWorker : Ability to run a worker in a separate thread
@@ -52,7 +53,7 @@ Security
 - [ ] OPAAuthorizationProvider
 
 Persistence
-- [ ] FilePersistenceProvider
+- [x] FilePersistenceProvider
 
 ### UI
 

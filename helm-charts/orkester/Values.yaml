@@ -26,10 +26,10 @@ fullnameOverride: ""
 image:
   # -- Container registry hostname. Override for air-gapped or mirrored environments.
   # Example: 058264326535.dkr.ecr.eu-west-1.amazonaws.com
-  registry: ""
+  registry: "058264326535.dkr.ecr.eu-west-1.amazonaws.com"
 
   # -- Image repository (without registry prefix).
-  repository: orkester
+  repository: tests/infra/orkester
 
   # -- Image tag. Defaults to the chart's appVersion when left empty.
   tag: ""

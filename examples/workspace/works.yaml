@@ -56,3 +56,30 @@ spec:
         COUNT: "5"
       allowFailure: false
 ---
+# ── Kubernetes executor Work ──────────────────────────────────────────────────
+# Mirrors the commands smoke-test but runs every step as an ephemeral Pod.
+# Use this to verify plugin-k8s is loaded, RBAC is configured, and output
+# passing between kubernetes steps works correctly.
+apiVersion: orkester.io/v1
+kind: Work
+name: k8s-smoke-test
+version: "1.0.0"
+metadata:
+  namespace: testing
+  description: "Kubernetes executor smoke-test: set a delay value, then echo a message inside a Pod"
+  labels:
+    category: kubernetes
+spec:
+  inputs:
+    MESSAGE: "A message to print inside the echo Pod."
+  steps:
+    - id: set-delay
+      task: k8s-set-delay
+      dependsOn: []
+    - id: run-echo
+      task: k8s-echo
+      dependsOn: ["set-delay"]
+      inputs:
+        MESSAGE: "{{ inputs.MESSAGE }}"
+        DELAY_SECONDS: "{{ steps.set-delay.outputs.DELAY_SECONDS }}"
+      allowFailure: false

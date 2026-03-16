@@ -1,0 +1,69 @@
+image:
+  tag: dev
+  pullPolicy: Always
+
+# No persistent storage needed for demos — workflows state is ephemeral.
+persistence:
+  enabled: false
+
+# The dev image has a shell; relax the read-only rootfs so the container
+# executor can write to /tmp if needed.
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+# Override the workspace loader to point at the embedded examples directory.
+config:
+  logging:
+    console:
+      enabled: true
+      filters:
+        - level: INFO
+  plugins:
+    dir: /orkester/plugins
+    recursive: false
+  servers:
+    rest_api:
+      component:
+        plugin: orkester-plugin-core
+        server: axum-rest-server
+      enabled: true
+      port: 8080
+      metrics_target: metrics
+      statics:
+        - url_prefix: /ui
+          dir: /orkester/ui
+          filters:
+            - extension: ["html", "css", "js", "png", "jpg", "jpeg", "gif", "svg"]
+          headers:
+            Cache-Control: "no-cache"
+    metrics:
+      component:
+        plugin: orkester-plugin-core
+        server: metrics-server
+      rest_server: rest_api
+      enabled: true
+    workspace:
+      component:
+        plugin: orkester-plugin-core
+        server: workspace-server
+      enabled: true
+      rest_target: rest_api
+      metrics_target: metrics
+      loaders:
+        - type: local
+          dir: /orkester/workspace
+    workflows:
+      component:
+        plugin: orkester-plugin-core
+        server: workflows-server
+      enabled: true
+      rest_target: rest_api
+      metrics_target: metrics
+      scheduler_interval_seconds: 30
+      persistence:
+        type: file-persistence
+        root-dir: /orkester/data/workflows

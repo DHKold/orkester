@@ -109,3 +109,60 @@ spec:
     RESULT: "Summary string written by the Python script."
   timeout_seconds: 120
   retries: 1
+---
+# ── Kubernetes executor tasks ────────────────────────────────────────────────
+# Each task below runs inside an ephemeral Kubernetes Pod.  They are the
+# kubernetes-executor counterparts of the echo-hello and container-echo tasks
+# above, useful for verifying the plugin-k8s integration end-to-end before
+# introducing advanced features (secrets, volumes, node selectors, etc.).
+apiVersion: orkester.io/v1
+kind: Task
+name: k8s-echo
+version: "1.0.0"
+metadata:
+  namespace: testing
+  description: "Simple echo task running in an Alpine Pod — kubernetes-executor smoke test"
+  labels:
+    category: kubernetes
+spec:
+  executor: kubernetes
+  config:
+    image: "alpine:3.19"
+    pull_policy: IfNotPresent
+    command:
+      - echo "Hello from a Kubernetes Pod!"
+      - echo "Message is: $MESSAGE"
+      - GREETING="Hello, $RECIPIENT!"
+    env:
+      RECIPIENT: "World"
+  inputs:
+    MESSAGE: "A message to print inside the Pod."
+  outputs:
+    GREETING: "The greeting string produced by the task."
+  timeout_seconds: 60
+  retries: 0
+---
+apiVersion: orkester.io/v1
+kind: Task
+name: k8s-set-delay
+version: "1.0.0"
+metadata:
+  namespace: testing
+  description: "Utility task that produces a DELAY_SECONDS output inside a Pod — tests output passing between kubernetes steps"
+  labels:
+    category: kubernetes
+spec:
+  executor: kubernetes
+  config:
+    image: "alpine:3.19"
+    pull_policy: IfNotPresent
+    command:
+      - echo "Setting DELAY_SECONDS to 5..."
+      - DELAY_SECONDS=5
+  outputs:
+    DELAY_SECONDS: "The delay value produced by this task."
+  timeout_seconds: 30
+  retries: 0
+  labels:
+    category: kubernetes
+    tier: extract

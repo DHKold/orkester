@@ -6,7 +6,9 @@ metadata:
   labels:
     {{- include "orkester.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "orkester.selectorLabels" . | nindent 6 }}

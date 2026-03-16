@@ -8,7 +8,7 @@ use k8s_openapi::api::core::v1::{
 };
 use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
 use kube::api::{Api, DeleteParams, PostParams};
-use kube::runtime::wait::{await_condition, conditions};
+use kube::runtime::wait::await_condition;
 use kube::Client;
 use orkester_common::plugin::providers::executor::{
     ExecutionRequest, ExecutionResult, ExecutionStatus, ExecutorBuilder, ExecutorError,
@@ -81,6 +81,15 @@ use serde_json::{json, Value};
 ///
 ///     # Tolerations (raw list forwarded verbatim)
 ///     tolerations: []
+///
+///     # Pod cleanup policy after the task finishes
+///     # auto    — delete the Pod immediately (default)
+///     # delayed — sleep for `cleanup.delay_seconds` then delete (useful for
+///                 log inspection or post-mortem without leaving pods forever)
+///     # none    — never delete; leave the Pod for manual inspection
+///     cleanup:
+///       policy: auto
+///       delay_seconds: 0
 /// ```
 ///
 /// # Inputs → environment variables
@@ -96,19 +105,32 @@ use serde_json::{json, Value};
 /// printf '%s=%s\n' 'VAR' "$VAR"
 /// ```
 /// Stdout is scanned after the sentinel; matched lines populate the step output map.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum CleanupPolicy {
+    /// Delete the Pod immediately after it reaches a terminal phase (default).
+    #[default]
+    Auto,
+    /// Sleep for `cleanup_delay_seconds` then delete the Pod.
+    Delayed,
+    /// Never delete the Pod; leave it for manual inspection.
+    None,
+}
+
 struct K8sConfig {
-    namespace:       String,
-    image:           String,
-    pull_policy:     String,
-    service_account: Option<String>,
-    command:         Vec<String>,
-    working_dir:     Option<String>,
-    env:             Vec<(String, String)>,
-    env_from_secret: Vec<(String, String, String)>, // (env_name, secret_name, key)
-    volumes:         Vec<VolumeSpec>,
-    resources:       Option<ResourceSpec>,
-    timeout_seconds: u64,
-    node_selector:   HashMap<String, String>,
+    namespace:             String,
+    image:                 String,
+    pull_policy:           String,
+    service_account:       Option<String>,
+    command:               Vec<String>,
+    working_dir:           Option<String>,
+    env:                   Vec<(String, String)>,
+    env_from_secret:       Vec<(String, String, String)>, // (env_name, secret_name, key)
+    volumes:               Vec<VolumeSpec>,
+    resources:             Option<ResourceSpec>,
+    timeout_seconds:       u64,
+    node_selector:         HashMap<String, String>,
+    cleanup_policy:        CleanupPolicy,
+    cleanup_delay_seconds: u64,
 }
 
 #[derive(Debug)]
@@ -261,6 +283,21 @@ impl K8sConfig {
             })
             .unwrap_or_default();
 
+        let cleanup_section = cfg.get("cleanup");
+        let cleanup_policy = match cleanup_section
+            .and_then(|v| v.get("policy"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("auto")
+        {
+            "none"    => CleanupPolicy::None,
+            "delayed" => CleanupPolicy::Delayed,
+            _         => CleanupPolicy::Auto,
+        };
+        let cleanup_delay_seconds = cleanup_section
+            .and_then(|v| v.get("delay_seconds"))
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+
         Ok(K8sConfig {
             namespace,
             image,
@@ -274,6 +311,8 @@ impl K8sConfig {
             resources,
             timeout_seconds,
             node_selector,
+            cleanup_policy,
+            cleanup_delay_seconds,
         })
     }
 }
@@ -285,86 +324,120 @@ pub struct KubernetesTaskExecutor;
 #[async_trait]
 impl TaskExecutor for KubernetesTaskExecutor {
     async fn execute(&self, request: ExecutionRequest) -> Result<ExecutionResult, ExecutorError> {
-        let cfg = K8sConfig::parse(&request.task_definition, &request.inputs)?;
+        // The plugin links its own copy of Tokio, so its thread-locals are
+        // separate from the host's runtime.  We create a dedicated reactor for
+        // each execution; `block_on` is safe here because the plugin's Tokio
+        // has no recorded async context on this thread.
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| ExecutorError::Configuration(format!("tokio init failed: {e}")))?;
 
-        let client = Client::try_default().await.map_err(|e| {
-            ExecutorError::Configuration(format!("cannot build Kubernetes client: {e}"))
-        })?;
+        rt.block_on(async move {
+            let cfg = K8sConfig::parse(&request.task_definition, &request.inputs)?;
 
-        let pod_name = pod_name(&request.id);
-        let pods: Api<Pod> = Api::namespaced(client.clone(), &cfg.namespace);
+            let client = Client::try_default().await.map_err(|e| {
+                ExecutorError::Configuration(format!("cannot build Kubernetes client: {e}"))
+            })?;
 
-        let pod = build_pod(&pod_name, &cfg, &request.outputs)?;
+            let pod_name = pod_name(&request.id);
+            let pods: Api<Pod> = Api::namespaced(client.clone(), &cfg.namespace);
 
-        tracing::debug!(
-            execution_id = %request.id,
-            %pod_name,
-            namespace = %cfg.namespace,
-            image = %cfg.image,
-            "KubernetesTaskExecutor: creating pod"
-        );
+            let pod = build_pod(&pod_name, &cfg, &request.outputs)?;
 
-        pods.create(&PostParams::default(), &pod).await.map_err(|e| {
-            ExecutorError::Failed(format!("failed to create pod '{pod_name}': {e}"))
-        })?;
+            tracing::debug!(
+                execution_id = %request.id,
+                %pod_name,
+                namespace = %cfg.namespace,
+                image = %cfg.image,
+                "KubernetesTaskExecutor: creating pod"
+            );
 
-        // Wait for pod to reach terminal state
-        let timeout = Duration::from_secs(cfg.timeout_seconds);
-        let result = tokio::time::timeout(
-            timeout,
-            await_condition(pods.clone(), &pod_name, conditions::is_pod_running()),
-        )
-        .await;
+            pods.create(&PostParams::default(), &pod).await.map_err(|e| {
+                ExecutorError::Failed(format!("failed to create pod '{pod_name}': {e}"))
+            })?;
 
-        // Collect logs regardless of outcome
-        let logs = fetch_logs(&pods, &pod_name).await;
+            // Wait for pod to reach a terminal phase (Succeeded or Failed).
+            // We do NOT use conditions::is_pod_running() here because that only
+            // matches phase == "Running" — a fast task can skip past Running and
+            // land directly in Succeeded, causing the watcher to hang forever.
+            let timeout = Duration::from_secs(cfg.timeout_seconds);
+            let result = tokio::time::timeout(
+                timeout,
+                await_condition(pods.clone(), &pod_name, is_pod_terminal()),
+            )
+            .await;
 
-        // Parse the pod phase after it finishes (re-read it)
-        let phase = get_pod_phase(&pods, &pod_name).await;
+            // Collect logs regardless of outcome
+            let logs = fetch_logs(&pods, &pod_name).await;
 
-        // Always clean up
-        let _ = pods.delete(&pod_name, &DeleteParams::default()).await;
+            // Parse the pod phase after it finishes (re-read it)
+            let phase = get_pod_phase(&pods, &pod_name).await;
 
-        match result {
-            Err(_elapsed) => {
-                return Err(ExecutorError::Failed(format!(
-                    "pod '{pod_name}' timed out after {}s",
-                    cfg.timeout_seconds
-                )));
+            // Clean up the Pod according to the configured policy.
+            match cfg.cleanup_policy {
+                CleanupPolicy::None => {
+                    tracing::debug!(%pod_name, "cleanup_policy=none: leaving pod for manual inspection");
+                }
+                CleanupPolicy::Delayed => {
+                    tracing::debug!(
+                        %pod_name,
+                        delay_seconds = cfg.cleanup_delay_seconds,
+                        "cleanup_policy=delayed: sleeping before pod deletion",
+                    );
+                    tokio::time::sleep(Duration::from_secs(cfg.cleanup_delay_seconds)).await;
+                    let _ = pods.delete(&pod_name, &DeleteParams::default()).await;
+                }
+                CleanupPolicy::Auto => {
+                    let _ = pods.delete(&pod_name, &DeleteParams::default()).await;
+                }
             }
-            Ok(Err(e)) => {
-                return Err(ExecutorError::Failed(format!(
-                    "error waiting for pod '{pod_name}': {e}"
-                )));
+
+            match result {
+                Err(_elapsed) => {
+                    return Err(ExecutorError::Failed(format!(
+                        "pod '{pod_name}' timed out after {}s",
+                        cfg.timeout_seconds
+                    )));
+                }
+                Ok(Err(e)) => {
+                    return Err(ExecutorError::Failed(format!(
+                        "error waiting for pod '{pod_name}': {e}"
+                    )));
+                }
+                Ok(Ok(_)) => {}
             }
-            Ok(Ok(_)) => {}
-        }
 
-        let log_text = logs.join("\n");
-        let exit_code: i32 = if phase == "Succeeded" { 0 } else { 1 };
-        let (outputs, log_str) = parse_outputs(&log_text, &request.outputs, exit_code);
+            let log_text = logs.join("\n");
+            let exit_code: i32 = if phase == "Succeeded" { 0 } else { 1 };
+            let (outputs, log_str) = parse_outputs(&log_text, &request.outputs, exit_code);
 
-        let log_lines: Vec<String> = log_str.lines().map(str::to_owned).collect();
+            let log_lines: Vec<String> = log_str.lines().map(str::to_owned).collect();
 
-        let status = if phase == "Succeeded" {
-            ExecutionStatus::Succeeded
-        } else {
-            let msg = format!("pod '{pod_name}' finished with phase '{phase}'");
-            tracing::warn!(%msg, "kubernetes task failed");
-            ExecutionStatus::Failed(msg)
-        };
+            let status = if phase == "Succeeded" {
+                ExecutionStatus::Succeeded
+            } else {
+                let msg = format!("pod '{pod_name}' finished with phase '{phase}'");
+                tracing::warn!(%msg, "kubernetes task failed");
+                ExecutionStatus::Failed(msg)
+            };
 
-        Ok(ExecutionResult { status, outputs, logs: log_lines })
+            Ok(ExecutionResult { status, outputs, logs: log_lines })
+        })
     }
 
     async fn cancel(&self, execution_id: &str) -> Result<(), ExecutorError> {
         let pod_name = pod_name(execution_id);
-        // Best-effort: if we can't build the client or find the namespace we just return Ok.
-        let Ok(client) = Client::try_default().await else { return Ok(()) };
-        // We don't know the namespace here; default is the safest bet.
-        let pods: Api<Pod> = Api::namespaced(client, "default");
-        let _ = pods.delete(&pod_name, &DeleteParams::default()).await;
-        Ok(())
+        let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() else {
+            return Ok(());
+        };
+        rt.block_on(async move {
+            let Ok(client) = Client::try_default().await else { return Ok(()) };
+            // We don't know the namespace here; default is the safest bet.
+            let pods: Api<Pod> = Api::namespaced(client, "default");
+            let _ = pods.delete(&pod_name, &DeleteParams::default()).await;
+            Ok(())
+        })
     }
 }
 
@@ -541,6 +614,19 @@ fn build_volumes(cfg: &K8sConfig) -> (Vec<Volume>, Vec<VolumeMount>) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Returns a condition function that resolves when the Pod phase is terminal
+/// (`Succeeded` or `Failed`).  Used instead of `conditions::is_pod_running()`
+/// so that fast tasks that skip past the Running phase are still detected.
+fn is_pod_terminal() -> impl Fn(Option<&Pod>) -> bool {
+    |pod: Option<&Pod>| {
+        matches!(
+            pod.and_then(|p| p.status.as_ref())
+               .and_then(|s| s.phase.as_deref()),
+            Some("Succeeded") | Some("Failed")
+        )
+    }
+}
 
 /// DNS-safe pod name derived from the execution ID.
 fn pod_name(execution_id: &str) -> String {
