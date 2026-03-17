@@ -1,4 +1,16 @@
-   Compiling orkester-plugin v0.1.0 (/orkester/rust/orkester-core/crates/orkester-plugin)
+    Updating crates.io index
+     Locking 7 packages to latest Rust 1.94.0 compatible versions
+      Adding itoa v1.0.17
+      Adding memchr v2.8.0
+      Adding serde v1.0.228
+      Adding serde_core v1.0.228
+      Adding serde_derive v1.0.228
+      Adding serde_json v1.0.149
+      Adding zmij v1.0.21
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.21
+   Compiling serde_json v1.0.149
+   Compiling serde v1.0.228
 warning: unused macro definition: `export_plugin`
  --> crates/orkester-plugin/src/macros.rs:1:14
   |
@@ -123,33 +135,16 @@ warning: function `dispatch_plugin_free` is never used
 26 | pub unsafe fn dispatch_plugin_free(msg: *mut AbiOwnedMessage) {
    |               ^^^^^^^^^^^^^^^^^^^^
 
+   Compiling memchr v2.8.0
+   Compiling itoa v1.0.17
 warning: `orkester-plugin` (lib) generated 19 warnings
+   Compiling serde_derive v1.0.228
    Compiling orkester-plugin-test v0.1.0 (/orkester/rust/orkester-core/crates/orkester-plugin-test)
-   Compiling orkester v0.1.0 (/orkester/rust/orkester-core/crates/orkester)
-error[E0432]: unresolved imports `orkester_plugin::Plugin`, `orkester_plugin::Component`, `orkester_plugin::Host`, `orkester_plugin::PluginError`, `orkester_plugin::Message`, `orkester_plugin::OwnedMessage`
- --> crates/orkester-plugin-test/src/lib.rs:1:23
+error[E0432]: unresolved import `orkester_plugin::export_plugin`
+ --> crates/orkester-plugin-test/src/lib.rs:6:5
   |
-1 | use orkester_plugin::{Plugin, Component, Host, PluginError, Message, OwnedMessage};
-  |                       ^^^^^^  ^^^^^^^^^  ^^^^  ^^^^^^^^^^^  ^^^^^^^  ^^^^^^^^^^^^ no `OwnedMessage` in the root
-  |                       |       |          |     |            |
-  |                       |       |          |     |            no `Message` in the root
-  |                       |       |          |     no `PluginError` in the root
-  |                       |       |          no `Host` in the root
-  |                       |       no `Component` in the root
-  |                       no `Plugin` in the root
-  |
-  = help: consider importing this trait instead:
-          orkester_plugin::sdk::Plugin
-  = help: consider importing one of these items instead:
-          std::path::Component
-          orkester_plugin::sdk::Component
-  = help: consider importing this struct instead:
-          orkester_plugin::sdk::Host
-  = help: consider importing this struct instead:
-          orkester_plugin::sdk::Message
-  = help: consider importing this struct instead:
-          orkester_plugin::sdk::OwnedMessage
+6 | use orkester_plugin::export_plugin;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `export_plugin` in the root
 
 For more information about this error, try `rustc --explain E0432`.
 error: could not compile `orkester-plugin-test` (lib) due to 1 previous error
-warning: build failed, waiting for other jobs to finish...

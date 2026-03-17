@@ -5,8 +5,6 @@ use crate::{
     sdk::{Plugin, Result},
 };
 
-pub trait Sealed {}
-
 pub fn init_plugin_runtime<P: Plugin>(host: *const AbiHostApi) -> Result<*mut c_void> {
     unsafe { crate::sdk::runtime::plugin_create_root::<P>(host) }
 }

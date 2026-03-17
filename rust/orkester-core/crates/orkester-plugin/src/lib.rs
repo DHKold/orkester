@@ -10,4 +10,6 @@ pub mod abi;
 pub mod sdk;
 
 mod macros;
-mod private;
+
+#[doc(hidden)]
+pub mod __private;

@@ -2,10 +2,11 @@
 name = "orkester-plugin-test"
 version = "0.1.0"
 edition = "2024"
-description = "Test Plugin for Orkester"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
-orkester-plugin = { workspace = true }
+orkester-plugin = { path = "../orkester-plugin" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

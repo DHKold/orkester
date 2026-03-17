@@ -12,3 +12,4 @@ pub use host::Host;
 pub use message::Message;
 pub use owned_message::OwnedMessage;
 pub use plugin::Plugin;
+pub use runtime::create_component_box;

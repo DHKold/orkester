@@ -109,7 +109,7 @@ pub(crate) unsafe extern "C" fn plugin_free(msg: *mut AbiOwnedMessage) {
     }
 }
 
-pub(crate) fn create_component_box(component: Box<dyn Component>) -> OwnedMessage {
+pub fn create_component_box(component: Box<dyn Component>) -> OwnedMessage {
     let handle = Box::into_raw(Box::new(ComponentBox { inner: component })) as *mut c_void;
     let payload = (handle as usize).to_ne_bytes().to_vec();
 
