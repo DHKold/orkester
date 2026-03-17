@@ -1,5 +1,7 @@
 use orkester_plugin::sdk::{Component, Host, Message, OwnedMessage, Result};
 
+use crate::protocol::ComponentDescriptor;
+
 pub struct CounterComponent {
     value: u64,
 }
@@ -7,6 +9,14 @@ pub struct CounterComponent {
 impl CounterComponent {
     pub fn new(initial: u64) -> Self {
         Self { value: initial }
+    }
+
+    pub fn descriptor() -> ComponentDescriptor {
+        ComponentDescriptor {
+            id: "counter".to_string(),
+            name: "Counter Component".to_string(),
+            description: "A simple counter component that can be incremented, decremented, or reset.".to_string(),
+        }
     }
 }
 
@@ -27,5 +37,31 @@ impl Component for CounterComponent {
             orkester_plugin::abi::FLAG_RESPONSE,
             self.value.to_string().into_bytes(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use orkester_plugin::sdk::{Host, Message};
+    use crate::protocol::TYPE_UTF8;
+    use core::ptr;
+
+    #[test]
+    fn counter_basic_ops() {
+        let mut comp = CounterComponent::new(5);
+        let host = Host::new(ptr::null());
+
+        let inc = Message::new(1, TYPE_UTF8, 0, b"inc");
+        let res = comp.handle(host, inc).expect("inc failed");
+        assert_eq!(res.utf8().unwrap(), "6");
+
+        let dec = Message::new(2, TYPE_UTF8, 0, b"dec");
+        let res = comp.handle(host, dec).expect("dec failed");
+        assert_eq!(res.utf8().unwrap(), "5");
+
+        let reset = Message::new(3, TYPE_UTF8, 0, b"reset");
+        let res = comp.handle(host, reset).expect("reset failed");
+        assert_eq!(res.utf8().unwrap(), "0");
     }
 }

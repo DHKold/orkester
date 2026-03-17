@@ -2,6 +2,8 @@
 name = "orkester-plugin-test"
 version = "0.1.0"
 edition = "2024"
+description = "Example plugin for Orkester used in tests"
+authors = ["Cedric van Eetvelde <dhkold@gmail.com>"]
 
 [lib]
 crate-type = ["cdylib"]

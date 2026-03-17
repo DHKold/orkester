@@ -22,6 +22,7 @@ pub struct PluginMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComponentDescriptor {
     pub id: String,
+    pub name: String,
     pub description: String,
 }
 

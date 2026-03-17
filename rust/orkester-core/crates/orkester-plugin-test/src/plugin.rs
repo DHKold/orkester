@@ -39,18 +39,9 @@ impl Plugin for TestPlugin {
 
             MSG_LIST_COMPONENTS => {
                 let components = vec![
-                    ComponentDescriptor {
-                        id: "echo".to_string(),
-                        description: "Returns the received payload unchanged".to_string(),
-                    },
-                    ComponentDescriptor {
-                        id: "upper".to_string(),
-                        description: "Returns the received UTF-8 payload uppercased".to_string(),
-                    },
-                    ComponentDescriptor {
-                        id: "counter".to_string(),
-                        description: "Stateful counter component".to_string(),
-                    },
+                    components::echo::EchoComponent::descriptor(),
+                    components::upper::UpperComponent::descriptor(),
+                    components::counter::CounterComponent::descriptor(),
                 ];
 
                 util::json_response(request.id(), &components)
@@ -65,10 +56,7 @@ impl Plugin for TestPlugin {
         }
     }
 
-    fn create_component(
-        &mut self,
-        request: Message<'_>,
-    ) -> Result<Box<dyn orkester_plugin::sdk::Component>> {
+    fn create_component(&mut self, request: Message<'_>) -> Result<Box<dyn orkester_plugin::sdk::Component>> {
         if request.type_id() != MSG_CREATE_COMPONENT {
             return Err(orkester_plugin::sdk::Error::Custom("invalid create request type"));
         }
