@@ -1,7 +1,7 @@
 use super::{host::AbiHostApi, types::AbiComponentHandle};
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Clone, Debug)]
 pub struct AbiCallContext {
     pub host: *const AbiHostApi,
     pub component: AbiComponentHandle, // null => root component

@@ -15,7 +15,7 @@ pub type AbiHostFreeFn =
     unsafe extern "C" fn(host_ctx: *mut c_void, msg: *mut AbiOwnedMessage);
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Clone, Debug)]
 pub struct AbiHostApi {
     pub abi_version: u32,
     pub host_ctx: *mut c_void,
