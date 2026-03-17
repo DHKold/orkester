@@ -1,0 +1,11 @@
+[package]
+name = "orkester-plugin-test"
+version = "0.1.0"
+edition = "2024"
+description = "Test Plugin for Orkester"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+orkester-plugin = { workspace = true }

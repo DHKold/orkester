@@ -1,0 +1,7 @@
+[package]
+name = "orkester-plugin"
+version = "0.1.0"
+edition = "2024"
+description = "Raw ABI and Rust SDK for Orkester plugins"
+
+[dependencies]
