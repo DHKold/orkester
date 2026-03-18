@@ -10,7 +10,7 @@ pub mod plugin;
 pub use component::Component;
 pub use constants::*;
 pub use error::Error;
-pub use handler::{alloc_component, ComponentHandler, Response as HandlerResponse};
+pub use handler::{alloc_component, require_json, ComponentHandler, Response as HandlerResponse};
 pub use host::{HostHandler, NullHostHandler, OrkesterHost};
 pub use message::{ComponentResponse, Request};
 pub use metadata::ComponentKind;

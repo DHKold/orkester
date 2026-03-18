@@ -13,7 +13,7 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
-use orkester_plugin::{abi, sdk::{ComponentHandler, HandlerResponse, Request, ERROR_INVALID_REQUEST, FLAG_UTF8, MSG_TYPE_JSON}};
+use orkester_plugin::{abi, sdk::{require_json, ComponentHandler, HandlerResponse, Request, FLAG_UTF8, MSG_TYPE_JSON}};
 
 #[derive(Deserialize)]
 struct GreetReq {
@@ -40,9 +40,9 @@ impl Greeter {
 
 impl ComponentHandler for Greeter {
     fn handle(&mut self, req: Request) -> HandlerResponse {
-        let parsed: GreetReq = match serde_json::from_slice(req.payload()) {
-            Ok(v) => v,
-            Err(e) => return HandlerResponse::error(ERROR_INVALID_REQUEST, e.to_string()),
+        let parsed: GreetReq = match require_json(&req) {
+            Ok(v)  => v,
+            Err(e) => return e,
         };
 
         let lang = parsed.language.as_deref().unwrap_or("en");

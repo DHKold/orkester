@@ -10,7 +10,7 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
-use orkester_plugin::sdk::{ComponentHandler, HandlerResponse, Request, ERROR_INVALID_REQUEST};
+use orkester_plugin::sdk::{require_json, ComponentHandler, HandlerResponse, Request, ERROR_INVALID_REQUEST};
 
 #[derive(Deserialize)]
 struct CalcReq { op: String, a: f64, b: f64 }
@@ -23,9 +23,9 @@ pub struct Calculator;
 
 impl ComponentHandler for Calculator {
     fn handle(&mut self, req: Request) -> HandlerResponse {
-        let parsed: CalcReq = match serde_json::from_slice(req.payload()) {
-            Ok(v) => v,
-            Err(e) => return HandlerResponse::error(ERROR_INVALID_REQUEST, e.to_string()),
+        let parsed: CalcReq = match require_json(&req) {
+            Ok(v)  => v,
+            Err(e) => return e,
         };
 
         let result: Result<f64, &'static str> = match parsed.op.as_str() {

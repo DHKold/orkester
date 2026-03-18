@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use serde::{Deserialize, Serialize};
 use orkester_plugin::{
     abi,
-    sdk::{alloc_component, ComponentHandler, HandlerResponse, Request,
+    sdk::{require_json, alloc_component, ComponentHandler, HandlerResponse, Request,
           COMPONENT_KIND_PLUGIN, ERROR_INTERNAL, ERROR_INVALID_REQUEST,
           FLAG_UTF8, MSG_TYPE_JSON, PROTOCOL_V1},
 };
@@ -59,9 +59,9 @@ impl Root {
 
 impl ComponentHandler for Root {
     fn handle(&mut self, req: Request) -> HandlerResponse {
-        let parsed: RootReq = match serde_json::from_slice(req.payload()) {
-            Ok(v) => v,
-            Err(e) => return HandlerResponse::error(ERROR_INVALID_REQUEST, e.to_string()),
+        let parsed: RootReq = match require_json(&req) {
+            Ok(v)  => v,
+            Err(e) => return e,
         };
 
         log_to_host(self.host, req.id(), &format!("root received: {}", parsed.request_type));

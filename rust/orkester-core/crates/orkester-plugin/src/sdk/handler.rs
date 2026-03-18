@@ -1,5 +1,5 @@
 use crate::abi;
-use super::constants::PROTOCOL_V1;
+use super::constants::{ERROR_UNSUPPORTED, MSG_TYPE_JSON, PROTOCOL_V1};
 use super::message::Request;
 
 // ─── ComponentHandler trait ───────────────────────────────────────────────────
@@ -84,6 +84,41 @@ impl Response {
             .unwrap_or_default();
         Self { format: MSG_TYPE_JSON, flags: FLAG_UTF8, payload }
     }
+}
+
+// ─── JSON request helper ──────────────────────────────────────────────────────
+
+/// Verify that `req` carries a JSON payload and deserialise it into `T`.
+///
+/// Returns `Err(Response::error(...))` when:
+/// - the request format is not `MSG_TYPE_JSON` (`ERROR_UNSUPPORTED`), or
+/// - the payload cannot be deserialised into `T` (`ERROR_INVALID_REQUEST`).
+///
+/// # Usage
+/// ```ignore
+/// fn handle(&mut self, req: Request) -> Response {
+///     let parsed: MyReq = match require_json(&req) {
+///         Ok(v)  => v,
+///         Err(e) => return e,
+///     };
+///     // ... rest of handler
+/// }
+/// ```
+pub fn require_json<T: serde::de::DeserializeOwned>(req: &Request) -> Result<T, Response> {
+    use super::constants::ERROR_INVALID_REQUEST;
+    if req.format() != MSG_TYPE_JSON {
+        return Err(Response::error(
+            ERROR_UNSUPPORTED,
+            format!(
+                "expected JSON request (format {}), got format {}",
+                MSG_TYPE_JSON,
+                req.format()
+            ),
+        ));
+    }
+    serde_json::from_slice(req.payload()).map_err(|e| {
+        Response::error(ERROR_INVALID_REQUEST, e.to_string())
+    })
 }
 
 // ─── Component allocator ──────────────────────────────────────────────────────

@@ -8,7 +8,7 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
-use orkester_plugin::sdk::{ComponentHandler, HandlerResponse, Request, ERROR_INVALID_REQUEST};
+use orkester_plugin::sdk::{require_json, ComponentHandler, HandlerResponse, Request, ERROR_INVALID_REQUEST};
 
 #[derive(Deserialize)]
 struct CounterReq { #[serde(rename = "type")] op: String }
@@ -26,9 +26,9 @@ impl Counter {
 
 impl ComponentHandler for Counter {
     fn handle(&mut self, req: Request) -> HandlerResponse {
-        let parsed: CounterReq = match serde_json::from_slice(req.payload()) {
-            Ok(v) => v,
-            Err(e) => return HandlerResponse::error(ERROR_INVALID_REQUEST, e.to_string()),
+        let parsed: CounterReq = match require_json(&req) {
+            Ok(v)  => v,
+            Err(e) => return e,
         };
         match parsed.op.as_str() {
             "Inc"   => { self.value += 1; HandlerResponse::json(&CounterRes { value: self.value }) }
