@@ -4,6 +4,12 @@ pub struct Component {
     pub id: u32,
     pub kind: u32,
     pub parent: u32,
+    /// Opaque handler state managed by the SDK or the plugin directly.
+    /// The SDK stores a `*mut H` (the [`ComponentHandler`] impl) here;
+    /// raw plugin implementations may use it for any purpose they choose.
+    ///
+    /// [`ComponentHandler`]: crate::sdk::ComponentHandler
+    pub context: *mut std::ffi::c_void,
     pub handle: unsafe extern "C" fn(this: *mut Component, req: Request) -> Response,
     pub free_response: unsafe extern "C" fn(this: *mut Component, res: Response),
     pub free: unsafe extern "C" fn(this: *mut Component),

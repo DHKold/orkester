@@ -73,6 +73,26 @@ impl Request {
             len: self.payload.len() as u32,
         }
     }
+
+    /// Reconstruct a [`Request`] from a raw ABI request, copying the payload.
+    ///
+    /// Used by the SDK trampolines inside [`alloc_component`] to pass a safe
+    /// request value to [`ComponentHandler::handle`].
+    ///
+    /// # Safety
+    /// `req.payload` must be valid for `req.len` bytes.
+    ///
+    /// [`alloc_component`]: super::handler::alloc_component
+    /// [`ComponentHandler::handle`]: super::handler::ComponentHandler::handle
+    pub(crate) fn from_abi(req: abi::Request) -> Self {
+        let payload = if req.len == 0 || req.payload.is_null() {
+            Vec::new()
+        } else {
+            // SAFETY: guaranteed by the caller (the host).
+            unsafe { std::slice::from_raw_parts(req.payload, req.len as usize) }.to_vec()
+        };
+        Self { id: req.id, format: req.format, flags: req.flags, payload }
+    }
 }
 
 // ─── ComponentResponse ────────────────────────────────────────────────────────

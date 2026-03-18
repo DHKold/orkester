@@ -53,6 +53,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.102"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+
+[[package]]
 name = "bitflags"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -183,16 +189,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libloading"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
-dependencies = [
- "cfg-if",
- "windows-link",
-]
-
-[[package]]
 name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -235,11 +231,10 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 name = "orkester"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "ctrlc",
- "libloading 0.9.0",
  "orkester-plugin",
- "serde",
  "serde_json",
 ]
 
@@ -247,7 +242,7 @@ dependencies = [
 name = "orkester-plugin"
 version = "0.1.0"
 dependencies = [
- "libloading 0.8.9",
+ "libloading",
  "serde",
  "serde_json",
 ]
