@@ -109,7 +109,7 @@ unsafe fn call_json(
     ctx: AbiCallContext,
     type_id: u32,
 ) -> String {
-    let req = AbiMessage::empty(1, type_id, FLAG_NONE);
+    let req = AbiMessage::empty(1, type_id, 0);
     let mut out = AbiOwnedMessage::empty();
 
     let rc = unsafe { call(ctx, req, &mut out) };
@@ -133,7 +133,7 @@ unsafe fn call_create_component(
     let req = AbiMessage {
         id: 1,
         type_id: 1002,
-        flags: FLAG_NONE,
+        flags: 0,
         payload: payload.as_ptr(),
         len: payload.len() as u32,
     };
@@ -142,7 +142,7 @@ unsafe fn call_create_component(
 
     let rc = unsafe { call(ctx, req, &mut out) };
     assert_eq!(rc, 0);
-    assert_eq!(out.type_id, TYPE_COMPONENT);
+    assert_eq!(out.type_id, orkester_plugin::sdk::protocol::constants::MSG_TYPE_POINTER);
 
     let ptr_bytes = unsafe { std::slice::from_raw_parts(out.payload, out.len as usize) };
     let mut arr = [0u8; std::mem::size_of::<usize>()];
@@ -162,8 +162,8 @@ unsafe fn call_utf8(
 ) -> String {
     let req = AbiMessage {
         id: 1,
-        type_id: TYPE_UTF8,
-        flags: FLAG_NONE,
+        type_id: orkester_plugin::sdk::protocol::constants::MSG_TYPE_STRING,
+        flags: 0,
         payload: input.as_ptr(),
         len: input.len() as u32,
     };

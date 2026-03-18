@@ -1,34 +1,72 @@
-use core::fmt;
+use std::fmt;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+/// Every error that can surface through the Orkester plugin SDK.
+#[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
-    InvalidMessage,
-    InvalidOwnedMessage,
-    InvalidUtf8,
-    NullOutput,
-    NullHostApi,
-    HostCallFailed,
-    PluginCallFailed,
-    Panic,
-    Custom(&'static str),
-}
+    /// Failed to load or link the shared library.
+    Library(libloading::Error),
 
-pub type Result<T> = core::result::Result<T, Error>;
+    /// The plugin returned a null component pointer.
+    NullComponent,
+
+    /// JSON serialization or deserialization failed.
+    Json(serde_json::Error),
+
+    /// Response payload bytes were not valid UTF-8.
+    Utf8(std::str::Utf8Error),
+
+    /// A response carried an unexpected payload format code.
+    UnexpectedFormat { expected: u32, got: u32 },
+
+    /// A pointer-typed response payload had the wrong byte length.
+    InvalidPointerPayload,
+}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidMessage => f.write_str("invalid message"),
-            Self::InvalidOwnedMessage => f.write_str("invalid owned message"),
-            Self::InvalidUtf8 => f.write_str("invalid utf-8"),
-            Self::NullOutput => f.write_str("null output pointer"),
-            Self::NullHostApi => f.write_str("null host api"),
-            Self::HostCallFailed => f.write_str("host call failed"),
-            Self::PluginCallFailed => f.write_str("plugin call failed"),
-            Self::Panic => f.write_str("panic across ffi boundary"),
-            Self::Custom(message) => f.write_str(message),
+            Error::Library(e) => write!(f, "failed to load plugin library: {e}"),
+            Error::NullComponent => write!(f, "plugin returned a null component pointer"),
+            Error::Json(e) => write!(f, "JSON error: {e}"),
+            Error::Utf8(e) => write!(f, "payload is not valid UTF-8: {e}"),
+            Error::UnexpectedFormat { expected, got } => write!(
+                f,
+                "unexpected response format (expected {expected}, got {got})"
+            ),
+            Error::InvalidPointerPayload => write!(
+                f,
+                "response payload length does not match a component pointer"
+            ),
         }
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Library(e) => Some(e),
+            Error::Json(e) => Some(e),
+            Error::Utf8(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<libloading::Error> for Error {
+    fn from(e: libloading::Error) -> Self {
+        Error::Library(e)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(e: serde_json::Error) -> Self {
+        Error::Json(e)
+    }
+}
+
+impl From<std::str::Utf8Error> for Error {
+    fn from(e: std::str::Utf8Error) -> Self {
+        Error::Utf8(e)
+    }
+}

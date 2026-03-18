@@ -5,3 +5,6 @@ edition = "2024"
 description = "Raw ABI and Rust SDK for Orkester plugins"
 
 [dependencies]
+libloading = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -1,15 +1,15 @@
-mod component;
-mod error;
-mod host;
-mod message;
-mod owned_message;
-mod plugin;
-pub(crate) mod runtime;
+pub mod component;
+pub mod constants;
+pub mod error;
+pub mod host;
+pub mod message;
+pub mod metadata;
+pub mod plugin;
 
 pub use component::Component;
-pub use error::{Error, Result};
-pub use host::Host;
-pub use message::Message;
-pub use owned_message::OwnedMessage;
-pub use plugin::Plugin;
-pub use runtime::create_component_box;
+pub use constants::*;
+pub use error::Error;
+pub use host::{HostHandler, NullHostHandler, OrkesterHost};
+pub use message::{ComponentResponse, Request};
+pub use metadata::ComponentKind;
+pub use plugin::{Plugin, COMPONENT_BUILDER_SYMBOL};

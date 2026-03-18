@@ -4,8 +4,8 @@ pub fn json_response<T: serde::Serialize>(id: u64, value: &T) -> Result<OwnedMes
     let payload = serde_json::to_vec(value).map_err(|_| Error::Custom("json serialization failed"))?;
     Ok(OwnedMessage::new(
         id,
-        orkester_plugin::abi::TYPE_JSON,
-        orkester_plugin::abi::FLAG_RESPONSE,
+        orkester_plugin::sdk::protocol::constants::MSG_TYPE_JSON,
+        0,
         payload,
     ))
 }
@@ -13,8 +13,8 @@ pub fn json_response<T: serde::Serialize>(id: u64, value: &T) -> Result<OwnedMes
 pub fn utf8_response(id: u64, text: impl Into<String>) -> OwnedMessage {
     OwnedMessage::new(
         id,
-        orkester_plugin::abi::TYPE_UTF8,
-        orkester_plugin::abi::FLAG_RESPONSE,
+        orkester_plugin::sdk::protocol::constants::MSG_TYPE_STRING,
+        0,
         text.into().into_bytes(),
     )
 }

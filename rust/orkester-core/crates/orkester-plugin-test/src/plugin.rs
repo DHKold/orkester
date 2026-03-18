@@ -1,17 +1,12 @@
-use orkester_plugin::sdk::{create_component_box, OwnedMessage, Plugin, Result, Host, Message};
-
-use crate::{
-    components,
-    protocol::{
-        ComponentDescriptor,
-        CreateComponentRequest,
-        PluginMetadata,
-        MSG_CREATE_COMPONENT,
-        MSG_GET_PLUGIN_METADATA,
-        MSG_LIST_COMPONENTS,
-    },
-    util,
+use orkester_plugin::sdk::{
+    create_component_box, Component, Host, Message, OwnedMessage, Plugin, Result,
 };
+use orkester_plugin::sdk::protocol::{
+    CreateComponentRequest, PluginMetadata,
+    MSG_CREATE_COMPONENT, MSG_GET_METADATA, MSG_LIST_COMPONENTS,
+};
+
+use crate::components;
 
 pub struct TestPlugin {
     #[allow(dead_code)]
@@ -25,26 +20,27 @@ impl Plugin for TestPlugin {
 
     fn handle(&mut self, request: Message<'_>) -> Result<OwnedMessage> {
         match request.type_id() {
-            MSG_GET_PLUGIN_METADATA => {
+            MSG_GET_METADATA => {
                 let metadata = PluginMetadata {
                     name: "orkester-plugin-test".to_string(),
                     version: "0.1.0".to_string(),
-                    description: "Example plugin for Orkester".to_string(),
+                    description: Some("Example plugin for Orkester".to_string()),
                     authors: vec!["OpenAI".to_string()],
                     tags: vec!["example".to_string(), "test".to_string()],
+                    extra: serde_json::Map::new(),
                 };
 
-                util::json_response(request.id(), &metadata)
+                json_response(request.id(), MSG_GET_METADATA, &metadata)
             }
 
             MSG_LIST_COMPONENTS => {
                 let components = vec![
-                    components::echo::EchoComponent::descriptor(),
-                    components::upper::UpperComponent::descriptor(),
-                    components::counter::CounterComponent::descriptor(),
+                    components::counter::CounterComponent::metadata(),
+                    components::upper::UpperComponent::metadata(),
+                    components::echo::EchoComponent::metadata(),
                 ];
 
-                util::json_response(request.id(), &components)
+                json_response(request.id(), MSG_LIST_COMPONENTS, &components)
             }
 
             MSG_CREATE_COMPONENT => {
@@ -52,17 +48,12 @@ impl Plugin for TestPlugin {
                 Ok(create_component_box(component))
             }
 
-            _ => Ok(util::utf8_response(request.id(), "unsupported root request")),
+            _ => json_error(request.id(), "unsupported_request", "unsupported root request"),
         }
     }
 
-    fn create_component(&mut self, request: Message<'_>) -> Result<Box<dyn orkester_plugin::sdk::Component>> {
-        if request.type_id() != MSG_CREATE_COMPONENT {
-            return Err(orkester_plugin::sdk::Error::Custom("invalid create request type"));
-        }
-
-        let create: CreateComponentRequest = serde_json::from_slice(request.payload())
-            .map_err(|_| orkester_plugin::sdk::Error::Custom("invalid create request payload"))?;
+    fn create_component(&mut self, request: Message<'_>) -> Result<Box<dyn Component>> {
+        let create: CreateComponentRequest = decode_json(request)?;
 
         components::create_component(&create.component_id, &create.config)
             .ok_or(orkester_plugin::sdk::Error::Custom("unknown component"))

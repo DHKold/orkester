@@ -1,6 +1,5 @@
 use orkester_plugin::sdk::{Component, Host, Message, OwnedMessage, Result};
-
-use crate::protocol::ComponentDescriptor;
+use orkester_plugin::sdk::protocol::ComponentMetadata;
 
 pub struct UpperComponent;
 
@@ -9,11 +8,14 @@ impl UpperComponent {
         Self
     }
 
-    pub fn descriptor() -> ComponentDescriptor {
-        ComponentDescriptor {
+    pub fn metadata() -> ComponentMetadata {
+        ComponentMetadata {
             id: "upper".to_string(),
-            name: "Upper Component".to_string(),
-            description: "A simple component that converts incoming UTF-8 messages to uppercase.".to_string(),
+            name: Some("Uppercase Converter".to_string()),
+            description: Some("Converts the input string to uppercase.".to_string()),
+            input_types: vec![orkester_plugin::sdk::protocol::constants::MSG_TYPE_STRING],
+            output_types: vec![orkester_plugin::sdk::protocol::constants::MSG_TYPE_STRING],
+            extra: serde_json::Map::new(),
         }
     }
 }
@@ -24,8 +26,8 @@ impl Component for UpperComponent {
 
         Ok(OwnedMessage::new(
             request.id(),
-            orkester_plugin::abi::TYPE_UTF8,
-            orkester_plugin::abi::FLAG_RESPONSE,
+            orkester_plugin::sdk::protocol::constants::MSG_TYPE_STRING,
+            0,
             text.into_bytes(),
         ))
     }
@@ -35,16 +37,15 @@ impl Component for UpperComponent {
 mod tests {
     use super::*;
     use orkester_plugin::sdk::{Host, Message};
-    use crate::protocol::TYPE_UTF8;
     use core::ptr;
 
     #[test]
     fn upper_converts_to_uppercase() {
         let mut comp = UpperComponent::new();
         let host = Host::new(ptr::null());
-        let msg = Message::new(1, TYPE_UTF8, 0, b"Hello");
+        let msg = Message::new(1, orkester_plugin::sdk::protocol::constants::MSG_TYPE_STRING, 0, b"Hello");
         let res = comp.handle(host, msg).expect("handle failed");
         assert_eq!(res.utf8().unwrap(), "HELLO");
-        assert_eq!(res.type_id(), TYPE_UTF8);
+        assert_eq!(res.type_id(), orkester_plugin::sdk::protocol::constants::MSG_TYPE_STRING);
     }
 }

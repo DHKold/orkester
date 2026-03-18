@@ -1,6 +1,5 @@
 use orkester_plugin::sdk::{Component, Host, Message, OwnedMessage, Result};
-
-use crate::protocol::ComponentDescriptor;
+use orkester_plugin::sdk::protocol::ComponentMetadata;
 
 pub struct CounterComponent {
     value: u64,
@@ -11,11 +10,14 @@ impl CounterComponent {
         Self { value: initial }
     }
 
-    pub fn descriptor() -> ComponentDescriptor {
-        ComponentDescriptor {
+    pub fn metadata() -> ComponentMetadata {
+        ComponentMetadata {
             id: "counter".to_string(),
-            name: "Counter Component".to_string(),
-            description: "A simple counter component that can be incremented, decremented, or reset.".to_string(),
+            name: Some("Counter Component".to_string()),
+            description: Some("A simple counter component that can be incremented, decremented, or reset.".to_string()),
+            input_types: vec![orkester_plugin::sdk::protocol::constants::MSG_TYPE_STRING],
+            output_types: vec![orkester_plugin::sdk::protocol::constants::MSG_TYPE_STRING],
+            extra: serde_json::Map::new(),
         }
     }
 }
@@ -33,8 +35,8 @@ impl Component for CounterComponent {
 
         Ok(OwnedMessage::new(
             request.id(),
-            orkester_plugin::abi::TYPE_UTF8,
-            orkester_plugin::abi::FLAG_RESPONSE,
+            orkester_plugin::sdk::protocol::constants::MSG_TYPE_STRING,
+            0,
             self.value.to_string().into_bytes(),
         ))
     }
