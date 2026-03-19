@@ -1,0 +1,67 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://huforge.com/schemas/orkester/taskrunner.v1.yaml"
+title: Orkester TaskRunner v1
+type: object
+
+allOf:
+  - $ref: "common/document.yaml"
+
+required:
+  - kind
+  - name
+  - version
+  - spec
+
+properties:
+  kind:
+    const: "orkester/taskrunner:1.0"
+
+  spec:
+    type: object
+    required:
+      - kind
+    properties:
+      enabled:
+        type: boolean
+        default: true
+
+      kind:
+        type: string
+        minLength: 1
+
+      profile_ref:
+        type: string
+        pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*:[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.-]+)?$"
+
+      scope:
+        type: object
+        properties:
+          namespaces:
+            type: array
+            default: []
+            items:
+              type: string
+              minLength: 1
+        additionalProperties: false
+
+      capacity:
+        type: object
+        properties:
+          max_tasks:
+            type: integer
+            minimum: 1
+        additionalProperties: false
+
+      config:
+        type: object
+        additionalProperties: true
+
+    additionalProperties: false
+
+  status:
+    type: object
+    properties:
+      deleted:
+        type: boolean
+        default: false
+    additionalProperties: true

@@ -1,0 +1,52 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://huforge.com/schemas/orkester/taskrunnerprofile.v1.yaml"
+title: Orkester TaskRunnerProfile v1
+type: object
+
+allOf:
+  - $ref: "common/document.yaml"
+
+required:
+  - kind
+  - name
+  - version
+  - spec
+
+properties:
+  kind:
+    const: "orkester/taskrunnerprofile:1.0"
+
+  spec:
+    type: object
+    required:
+      - kind
+      - config
+    properties:
+      kind:
+        type: string
+        minLength: 1
+
+      config:
+        type: object
+        additionalProperties: true
+
+      allow_override:
+        type: boolean
+        default: false
+
+      allowed_override_fields:
+        type: array
+        default: []
+        items:
+          type: string
+          minLength: 1
+
+    additionalProperties: false
+
+  status:
+    type: object
+    properties:
+      deleted:
+        type: boolean
+        default: false
+    additionalProperties: true

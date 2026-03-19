@@ -1,0 +1,5 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://www.huforge.com/schemas/orkester/common/task-ref.yaml"
+title: Task Reference
+type: string
+pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*(:[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9._-]+)?)?$"

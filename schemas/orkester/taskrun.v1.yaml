@@ -1,0 +1,105 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://huforge.com/schemas/orkester/taskrun.v1.yaml"
+title: Orkester TaskRun v1
+type: object
+
+allOf:
+  - $ref: "common/document.yaml"
+
+required:
+  - kind
+  - name
+  - version
+  - spec
+  - status
+
+properties:
+  kind:
+    const: "orkester/taskrun:1.0"
+
+  spec:
+    type: object
+    required:
+      - work_run_ref
+      - task_ref
+      - task_name
+    properties:
+      work_run_ref:
+        type: string
+        minLength: 1
+
+      task_name:
+        type: string
+        minLength: 1
+
+      task_ref:
+        $ref: "common/task-ref.yaml"
+
+      attempt:
+        type: integer
+        minimum: 1
+        default: 1
+
+      inputs:
+        type: object
+        default: {}
+        additionalProperties: true
+
+    additionalProperties: false
+
+  status:
+    type: object
+    required:
+      - deleted
+      - phase
+    properties:
+      deleted:
+        type: boolean
+        default: false
+
+      phase:
+        type: string
+        enum:
+          [
+            pending,
+            ready,
+            starting,
+            running,
+            succeeded,
+            failed,
+            cancelled,
+            skipped,
+          ]
+
+      started_at:
+        type: string
+        format: date-time
+
+      finished_at:
+        type: string
+        format: date-time
+
+      worker:
+        type: string
+
+      task_runner:
+        type: string
+
+      external_id:
+        type: string
+
+      outputs:
+        type: object
+        default: {}
+        additionalProperties: true
+
+      error:
+        type: object
+        properties:
+          code:
+            type: string
+          message:
+            type: string
+        additionalProperties: true
+
+    additionalProperties: true

@@ -1,0 +1,97 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://huforge.com/schemas/orkester/workrun.v1.yaml"
+title: Orkester WorkRun v1
+type: object
+
+allOf:
+  - $ref: "common/document.yaml"
+
+required:
+  - kind
+  - name
+  - version
+  - spec
+  - status
+
+properties:
+  kind:
+    const: "orkester/workrun:1.0"
+
+  spec:
+    type: object
+    required:
+      - work_ref
+    properties:
+      work_ref:
+        type: string
+        pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*:[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.-]+)?$"
+
+      trigger:
+        type: object
+        properties:
+          kind:
+            type: string
+            enum: [cron, manual, api, system]
+          ref:
+            type: string
+        additionalProperties: false
+
+      params:
+        type: object
+        default: {}
+        additionalProperties: true
+
+    additionalProperties: false
+
+  status:
+    type: object
+    required:
+      - deleted
+      - phase
+    properties:
+      deleted:
+        type: boolean
+        default: false
+
+      phase:
+        type: string
+        enum: [pending, ready, running, succeeded, failed, cancelled]
+
+      started_at:
+        type: string
+        format: date-time
+
+      finished_at:
+        type: string
+        format: date-time
+
+      task_counts:
+        type: object
+        properties:
+          total:
+            type: integer
+            minimum: 0
+          pending:
+            type: integer
+            minimum: 0
+          running:
+            type: integer
+            minimum: 0
+          succeeded:
+            type: integer
+            minimum: 0
+          failed:
+            type: integer
+            minimum: 0
+          cancelled:
+            type: integer
+            minimum: 0
+          skipped:
+            type: integer
+            minimum: 0
+        additionalProperties: false
+
+      worker:
+        type: string
+
+    additionalProperties: true

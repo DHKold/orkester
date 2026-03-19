@@ -1,0 +1,120 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://huforge.com/schemas/orkester/work.v1.yaml"
+title: Orkester Work v1
+type: object
+
+allOf:
+  - $ref: "common/document.yaml"
+
+required:
+  - kind
+  - name
+  - version
+  - spec
+
+properties:
+  kind:
+    const: "orkester/work:1.0"
+
+  spec:
+    type: object
+    required:
+      - tasks
+    properties:
+      params:
+        type: array
+        default: []
+        items:
+          type: object
+          required: [name, type]
+          properties:
+            name:
+              type: string
+              minLength: 1
+            type:
+              type: string
+              minLength: 1
+            required:
+              type: boolean
+              default: false
+            default: true
+          additionalProperties: true
+
+      tasks:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          required:
+            - name
+            - task_ref
+          properties:
+            name:
+              type: string
+              minLength: 1
+              pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+
+            task_ref:
+              $ref: "common/task-ref.yaml"
+
+            depends_on:
+              type: array
+              default: []
+              items:
+                type: string
+                minLength: 1
+
+            inputs:
+              type: object
+              default: {}
+              additionalProperties: true
+
+            condition:
+              type: string
+
+            retry_count:
+              type: integer
+              minimum: 0
+
+            timeout_seconds:
+              type: integer
+              minimum: 1
+
+            execution:
+              type: object
+              properties:
+                profile:
+                  type: string
+                  minLength: 1
+                override:
+                  type: object
+                  default: {}
+              additionalProperties: false
+          additionalProperties: false
+
+      concurrency:
+        type: object
+        properties:
+          max_parallel_tasks:
+            type: integer
+            minimum: 1
+        additionalProperties: false
+
+      failure_policy:
+        type: object
+        properties:
+          mode:
+            type: string
+            enum: [fail_fast, continue]
+            default: fail_fast
+        additionalProperties: false
+
+    additionalProperties: false
+
+  status:
+    type: object
+    properties:
+      deleted:
+        type: boolean
+        default: false
+    additionalProperties: true
