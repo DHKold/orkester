@@ -8,7 +8,7 @@ pub trait PluginComponent: Sized {
 
     /// Consume `self` and produce a stable ABI vtable.
     ///
-    /// Implementors should use [`crate::sdk::AbiHandlerBuilder`] to construct
+    /// Implementors should use [`crate::sdk::AbiComponentBuilder`] to construct
     /// the return value.
     fn to_abi(self) -> AbiComponent;
 }

@@ -50,7 +50,7 @@ mod echo_plugin {
         }
 
         pub fn to_abi(self) -> abi::AbiComponent {
-            sdk::AbiHandlerBuilder::new(self.host)
+            sdk::AbiComponentBuilder::new(self.host)
                  .with_handler("example/echo", Self::echo) // Register the `echo` method as a handler for requests with the "example/echo" action.
                  .with_handler("orkester/GetMetadata", Self::get_metadata) // Register the `get_metadata` method as a handler for the standard "GetMetadata" action, which allows the host to query the component's metadata.
                  .with_factory("example/TotoComponent:1.2", Self::make_toto, TotoComponent::get_metadata) // Register the `make_toto` method as a factory for creating `TotoComponent` subcomponents.

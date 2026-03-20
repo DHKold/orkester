@@ -5,24 +5,24 @@ use crate::abi::AbiComponent;
 use crate::sdk::{host::Host, message::format, metadata::ComponentMetadata};
 use dispatch::{build_component, DispatchTable, Factory, Handler};
 
-// ── AbiHandlerBuilder ─────────────────────────────────────────────────────────
+// ── AbiComponentBuilder ─────────────────────────────────────────────────────────
 
 /// Fluent builder that wires typed Rust methods to the ABI dispatch table.
 ///
 /// # Example
 /// ```ignore
-/// sdk::AbiHandlerBuilder::new(host)
+/// sdk::AbiComponentBuilder::new(host)
 ///     .with_handler("example/echo", EchoComponent::echo)
 ///     .with_factory("example/Sub:1.0", EchoComponent::make_sub, Sub::get_metadata)
 ///     .build(component)
 /// ```
-pub struct AbiHandlerBuilder<C: Send + 'static> {
+pub struct AbiComponentBuilder<C: Send + 'static> {
     _host: Host,
     handlers: HashMap<String, Handler<C>>,
     factories: HashMap<String, Factory<C>>,
 }
 
-impl<C: Send + 'static> AbiHandlerBuilder<C> {
+impl<C: Send + 'static> AbiComponentBuilder<C> {
     /// Create a builder.  The `host` is stored so the built component has a
     /// valid back-channel to the runtime.
     pub fn new(host: Host) -> Self {
