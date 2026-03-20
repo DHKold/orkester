@@ -102,11 +102,19 @@ unsafe impl Send for Host {}
 
 /// A plugin whose root component is live and ready for calls.
 pub struct LoadedPlugin {
-    component: *mut crate::abi::AbiComponent,
+    pub(crate) component: *mut crate::abi::AbiComponent,
     _lib: libloading::Library,
 }
 
 impl LoadedPlugin {
+    /// Return the raw root component pointer.
+    ///
+    /// # Safety
+    /// The pointer is valid as long as this `LoadedPlugin` is alive.
+    pub fn root_ptr(&self) -> *mut crate::abi::AbiComponent {
+        self.component
+    }
+
     /// Return a [`ComponentHandle`] for the root component.
     ///
     /// The handle borrows this plugin — it must not outlive it.

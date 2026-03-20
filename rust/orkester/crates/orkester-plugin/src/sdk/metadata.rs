@@ -1,5 +1,5 @@
 /// Descriptive metadata attached to a component kind.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ComponentMetadata {
     /// Fully-qualified kind identifier, e.g. `"example/EchoComponent:1.0"`.
     pub kind: String,

@@ -129,22 +129,28 @@ pub unsafe extern "C" fn dispatch_handle<C: Send + 'static>(
     this: *mut AbiComponent,
     req: AbiRequest,
 ) -> AbiResponse {
-    let table = &mut *((*this).context as *mut DispatchTable<C>);
-    table.dispatch(&req).into_abi()
+    unsafe {
+        let table = &mut *((*this).context as *mut DispatchTable<C>);
+        table.dispatch(&req).into_abi()
+    }
 }
 
 pub unsafe extern "C" fn dispatch_free_response(_: *mut AbiComponent, res: AbiResponse) {
-    if !res.payload.is_null() && res.payload_len > 0 {
-        drop(Box::from_raw(slice::from_raw_parts_mut(
-            res.payload,
-            res.payload_len as usize,
-        )));
+    unsafe {
+        if !res.payload.is_null() && res.payload_len > 0 {
+            drop(Box::from_raw(slice::from_raw_parts_mut(
+                res.payload,
+                res.payload_len as usize,
+            )));
+        }
     }
 }
 
 pub unsafe extern "C" fn dispatch_free<C: Send + 'static>(this: *mut AbiComponent) {
-    drop(Box::from_raw((*this).context as *mut DispatchTable<C>));
-    drop(Box::from_raw(this));
+    unsafe {
+        drop(Box::from_raw((*this).context as *mut DispatchTable<C>));
+        drop(Box::from_raw(this));
+    }
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
@@ -153,7 +159,7 @@ unsafe fn read_str(ptr: *const u8, len: u32) -> &'static str {
     if ptr.is_null() || len == 0 {
         return "";
     }
-    let bytes = slice::from_raw_parts(ptr, len as usize);
+    let bytes = unsafe { slice::from_raw_parts(ptr, len as usize) };
     std::str::from_utf8(bytes).unwrap_or("")
 }
 
@@ -161,7 +167,7 @@ unsafe fn read_bytes(ptr: *const u8, len: u32) -> &'static [u8] {
     if ptr.is_null() || len == 0 {
         return &[];
     }
-    slice::from_raw_parts(ptr, len as usize)
+    unsafe { slice::from_raw_parts(ptr, len as usize) }
 }
 
 // ── build helper ─────────────────────────────────────────────────────────────

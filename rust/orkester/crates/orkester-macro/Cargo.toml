@@ -1,10 +1,13 @@
 [package]
 name = "orkester-macro"
 version = "0.1.0"
-description = "Generic Orkester host CLI to load and orchestrate components"
+description = "Procedural macros for the Orkester plugin SDK"
 edition = "2024"
 
 [lib]
 proc-macro = true
 
 [dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }

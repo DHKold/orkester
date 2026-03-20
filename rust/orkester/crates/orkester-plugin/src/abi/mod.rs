@@ -1,4 +1,3 @@
-#[repr(C)]
 pub const ORKESTER_ABI_VERSION: u32 = 1;
 
 #[repr(C)]

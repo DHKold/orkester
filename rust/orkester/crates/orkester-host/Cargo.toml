@@ -10,4 +10,11 @@ path = "src/main.rs"
 
 [dependencies]
 orkester-plugin = { path = "../orkester-plugin" }
-libloading = "0.9"
+anyhow  = "1"
+clap    = { version = "4", features = ["derive"] }
+ctrlc   = "3"
+serde   = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+toml    = "0.8"
+walkdir = "2"

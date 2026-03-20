@@ -84,7 +84,7 @@ impl Deserializer {
         component: *mut AbiComponent,
         res: AbiResponse,
     ) -> Result<*mut AbiComponent> {
-        let fmt = unsafe { read_format(&res) };
+        let fmt = unsafe { read_format(&res) }.to_owned();
         if fmt != format::COMPONENT {
             free_response(component, res);
             return Err(format!("expected format '{}', got '{fmt}'", format::COMPONENT).into());
@@ -123,7 +123,7 @@ unsafe fn read_format(res: &AbiResponse) -> &str {
     if res.format.is_null() || res.format_len == 0 {
         return format::JSON;
     }
-    let bytes = slice::from_raw_parts(res.format, res.format_len as usize);
+    let bytes = unsafe { slice::from_raw_parts(res.format, res.format_len as usize) };
     std::str::from_utf8(bytes).unwrap_or(format::JSON)
 }
 
@@ -131,5 +131,5 @@ unsafe fn read_payload(res: &AbiResponse) -> &[u8] {
     if res.payload.is_null() || res.payload_len == 0 {
         return &[];
     }
-    slice::from_raw_parts(res.payload, res.payload_len as usize)
+    unsafe { slice::from_raw_parts(res.payload, res.payload_len as usize) }
 }

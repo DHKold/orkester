@@ -11,22 +11,38 @@ use dispatch::{build_component, DispatchTable, Factory, Handler};
 ///
 /// # Example
 /// ```ignore
-/// sdk::AbiComponentBuilder::new(host)
+/// sdk::AbiComponentBuilder::new()
 ///     .with_handler("example/echo", EchoComponent::echo)
 ///     .with_factory("example/Sub:1.0", EchoComponent::make_sub, Sub::get_metadata)
 ///     .build(component)
 /// ```
 pub struct AbiComponentBuilder<C: Send + 'static> {
-    _host: Host,
+    _host: Option<Host>,
+    meta: Option<ComponentMetadata>,
+    factory_metas: Vec<ComponentMetadata>,
     handlers: HashMap<String, Handler<C>>,
     factories: HashMap<String, Factory<C>>,
 }
 
 impl<C: Send + 'static> AbiComponentBuilder<C> {
-    /// Create a builder.  The `host` is stored so the built component has a
-    /// valid back-channel to the runtime.
-    pub fn new(host: Host) -> Self {
-        Self { _host: host, handlers: HashMap::new(), factories: HashMap::new() }
+    /// Create a builder without a host back-channel.
+    ///
+    /// Sufficient for components that only respond to incoming requests and
+    /// do not need to emit requests back to the host.
+    pub fn new() -> Self {
+        Self { _host: None, meta: None, factory_metas: Vec::new(), handlers: HashMap::new(), factories: HashMap::new() }
+    }
+
+    /// Create a builder that keeps a host reference for outbound calls.
+    pub fn new_with_host(host: Host) -> Self {
+        Self { _host: Some(host), meta: None, factory_metas: Vec::new(), handlers: HashMap::new(), factories: HashMap::new() }
+    }
+
+    /// Attach component metadata.  When set, the builder automatically registers
+    /// an `"orkester/GetMetadata"` handler that returns this metadata as JSON.
+    pub fn with_metadata(mut self, meta: ComponentMetadata) -> Self {
+        self.meta = Some(meta);
+        self
     }
 
     // ── Handlers ──────────────────────────────────────────────────────────
@@ -62,7 +78,7 @@ impl<C: Send + 'static> AbiComponentBuilder<C> {
         mut self,
         kind: &str,
         f: F,
-        _meta: fn() -> ComponentMetadata,
+        meta: fn() -> ComponentMetadata,
     ) -> Self
     where
         Cfg: serde::de::DeserializeOwned + 'static,
@@ -70,6 +86,7 @@ impl<C: Send + 'static> AbiComponentBuilder<C> {
         E: std::fmt::Display,
         F: Fn(&mut C, Cfg) -> Result<Sub, E> + Send + Sync + 'static,
     {
+        self.factory_metas.push(meta());
         let factory: Factory<C> = Box::new(move |component, fmt, payload| {
             let cfg: Cfg = format::decode(fmt, payload).map_err(|e| e.to_string())?;
             let sub = f(component, cfg).map_err(|e| e.to_string())?;
@@ -122,10 +139,27 @@ impl<C: Send + 'static> AbiComponentBuilder<C> {
     /// Box::into_raw(Box::new(root_component.to_abi()))
     /// ```
     pub fn build(self, component: C) -> AbiComponent {
-        build_component(DispatchTable {
-            component,
-            handlers: self.handlers,
-            factories: self.factories,
-        })
+        let mut handlers = self.handlers;
+        let factories = self.factories;
+
+        // Auto-register GetMetadata if metadata was provided.
+        if let Some(meta) = self.meta {
+            let meta_json = serde_json::to_vec(&meta).unwrap_or_default();
+            handlers.insert(
+                "orkester/GetMetadata".to_string(),
+                Box::new(move |_, _, _| Ok(meta_json.clone())),
+            );
+        }
+
+        // Auto-register ListComponents from collected factory metadata.
+        if !self.factory_metas.is_empty() {
+            let list_json = serde_json::to_vec(&self.factory_metas).unwrap_or_default();
+            handlers.insert(
+                "orkester/ListComponents".to_string(),
+                Box::new(move |_, _, _| Ok(list_json.clone())),
+            );
+        }
+
+        build_component(DispatchTable { component, handlers, factories })
     }
 }
