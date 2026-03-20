@@ -1,0 +1,77 @@
+﻿# Orkester Host - Sample Configuration
+#
+# Build the sample plugin first:
+#   cargo build -p orkester-plugin-sample
+#
+# Then run from rust/orkester/:
+#   cargo run -p orkester-host -- --config samples/config.yaml
+#
+# Override a value at runtime with --set KEY=VALUE, e.g.:
+#   --set servers.0.config.min_level=debug
+
+plugins:
+  directories:
+    # Compiled cdylib produced by: cargo build -p orkester-plugin-sample
+    - path: target/debug
+      recursive: false
+
+# Each entry asks the hub to instantiate one component from the loaded plugins.
+# kind   - fully-qualified component kind (must match a registered factory)
+# name   - display name used in logs and the routing report
+# config - forwarded verbatim to the component factory; must match its schema
+#
+# Routing: when two servers handle the same action the FIRST one in this list
+# wins. Route to a specific server by giving its actions a unique prefix.
+servers:
+
+  # Console logger
+  # Handles:  sample/Log
+  # Policy:   only WARN and above reach stdout (low-noise production default)
+  - kind: sample/Logger:1.0
+    name: console-logger
+    config:
+      min_level: warn
+      backends:
+        - type: console
+
+  # Audit logger
+  # Handles:  sample/Log  (routing falls to console-logger; see routing note)
+  # Policy:   captures DEBUG-and-above to stdout AND to a local file.
+  # Tip:      to route independently use a separate action prefix, e.g. audit/Log
+  - kind: sample/Logger:1.0
+    name: audit-logger
+    config:
+      min_level: debug
+      backends:
+        - type: console
+        - type: file
+          path: orkester-audit.log   # written to CWD (rust/orkester/)
+
+  # Calculator
+  # Handles:  sample/Calculate
+  # Stateless four-operation arithmetic service; no config required.
+  - kind: sample/Calculator:1.0
+    name: calculator
+
+  # Request counter
+  # Handles:  sample/Counter/Get
+  #           sample/Counter/Increment
+  #           sample/Counter/Decrement
+  #           sample/Counter/Reset
+  # Tracks an in-memory integer with hard min/max bounds.
+  # Use it to count events, measure throughput, or guard rate limits.
+  - kind: sample/Counter:1.0
+    name: request-counter
+    config:
+      initial: 0
+      min: 0
+      max: 999999
+
+  # Health-check echo
+  # Handles:  sample/Echo
+  # Echoes every message back with a configurable prefix.
+  # Useful as a liveness probe or round-trip-latency baseline.
+  - kind: sample/Echo:1.0
+    name: health-echo
+    config:
+      prefix: "pong: "

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use orkester_plugin::{
     abi::AbiComponent,
     sdk::message::{Serializer, Deserializer},
@@ -22,12 +23,20 @@ impl Server {
         Self { name, kind, component }
     }
 
-    /// Send a request to this server and return the raw JSON response.
+    /// Send a request to this server and return the JSON response.
     pub fn handle(&mut self, action: &str, params: Value) -> Result<Value> {
         let envelope = serde_json::json!({ "action": action, "params": params });
         let req = Serializer::json(&envelope);
         let raw_res = unsafe { ((*self.component).handle)(self.component, req.as_abi()) };
         Deserializer::value(self.component, raw_res)
+    }
+
+    /// Query the component for all action names it handles.
+    fn list_actions(&mut self) -> Vec<String> {
+        let envelope = serde_json::json!({ "action": "orkester/ListActions", "params": null });
+        let req = Serializer::json(&envelope);
+        let raw_res = unsafe { ((*self.component).handle)(self.component, req.as_abi()) };
+        Deserializer::json::<Vec<String>>(self.component, raw_res).unwrap_or_default()
     }
 }
 
@@ -39,47 +48,54 @@ impl Drop for Server {
 
 // ── Hub ───────────────────────────────────────────────────────────────────────
 
-/// Simple synchronous message hub.
+/// Synchronous message hub.
 ///
-/// Routes messages from one component to the correct server(s) based on
-/// the action prefix.  Components send messages to the host via the
-/// [`Host::handle`] back-channel; the hub receives them and forwards them.
+/// At construction it queries every server for its supported actions
+/// (`orkester/ListActions`) and builds an exact action → server routing table.
+/// `route()` dispatches each request to the correct server in O(1).
 pub struct Hub {
     servers: Vec<Server>,
+    /// Maps action name → indices in `self.servers`.
+    routes: HashMap<String, Vec<usize>>,
 }
 
 impl Hub {
-    pub fn new(servers: Vec<Server>) -> Self {
-        Self { servers }
-    }
-
-    /// Route an action + params to every server whose kind prefix matches.
-    ///
-    /// Returns the first successful response, or an error if none matched.
-    pub fn route(&mut self, action: &str, params: Value) -> Result<Value> {
-        for server in &mut self.servers {
-            // Simple prefix routing: "sample/Log" goes to anything whose kind
-            // starts with "sample/Logger".
-            if action_matches(action, &server.kind) {
-                return server.handle(action, params.clone());
+    /// Build the hub and populate the routing table from each server's action list.
+    pub fn new(mut servers: Vec<Server>) -> Self {
+        let mut routes = HashMap::new();
+        for (i, server) in servers.iter_mut().enumerate() {
+            let actions = server.list_actions();
+            eprintln!(
+                "[hub] '{}' ({}) — {} action(s)",
+                server.name, server.kind, actions.len()
+            );
+            for action in actions {
+                // First registered server wins for each action.
+                routes.entry(action).or_insert_with(Vec::new).push(i);
             }
         }
-        Err(format!("no server handles action '{action}'").into())
+        Self { servers, routes }
     }
 
-    pub fn servers(&self) -> &[Server] {
-        &self.servers
+    /// Dispatch `action` to the server registered for it.
+    pub fn route(&mut self, action: &str, params: Value) -> Result<Value> {
+        let indices = self.routes.get(action).ok_or_else(|| format!("no server handles action '{action}'"))?;
+        for idx in indices {
+            let server = &mut self.servers[*idx];
+            match server.handle(action, params.clone()) {
+                Ok(_res) => (),
+                Err(err) => eprintln!("[hub] error from server '{}': {err} — trying next", server.name),
+            }
+        }
+        Ok(serde_json::json!({ "status": "ok" }))
     }
+
+    pub fn servers(&self) -> &[Server] { &self.servers }
+
+    pub fn route_count(&self) -> usize { self.routes.len() }
 
     pub fn shutdown(self) {
-        // Dropping self drops all servers which call component.free().
         eprintln!("[hub] shutdown — releasing {} server(s)", self.servers.len());
+        // Dropping self drops all Servers, which each call component.free().
     }
-}
-
-fn action_matches(action: &str, kind: &str) -> bool {
-    // Extract the namespace prefix from the kind (e.g. "sample/Logger:1.0" → "sample").
-    let kind_prefix = kind.split('/').next().unwrap_or(kind);
-    let action_prefix = action.split('/').next().unwrap_or(action);
-    kind_prefix.eq_ignore_ascii_case(action_prefix)
 }

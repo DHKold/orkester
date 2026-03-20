@@ -160,6 +160,15 @@ impl<C: Send + 'static> AbiComponentBuilder<C> {
             );
         }
 
+        // Auto-register ListActions — lets the hub discover routing at startup.
+        // Collected after all system handlers are inserted so the list is complete.
+        let action_names: Vec<String> = handlers.keys().cloned().collect();
+        let actions_json = serde_json::to_vec(&action_names).unwrap_or_default();
+        handlers.insert(
+            "orkester/ListActions".to_string(),
+            Box::new(move |_, _, _| Ok(actions_json.clone())),
+        );
+
         build_component(DispatchTable { component, handlers, factories })
     }
 }
