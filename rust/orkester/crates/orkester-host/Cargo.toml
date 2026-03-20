@@ -1,0 +1,13 @@
+[package]
+name = "orkester-host"
+version = "0.1.0"
+description = "Generic Orkester host CLI to load and orchestrate components"
+edition = "2024"
+
+[[bin]]
+name = "orkester"
+path = "src/main.rs"
+
+[dependencies]
+orkester-plugin = { path = "../orkester-plugin" }
+libloading = "0.9"

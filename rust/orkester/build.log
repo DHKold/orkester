@@ -1,0 +1,184 @@
+   Compiling orkester-plugin v0.1.0 (/orkester/rust/orkester/crates/orkester-plugin)
+error[E0517]: attribute should be applied to a struct, enum, or union
+ --> crates/orkester-plugin/src/abi/mod.rs:1:8
+  |
+1 | #[repr(C)]
+  |        ^
+2 | pub const ORKESTER_ABI_VERSION: u32 = 1;
+  | ---------------------------------------- not a struct, enum, or union
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:132:22
+    |
+132 |     let table = &mut *((*this).context as *mut DispatchTable<C>);
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:128:1
+    |
+128 | / pub unsafe extern "C" fn dispatch_handle<C: Send + 'static>(
+129 | |     this: *mut AbiComponent,
+130 | |     req: AbiRequest,
+131 | | ) -> AbiResponse {
+    | |________________^
+    = note: `#[warn(unsafe_op_in_unsafe_fn)]` (part of `#[warn(rust_2024_compatibility)]`) on by default
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:132:24
+    |
+132 |     let table = &mut *((*this).context as *mut DispatchTable<C>);
+    |                        ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `std::boxed::Box::<T>::from_raw` is unsafe and requires unsafe block
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:138:14
+    |
+138 |           drop(Box::from_raw(slice::from_raw_parts_mut(
+    |  ______________^
+139 | |             res.payload,
+140 | |             res.payload_len as usize,
+141 | |         )));
+    | |__________^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:136:1
+    |
+136 | pub unsafe extern "C" fn dispatch_free_response(_: *mut AbiComponent, res: AbiResponse) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `std::slice::from_raw_parts_mut` is unsafe and requires unsafe block
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:138:28
+    |
+138 |           drop(Box::from_raw(slice::from_raw_parts_mut(
+    |  ____________________________^
+139 | |             res.payload,
+140 | |             res.payload_len as usize,
+141 | |         )));
+    | |_________^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `std::boxed::Box::<T>::from_raw` is unsafe and requires unsafe block
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:146:10
+    |
+146 |     drop(Box::from_raw((*this).context as *mut DispatchTable<C>));
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:145:1
+    |
+145 | pub unsafe extern "C" fn dispatch_free<C: Send + 'static>(this: *mut AbiComponent) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:146:24
+    |
+146 |     drop(Box::from_raw((*this).context as *mut DispatchTable<C>));
+    |                        ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `std::boxed::Box::<T>::from_raw` is unsafe and requires unsafe block
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:147:10
+    |
+147 |     drop(Box::from_raw(this));
+    |          ^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `std::slice::from_raw_parts` is unsafe and requires unsafe block
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:156:17
+    |
+156 |     let bytes = slice::from_raw_parts(ptr, len as usize);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:152:1
+    |
+152 | unsafe fn read_str(ptr: *const u8, len: u32) -> &'static str {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `std::slice::from_raw_parts` is unsafe and requires unsafe block
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:164:5
+    |
+164 |     slice::from_raw_parts(ptr, len as usize)
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> crates/orkester-plugin/src/sdk/handler/dispatch.rs:160:1
+    |
+160 | unsafe fn read_bytes(ptr: *const u8, len: u32) -> &'static [u8] {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0505]: cannot move out of `res` because it is borrowed
+  --> crates/orkester-plugin/src/sdk/message/codec.rs:89:38
+   |
+85 |         res: AbiResponse,
+   |         --- binding `res` declared here
+86 |     ) -> Result<*mut AbiComponent> {
+87 |         let fmt = unsafe { read_format(&res) };
+   |                                        ---- borrow of `res` occurs here
+88 |         if fmt != format::COMPONENT {
+89 |             free_response(component, res);
+   |                                      ^^^ move out of `res` occurs here
+90 |             return Err(format!("expected format '{}', got '{fmt}'", format::COMPONENT).into());
+   |                                                             --- borrow later used here
+   |
+note: if `AbiResponse` implemented `Clone`, you could clone the value
+  --> crates/orkester-plugin/src/abi/mod.rs:38:1
+   |
+38 | pub struct AbiResponse {
+   | ^^^^^^^^^^^^^^^^^^^^^^ consider implementing `Clone` for this type
+   |
+  ::: crates/orkester-plugin/src/sdk/message/codec.rs:87:41
+   |
+87 |         let fmt = unsafe { read_format(&res) };
+   |                                         --- you could clone this value
+
+warning[E0133]: call to unsafe function `std::slice::from_raw_parts` is unsafe and requires unsafe block
+   --> crates/orkester-plugin/src/sdk/message/codec.rs:126:17
+    |
+126 |     let bytes = slice::from_raw_parts(res.format, res.format_len as usize);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> crates/orkester-plugin/src/sdk/message/codec.rs:122:1
+    |
+122 | unsafe fn read_format(res: &AbiResponse) -> &str {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `std::slice::from_raw_parts` is unsafe and requires unsafe block
+   --> crates/orkester-plugin/src/sdk/message/codec.rs:134:5
+    |
+134 |     slice::from_raw_parts(res.payload, res.payload_len as usize)
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> crates/orkester-plugin/src/sdk/message/codec.rs:130:1
+    |
+130 | unsafe fn read_payload(res: &AbiResponse) -> &[u8] {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Some errors have detailed explanations: E0133, E0505, E0517.
+For more information about an error, try `rustc --explain E0133`.
+warning: `orkester-plugin` (lib) generated 11 warnings
+error: could not compile `orkester-plugin` (lib) due to 2 previous errors; 11 warnings emitted

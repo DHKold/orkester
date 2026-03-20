@@ -1,0 +1,10 @@
+[package]
+name = "orkester-macro"
+version = "0.1.0"
+description = "Generic Orkester host CLI to load and orchestrate components"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]

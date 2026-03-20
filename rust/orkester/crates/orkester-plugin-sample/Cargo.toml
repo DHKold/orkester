@@ -1,0 +1,11 @@
+[package]
+name = "orkester-plugin-sample"
+version = "0.1.0"
+description = "Example plugin for Orkester: some servers, generic components, etc."
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+orkester-plugin = { path = "../orkester-plugin" }

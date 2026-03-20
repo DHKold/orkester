@@ -1,0 +1,14 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/workaholic",
+    "crates/orkester-plugin-workaholic",
+    "crates/orkester-plugin-workaholic-opa",
+    "crates/orkester-plugin-workaholic-sql",
+    "crates/orkester-plugin-workaholic-aws",
+]
+
+[profile.release]
+strip = true        # Automatically strip symbols from the binary.
+lto = true          # Use Linked Time Optimization
+codegen-units = 1   # Single code generator to optimize the size
