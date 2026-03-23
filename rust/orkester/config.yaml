@@ -1,12 +1,13 @@
-﻿# Orkester host configuration — dev environment
+# Orkester host configuration — sample setup
 #
-# run.sh does: cd rust && cargo run -- -c /orkester/dev/config.yaml
-# The binary's cwd is /orkester/rust/, so plugin path target/debug resolves
-# to /orkester/rust/target/debug  (or use the volume-mounted build cache).
+# Demonstrates:
+#   - Loading the sample plugin
+#   - Instantiating PingServer, LoggingServer, and RestServer
+#   - Hub routing: log/Entry events → LoggingServer; catch-all → drop
 
 plugins:
   directories:
-    - path: target/debug
+    - path: target/debug   # built by: cargo build -p orkester-plugin-sample
 
 servers:
   - name: ping-server
@@ -20,12 +21,12 @@ servers:
       consumers:
         - kind: console
         - kind: file
-          path: /orkester/dev/data/orkester.log
+          path: orkester.log
 
   - name: rest-server
     kind: sample/RestServer:1.0
     config:
-      bind: "0.0.0.0:8080"
+      bind: "127.0.0.1:8080"
       routes:
         - path:   /ping
           method: GET
@@ -55,21 +56,7 @@ hub:
             targets:
               - name: log-server
 
-    # Route ping/* events to the PingServer
-    - name: route-ping
-      filters:
-        - kind: match
-          config:
-            field: kind
-            value: "^ping/"
-            mode:  regex
-      targets:
-        - kind: components
-          config:
-            targets:
-              - name: ping-server
-
-    # Catch-all: drop anything unmatched
+    # Catch-all: silently drop everything else
     - name: drop-unhandled
       filters:
         - kind: all

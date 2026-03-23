@@ -75,3 +75,99 @@ servers:
     name: health-echo
     config:
       prefix: "pong: "
+
+# ── Message hub ───────────────────────────────────────────────────────────────
+# Deserialized into orkester_plugin::hub::HubConfig and passed to
+# MessageHub::new().  The hub routes inbound Envelope messages to the live
+# component instances registered with with_registry().
+#
+# queue
+#   waiting_capacity  - max envelopes buffered before backpressure fires
+#   dispatch_capacity - channel depth between router and each dispatcher
+#   backpressure      - "reject" (error to caller) | "drop_oldest"
+#
+# routes.rules  - evaluated top-to-bottom; first matching rule wins
+#   filters     - all filters in the list must match (AND)
+#     kind: all           matches every envelope (no config needed)
+#     kind: match         field/value/mode string match
+#       field: kind | owner | format
+#       mode:  exact | contains | regex
+#   targets     - all targets in the list receive the envelope (fan-out)
+#     kind: components    dispatch to named/kind-prefixed live components
+#     kind: drop          silently discard (useful as an explicit catch-all)
+hub:
+  queue:
+    waiting_capacity: 1024
+    dispatch_capacity: 256
+    backpressure: reject
+
+  routes:
+    rules:
+      # Fan-out: log events go to BOTH loggers.
+      # console-logger applies min_level=warn; audit-logger captures everything.
+      - name: log-fan-out
+        filters:
+          - kind: match
+            config:
+              field: kind
+              value: "^sample/Log$"
+              mode: regex
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: console-logger
+                - name: audit-logger
+
+      # Calculator messages.
+      - name: calculator-route
+        filters:
+          - kind: match
+            config:
+              field: kind
+              value: "sample/Calculate"
+              mode: exact
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: calculator
+
+      # All counter actions share a common kind prefix.
+      - name: counter-route
+        filters:
+          - kind: match
+            config:
+              field: kind
+              value: "^sample/Counter/"
+              mode: regex
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: request-counter
+
+      # Echo messages.
+      - name: echo-route
+        filters:
+          - kind: match
+            config:
+              field: kind
+              value: "sample/Echo"
+              mode: exact
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: health-echo
+
+      # Catch-all: drop anything that did not match a rule above.
+      # Remove this rule to let unmatched envelopes accumulate in the
+      # "zero routes matched" counter instead.
+      - name: drop-unmatched
+        filters:
+          - kind: all
+            config: {}
+        targets:
+          - kind: drop
+            config: {}

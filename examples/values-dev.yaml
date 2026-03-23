@@ -19,12 +19,13 @@ containerSecurityContext:
 config:
   logging:
     console:
+      component: "orkester/ConsoleLogger"
       enabled: true
       filters:
         - level: INFO
   plugins:
-    dir: /orkester/plugins
-    recursive: false
+    - dir: /orkester/plugins
+      recursive: false
   servers:
     rest_api:
       component:

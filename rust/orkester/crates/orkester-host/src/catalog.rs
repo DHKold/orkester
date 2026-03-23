@@ -1,98 +1,74 @@
-use anyhow::{Context, Result};
-use orkester_plugin::{abi::AbiComponent, sdk::{Host, LoadedPlugin, message::Deserializer}};
 use std::path::Path;
+
+use anyhow::Result;
 use walkdir::WalkDir;
 
-use crate::config::{PluginDirectory, ServerConfig};
+use orkester_plugin::sdk::{Host, LoadedPlugin};
 
-// ── Plugin entry ──────────────────────────────────────────────────────────────
+use crate::config::PluginsConfig;
 
-/// A loaded plugin with its root component.
-struct Plugin {
-    _plugin: LoadedPlugin,
-    root: *mut AbiComponent,
+// ── CatalogEntry ──────────────────────────────────────────────────────────────
+
+/// A loaded plugin library with its root component alive and ready.
+pub struct CatalogEntry {
+    /// User-friendly name derived from the library file stem.
+    pub name:   String,
+    pub plugin: LoadedPlugin,
 }
-
-// SAFETY: we access `root` only from a single thread (the host main thread).
-unsafe impl Send for Plugin {}
 
 // ── Catalog ───────────────────────────────────────────────────────────────────
 
-/// Holds all loaded plugins and provides component instantiation.
+/// Scans configured directories and loads every dynamic library found.
 pub struct Catalog {
-    plugins: Vec<Plugin>,
+    pub entries: Vec<CatalogEntry>,
 }
 
 impl Catalog {
-    /// Scan `directories` for shared libraries, load each as an Orkester plugin.
-    pub fn load(host: &mut Host, directories: &[PluginDirectory]) -> Result<Self> {
-        let mut plugins = Vec::new();
+    /// Scan all plugin directories and return a [`Catalog`] with every
+    /// successfully loaded plugin.  Libraries that fail to load are logged
+    /// and skipped.
+    pub fn load(host: &mut Host, cfg: &PluginsConfig) -> Result<Self> {
+        let mut entries = Vec::new();
 
-        for dir in directories {
-            let walker = if dir.recursive {
-                WalkDir::new(&dir.path)
-            } else {
-                WalkDir::new(&dir.path).max_depth(1)
-            };
+        for dir_cfg in &cfg.directories {
+            let dir = Path::new(&dir_cfg.path);
+            if !dir.exists() {
+                log::warn!("[catalog] plugin directory not found: {}", dir.display());
+                continue;
+            }
 
-            for entry in walker {
-                let entry = entry.with_context(|| format!("walking {}", dir.path))?;
-                if !entry.file_type().is_file() {
-                    continue;
-                }
+            for entry in WalkDir::new(dir).max_depth(1).follow_links(false) {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(e) => { log::warn!("[catalog] walk error: {e}"); continue; }
+                };
                 let path = entry.path();
-                if !is_plugin_lib(path) {
-                    continue;
-                }
+                if !is_shared_lib(path) { continue; }
+
+                log::debug!("[catalog] loading plugin: {}", path.display());
                 match host.load_plugin(path) {
-                    Ok(loaded) => {
-                        let root = loaded.root_ptr();
-                        plugins.push(Plugin { _plugin: loaded, root });
-                        eprintln!("[catalog] loaded plugin: {}", path.display());
+                    Ok(plugin) => {
+                        let name = path.file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("unknown")
+                            .to_owned();
+                        log::info!("[catalog] loaded plugin '{name}' from {}", path.display());
+                        entries.push(CatalogEntry { name, plugin });
                     }
                     Err(e) => {
-                        eprintln!("[catalog] skipping {}: {e}", path.display());
+                        log::warn!("[catalog] failed to load {}: {e}", path.display());
                     }
                 }
             }
         }
 
-        Ok(Self { plugins })
-    }
-
-    /// Attempt to instantiate `kind` from any loaded plugin root component.
-    ///
-    /// Iterates all roots and sends an `"orkester/CreateComponent"` request;
-    /// returns the first successfully created component, or an error.
-    pub fn create_component(
-        &mut self,
-        _host: &mut Host,
-        server: &ServerConfig,
-    ) -> Result<*mut AbiComponent> {
-        use orkester_plugin::sdk::message::{Serializer, envelope::CreateComponentRequest};
-
-        let req_body = CreateComponentRequest::with_config(server.kind.clone(), &server.config);
-
-        // Wrap in the standard action envelope.
-        let envelope = serde_json::json!({
-            "action": "orkester/CreateComponent",
-            "params": serde_json::to_value(&req_body)?
-        });
-        let envelope_req = Serializer::json(&envelope);
-
-        for plugin in &mut self.plugins {
-            let raw_res = unsafe { ((*plugin.root).handle)(plugin.root, envelope_req.as_abi()) };
-            match Deserializer::component(plugin.root, raw_res) {
-                Ok(ptr) => return Ok(ptr),
-                Err(_) => continue,
-            }
-        }
-        anyhow::bail!("no plugin provides component kind '{}'", server.kind)
+        Ok(Self { entries })
     }
 }
 
-fn is_plugin_lib(path: &Path) -> bool {
-    path.extension().map_or(false, |ext| {
-        ext == "so" || ext == "dll" || ext == "dylib"
-    })
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+fn is_shared_lib(path: &Path) -> bool {
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    matches!(ext, "so" | "dylib" | "dll")
 }

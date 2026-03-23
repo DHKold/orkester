@@ -1,8 +1,8 @@
 mod component;
 mod error;
-mod handler;
-mod host;
-mod metadata;
+pub mod handler;
+pub mod host;
+pub mod metadata;
 pub mod message;
 
 pub use component::PluginComponent;
