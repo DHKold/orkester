@@ -1,0 +1,25 @@
+kind: orkester/namespace:1.0
+name: testing
+version: 1.0.0
+metadata:
+  description: Default namespace for general-purpose workflows
+spec:
+  retention:
+    work_runs_days: 30
+    task_runs_days: 30
+    logs_days: 7
+
+---
+kind: orkester/namespace:1.0
+name: analytics
+version: 1.0.0
+metadata:
+  description: Analytics pipeline namespace
+  tags: [analytics, data]
+spec:
+  retention:
+    work_runs_days: 90
+    task_runs_days: 90
+    logs_days: 30
+    metrics_days: 365
+    artifacts_days: 180

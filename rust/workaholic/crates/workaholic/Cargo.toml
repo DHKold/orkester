@@ -1,0 +1,18 @@
+[package]
+name = "workaholic"
+version = "0.1.0"
+edition = "2024"
+description = "Core models, traits, and utilities for the Orkester workflow system."
+
+[dependencies]
+serde        = { version = "1", features = ["derive"] }
+serde_json   = "1"
+serde_yaml   = "0.9"
+uuid         = { version = "1", features = ["v4"] }
+chrono       = { version = "0.4", features = ["serde"] }
+walkdir      = "2"
+thiserror    = "1"
+log          = "0.4"
+
+[dev-dependencies]
+tempfile = "3"

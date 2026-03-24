@@ -1,0 +1,41 @@
+# ── Daily analytics ETL cron ───────────────────────────────────────────────────
+kind: orkester/cron:1.0
+name: daily-analytics-etl
+namespace: analytics
+version: 1.0.0
+metadata:
+  description: Run the analytics ETL pipeline every day at 02:00 UTC
+  tags: [analytics, scheduled]
+spec:
+  work_ref: analytics/analytics-etl
+  schedules:
+    - "0 2 * * *"
+  timezone: UTC
+  params:
+    source_path: /data/source
+    destination: /data/warehouse
+    staging_path: /tmp/etl-staging
+  enabled: true
+  concurrency:
+    same_cron: skip
+    manual: add
+  failure_policy:
+    max_consecutive_failures: 3
+    action: pause
+
+---
+# ── Hourly smoke-test ──────────────────────────────────────────────────────────
+kind: orkester/cron:1.0
+name: hourly-smoke-test
+namespace: testing
+version: 1.0.0
+metadata:
+  description: Run the smoke-test workflow every 30 minutes
+spec:
+  work_ref: testing/smoke-test
+  schedules:
+    - "*/30 * * * *"
+  timezone: UTC
+  enabled: true
+  concurrency:
+    same_cron: skip

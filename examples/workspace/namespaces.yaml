@@ -1,10 +1,13 @@
-apiVersion: orkester.io/v1
-kind: Namespace
+kind: orkester/namespace:1.0
 name: testing
-version: "1.0.0"
+version: 1.0.0
 metadata:
-  description: "Default namespace for general-purpose workflows"
-spec: {}
+  description: Default namespace for general-purpose workflows
+spec:
+  retention:
+    work_runs_days: 30
+    task_runs_days: 30
+    logs_days: 7
 ---
 apiVersion: orkester.io/v1
 kind: Namespace

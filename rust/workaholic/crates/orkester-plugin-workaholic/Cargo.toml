@@ -1,0 +1,19 @@
+[package]
+name = "orkester-plugin-workaholic"
+version = "0.1.0"
+edition = "2024"
+description = "Workaholic workflow execution engine — Orkester plugin."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+orkester-plugin = { path = "../../../orkester/crates/orkester-plugin" }
+orkester-macro  = { path = "../../../orkester/crates/orkester-macro" }
+workaholic      = { path = "../workaholic" }
+serde        = { version = "1", features = ["derive"] }
+serde_json   = "1"
+uuid         = { version = "1", features = ["v4"] }
+chrono       = { version = "0.4", features = ["serde"] }
+crossbeam-channel = "0.5"
+log          = "0.4"

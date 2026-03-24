@@ -1,25 +1,21 @@
-# ── Command executor task ────────────────────────────────────────────────────
-# Runs a shell command locally on the Orkester host.
-apiVersion: orkester.io/v1
-kind: Task
+# ── Echo task — shell executor ───────────────────────────────────────────────
+kind: orkester/task:1.0
 name: echo-hello
-version: "1.0.0"
+namespace: testing
+version: 1.0.0
 metadata:
-  namespace: testing
-  description: "Simple echo command — useful for smoke-testing the pipeline"
-  labels:
-    category: utility
+  description: Simple echo command — useful for smoke-testing the pipeline
+  tags: [utility, test]
 spec:
-  executor: commands
-  config:
-    commands:
-      - ["echo", "Hello from Orkester!"]
-      - sleep $DELAY_SECONDS
-      - ["echo", "Done waiting for $DELAY_SECONDS seconds!"]
-  inputs:
-    DELAY_SECONDS: Waiting time in seconds before printing the second message. Adjust to test timeouts and retries.
+  retry_count: 0
   timeout_seconds: 30
-  retries: 0
+  execution:
+    kind: shell
+    config:
+      script: |
+        echo "Hello from Orkester!"
+        sleep ${DELAY_SECONDS:-1}
+        echo "Done!"
 ---
 apiVersion: orkester.io/v1
 kind: Task

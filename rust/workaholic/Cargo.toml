@@ -3,9 +3,6 @@ resolver = "3"
 members = [
     "crates/workaholic",
     "crates/orkester-plugin-workaholic",
-    "crates/orkester-plugin-workaholic-opa",
-    "crates/orkester-plugin-workaholic-sql",
-    "crates/orkester-plugin-workaholic-aws",
 ]
 
 [profile.release]

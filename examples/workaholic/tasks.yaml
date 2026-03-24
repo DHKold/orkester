@@ -1,0 +1,102 @@
+# ── Smoke-test task: echo ──────────────────────────────────────────────────────
+kind: orkester/task:1.0
+name: echo-hello
+namespace: testing
+version: 1.0.0
+metadata:
+  description: Simple echo task — emits a greeting and sleeps briefly
+  tags: [utility, test]
+spec:
+  retry_count: 2
+  timeout_seconds: 30
+  inputs:
+    - name: message
+      required: false
+      default: "Hello from Orkester!"
+  outputs:
+    - name: stdout
+  execution:
+    kind: shell
+    config:
+      script: |
+        echo "${message:-Hello from Orkester!}"
+        echo "Task complete."
+
+---
+# ── Data extraction task ───────────────────────────────────────────────────────
+kind: orkester/task:1.0
+name: extract-data
+namespace: analytics
+version: 1.0.0
+metadata:
+  description: Extracts data from source and writes to a staging area
+  tags: [analytics, etl]
+spec:
+  retry_count: 3
+  timeout_seconds: 3600
+  inputs:
+    - name: source_path
+      required: true
+    - name: output_path
+      required: true
+  outputs:
+    - name: row_count
+    - name: output_path
+  execution:
+    kind: shell
+    config:
+      script: |
+        echo "Extracting from ${source_path} to ${output_path}"
+        cp -r "${source_path}" "${output_path}"
+        echo "Done"
+
+---
+# ── Data transformation task ───────────────────────────────────────────────────
+kind: orkester/task:1.0
+name: transform-data
+namespace: analytics
+version: 1.0.0
+metadata:
+  description: Applies transformations to extracted data
+  tags: [analytics, etl]
+spec:
+  retry_count: 1
+  timeout_seconds: 7200
+  inputs:
+    - name: input_path
+      required: true
+    - name: output_path
+      required: true
+  outputs:
+    - name: output_path
+  execution:
+    kind: shell
+    config:
+      script: |
+        echo "Transforming data from ${input_path}"
+        cp -r "${input_path}" "${output_path}"
+        echo "Transformation complete"
+
+---
+# ── Data loading task ──────────────────────────────────────────────────────────
+kind: orkester/task:1.0
+name: load-data
+namespace: analytics
+version: 1.0.0
+metadata:
+  description: Loads transformed data into destination
+  tags: [analytics, etl]
+spec:
+  retry_count: 1
+  timeout_seconds: 3600
+  inputs:
+    - name: source_path
+      required: true
+    - name: destination
+      required: true
+  execution:
+    kind: shell
+    config:
+      script: |
+        echo "Loading data from ${source_path} to ${destination}"
+        echo "Load complete"
