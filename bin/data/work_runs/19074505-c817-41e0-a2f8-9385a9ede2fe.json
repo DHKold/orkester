@@ -1,0 +1,28 @@
+{
+  "kind": "orkester/workrun:1.0",
+  "metadata": {},
+  "name": "19074505-c817-41e0-a2f8-9385a9ede2fe",
+  "namespace": "testing",
+  "spec": {
+    "params": {
+      "message": "Hello banana!"
+    },
+    "trigger": {
+      "kind": "api"
+    },
+    "work_ref": "smoke-test"
+  },
+  "status": {
+    "phase": "pending",
+    "task_counts": {
+      "cancelled": 0,
+      "failed": 0,
+      "pending": 0,
+      "running": 0,
+      "skipped": 0,
+      "succeeded": 0,
+      "total": 0
+    }
+  },
+  "version": "1.0.0"
+}

@@ -7,6 +7,7 @@ use chrono::Utc;
 use crossbeam_channel::Receiver;
 use workaholic::{
     domain::work::FailureMode,
+    domain::task::ExecutionKind,
     execution::{
         task_run::{TaskRun, TaskRunPhase, TaskRunSpec, TaskRunStatus, TaskRunError},
         work_run::{WorkRunPhase, WorkRunStatus},
@@ -16,7 +17,7 @@ use workaholic::{
 };
 
 use crate::{
-    task_runner::{TaskRunEvent, build_runner},
+    task_runner::runner_components::{RunnerExecuteRequest, RunnerExecuteResponse},
     workflow_server::dag::topological_sort,
 };
 
@@ -64,7 +65,7 @@ fn worker_loop(
     ctx: WorkerContext,
     active_count: Arc<AtomicUsize>,
 ) {
-    log::info!("[worker/{}] started", ctx.worker_name);
+    ctx.host.log("info", &format!("worker/{}", ctx.worker_name), "started");
     loop {
         let work_run_id = match rx.recv_timeout(Duration::from_millis(500)) {
             Ok(id) => id,
@@ -80,7 +81,7 @@ fn worker_loop(
 
         active_count.fetch_sub(1, Ordering::Relaxed);
     }
-    log::info!("[worker/{}] stopped", ctx.worker_name);
+    ctx.host.log("info", &format!("worker/{}", ctx.worker_name), "stopped");
 }
 
 // ── Work run execution ────────────────────────────────────────────────────────
@@ -89,11 +90,13 @@ fn execute_work_run(work_run_id: &str, ctx: &WorkerContext) {
     let mut work_run: WorkRun = match traits::retrieve(&*ctx.persistence, WORK_RUNS, work_run_id) {
         Ok(Some(r)) => r,
         Ok(None) => {
-            log::error!("[worker/{}] work run '{work_run_id}' not found", ctx.worker_name);
+            ctx.host.log("error", &format!("worker/{}", ctx.worker_name),
+                &format!("work run '{work_run_id}' not found"));
             return;
         }
         Err(e) => {
-            log::error!("[worker/{}] failed to load work run '{work_run_id}': {e}", ctx.worker_name);
+            ctx.host.log("error", &format!("worker/{}", ctx.worker_name),
+                &format!("failed to load work run '{work_run_id}': {e}"));
             return;
         }
     };
@@ -106,10 +109,11 @@ fn execute_work_run(work_run_id: &str, ctx: &WorkerContext) {
         status.worker = Some(ctx.worker_name.clone());
     }
     if let Err(e) = traits::persist(&*ctx.persistence, WORK_RUNS, work_run_id, &work_run) {
-        log::error!("[worker/{}] failed to persist work run state: {e}", ctx.worker_name);
+        ctx.host.log("error", &format!("worker/{}", ctx.worker_name),
+            &format!("failed to persist work run state: {e}"));
     }
 
-    let (namespace, work_name) = parse_ref(&work_run.spec.work_ref, "default");
+    let (namespace, work_name) = parse_ref(&work_run.spec.work_ref, &work_run.namespace);
 
     let work = match ctx.host.call::<_, workaholic::domain::Work>(
         "catalog/GetWork",
@@ -187,7 +191,8 @@ fn run_task_with_retry(
         ) {
             Ok(t) => t,
             Err(e) => {
-                log::error!("[worker/{}] catalog/GetTask failed for '{}': {e}", ctx.worker_name, work_task.task_ref);
+                ctx.host.log("error", &format!("worker/{}", ctx.worker_name),
+                    &format!("catalog/GetTask failed for '{}': {e}", work_task.task_ref));
                 mark_failed(ctx, &mut task_run, "CATALOG_ERROR", &e.to_string());
                 save_task_run(ctx, &task_run);
                 if attempt > retry_count { return false; }
@@ -211,45 +216,54 @@ fn run_task_with_retry(
         ctx.host.log("info", &format!("worker/{}", ctx.worker_name),
             &format!("task '{}' attempt {attempt}/{}", work_task.name, retry_count + 1));
 
-        // Spawn the task runner (non-blocking).
-        let mut runner = build_runner(&task_def.spec.execution.kind);
-        let handle = runner.spawn(&work_task.name, &merged);
-
-        // Subscribe and forward events as log messages while waiting.
-        let events = handle.subscribe();
-        std::thread::spawn({
-            let host = ctx.host.clone();
-            let source = format!("worker/{}", ctx.worker_name);
-            move || {
-                for event in events {
-                    match event {
-                        TaskRunEvent::LogLine { level, message } => {
-                            host.log(&level, &source, &message);
-                        }
-                        TaskRunEvent::ExternalId(id) => {
-                            log::debug!("[{source}] external_id={id}");
-                        }
-                        TaskRunEvent::PhaseChanged(p) => {
-                            log::debug!("[{source}] phase -> {p:?}");
-                        }
-                    }
-                }
+        // Map the task's execution kind to the corresponding component kind string,
+        // then ask the host to create a fresh runner instance for this task.
+        // The runner is dropped when this block exits (OwnedComponent::drop calls free).
+        let runner_kind = runner_component_kind(&task_def.spec.execution.kind);
+        let runner = match ctx.host.create_component(runner_kind, serde_json::json!({})) {
+            Some(r) => r,
+            None => {
+                ctx.host.log("error", &format!("worker/{}", ctx.worker_name),
+                    &format!("failed to create runner '{runner_kind}' for task '{}' attempt {attempt}",
+                        work_task.name));
+                mark_failed(ctx, &mut task_run, "RUNNER_CREATE_ERROR",
+                    &format!("no factory for runner kind '{runner_kind}'"));
+                save_task_run(ctx, &task_run);
+                if attempt > retry_count { return false; }
+                continue;
             }
-        });
+        };
 
-        // Block until done.
-        let result = handle.wait();
-        let succeeded = result.phase == TaskRunPhase::Succeeded;
+        // Dispatch execution synchronously — the runner executes the task and
+        // returns once it finishes, times out, or fails.
+        let run_result: RunnerExecuteResponse = match runner.call("Execute", RunnerExecuteRequest {
+            task_name: work_task.name.clone(),
+            inputs:    merged.clone(),
+        }) {
+            Ok(r) => r,
+            Err(e) => {
+                ctx.host.log("error", &format!("worker/{}", ctx.worker_name),
+                    &format!("runner Execute failed for task '{}' attempt {attempt}: {e}",
+                        work_task.name));
+                mark_failed(ctx, &mut task_run, "RUNNER_ERROR", &e.to_string());
+                save_task_run(ctx, &task_run);
+                if attempt > retry_count { return false; }
+                continue;
+            }
+        };
+        // runner is dropped here, freeing the on-demand component.
 
-        // Apply result to task run.
+        let succeeded = run_result.phase == TaskRunPhase::Succeeded;
+
+        // Persist the final task run state.
         {
             let s = task_run.status.get_or_insert_with(TaskRunStatus::default);
-            s.phase = result.phase.clone();
-            s.outputs = result.outputs;
-            s.external_id = result.external_id;
-            s.error = result.error;
+            s.phase       = run_result.phase.clone();
+            s.outputs     = run_result.outputs;
+            s.external_id = run_result.external_id;
+            s.error       = run_result.error;
             s.finished_at = Some(Utc::now());
-            s.task_runner = Some(runner.kind().to_string());
+            s.task_runner = Some(format!("{:?}", task_def.spec.execution.kind));
         }
         save_task_run(ctx, &task_run);
 
@@ -311,7 +325,8 @@ fn mark_failed(ctx: &WorkerContext, run: &mut TaskRun, code: &str, msg: &str) {
 
 fn save_task_run(ctx: &WorkerContext, run: &TaskRun) {
     if let Err(e) = traits::persist(&*ctx.persistence, TASK_RUNS, &run.name, run) {
-        log::warn!("[worker/{}] failed to persist task run '{}': {e}", ctx.worker_name, run.name);
+        ctx.host.log("warn", &format!("worker/{}", ctx.worker_name),
+            &format!("failed to persist task run '{}': {e}", run.name));
     }
 }
 
@@ -321,7 +336,8 @@ fn fail_work_run(ctx: &WorkerContext, run: &mut WorkRun, reason: &str) {
     s.finished_at = Some(Utc::now());
     s.error = Some(reason.to_string());
     if let Err(e) = traits::persist(&*ctx.persistence, WORK_RUNS, &run.name, run) {
-        log::error!("[worker/{}] failed to persist failed work run: {e}", ctx.worker_name);
+        ctx.host.log("error", &format!("worker/{}", ctx.worker_name),
+            &format!("failed to persist failed work run '{}': {e}", run.name));
     }
     ctx.host.log("error", &format!("worker/{}", ctx.worker_name),
         &format!("work run '{}' failed: {reason}", run.name));
@@ -333,7 +349,8 @@ fn succeed_work_run(ctx: &WorkerContext, run: &mut WorkRun) {
     s.finished_at = Some(Utc::now());
     s.task_counts.running = 0;
     if let Err(e) = traits::persist(&*ctx.persistence, WORK_RUNS, &run.name, run) {
-        log::error!("[worker/{}] failed to persist succeeded work run: {e}", ctx.worker_name);
+        ctx.host.log("error", &format!("worker/{}", ctx.worker_name),
+            &format!("failed to persist succeeded work run '{}': {e}", run.name));
     }
     ctx.host.log("info", &format!("worker/{}", ctx.worker_name),
         &format!("work run '{}' succeeded", run.name));
@@ -355,4 +372,17 @@ fn merge_inputs(work_task: &serde_json::Value, exec_config: &serde_json::Value) 
         }
     }
     merged
+}
+
+// ── Runner kind mapping ───────────────────────────────────────────────────────
+
+/// Map an [`ExecutionKind`] to the component kind string used by
+/// `orkester/CreateComponent` to create an on-demand runner.
+fn runner_component_kind(kind: &ExecutionKind) -> &'static str {
+    match kind {
+        ExecutionKind::Shell      => "workaholic/ShellRunner:1.0",
+        ExecutionKind::Container  => "workaholic/ContainerRunner:1.0",
+        ExecutionKind::Kubernetes => "workaholic/KubernetesRunner:1.0",
+        _ => "workaholic/ShellRunner:1.0",
+    }
 }

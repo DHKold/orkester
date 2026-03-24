@@ -1,5 +1,6 @@
 pub mod catalog_server;
 pub mod host_client;
+pub mod persistence_server;
 pub mod root;
 pub mod task_runner;
 pub mod worker;

@@ -1,0 +1,27 @@
+{
+  "kind": "orkester/taskrun:1.0",
+  "metadata": {},
+  "name": "8eabdbf7-3059-4b0c-abd9-701531e2b259-greet-1",
+  "namespace": "testing",
+  "spec": {
+    "attempt": 1,
+    "inputs": {
+      "message": "{{ params.message }}",
+      "script": "echo \"${message:-Hello from Orkester!}\"\necho \"Task complete.\""
+    },
+    "task_name": "greet",
+    "task_ref": "echo-hello",
+    "work_run_ref": "8eabdbf7-3059-4b0c-abd9-701531e2b259"
+  },
+  "status": {
+    "finished_at": "2026-03-24T13:06:58.402156640Z",
+    "outputs": {
+      "stdout": "Hello from Orkester!\nTask complete.\n"
+    },
+    "phase": "succeeded",
+    "started_at": "2026-03-24T13:06:58.256093316Z",
+    "task_runner": "Unknown",
+    "worker": "main-worker"
+  },
+  "version": "1.0.0"
+}

@@ -13,3 +13,4 @@ libloading = "0.9"
 crossbeam-channel = "0.5"
 regex = "1"
 log = "0.4"
+indexmap = { version = "2", features = ["serde"] }

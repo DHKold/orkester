@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -60,9 +61,9 @@ pub struct TargetConfig {
     pub config: Value,
 }
 
+/// A single route rule (filters + targets).  The rule name is the map key.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RouteRuleConfig {
-    pub name: String,
     /// A message matches if ANY filter returns true.
     pub filters: Vec<FilterConfig>,
     /// On match, the message is sent to ALL targets.
@@ -75,7 +76,15 @@ pub struct RouteRuleConfig {
 pub struct HubConfig {
     #[serde(default)]
     pub queue: QueueConfig,
-    /// Route rules listed directly as a sequence (no wrapping object needed).
+    /// Route rules keyed by name, evaluated in insertion order.
+    ///
+    /// YAML format:
+    /// ```yaml
+    /// routes:
+    ///   route-logs:
+    ///     filters: [ ... ]
+    ///     targets: [ ... ]
+    /// ```
     #[serde(default)]
-    pub routes: Vec<RouteRuleConfig>,
+    pub routes: IndexMap<String, RouteRuleConfig>,
 }

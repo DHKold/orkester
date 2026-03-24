@@ -290,6 +290,7 @@ name = "orkester-plugin"
 version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
+ "indexmap",
  "libloading",
  "log",
  "orkester-macro",

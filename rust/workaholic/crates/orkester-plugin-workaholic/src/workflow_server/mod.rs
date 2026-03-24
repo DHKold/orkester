@@ -2,7 +2,7 @@ pub mod config;
 pub mod dag;
 pub mod state;
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use chrono::Utc;
 use orkester_plugin::{prelude::*, sdk::Host};
@@ -13,16 +13,16 @@ use workaholic::{
         work_run::{TriggerKind, WorkRunPhase, WorkRunSpec, WorkRunStatus, WorkRunTrigger},
         WorkRun,
     },
-    persistence::{LocalFsPersistenceProvider, MemoryPersistenceProvider},
-    traits::{self, PersistenceProvider},
+    traits,
 };
 
 use crate::{
     host_client::HostClient,
+    persistence_server::PersistenceClient,
     worker::{WorkerContext, WorkerHandle, thread::ThreadWorker},
 };
 
-use config::{PersistenceConfig, WorkflowServerConfig};
+use config::WorkflowServerConfig;
 use state::WorkflowServerState;
 
 // collection name constants
@@ -38,29 +38,27 @@ impl WorkflowServer {
     pub fn new(config: WorkflowServerConfig, host: Host) -> Self {
         let host_client = HostClient::new(host);
 
-        let persistence: Arc<dyn PersistenceProvider> = match &config.persistence {
-            PersistenceConfig::Memory => Arc::new(MemoryPersistenceProvider::new()),
-            PersistenceConfig::LocalFs { path } => {
-                match LocalFsPersistenceProvider::new(Path::new(path)) {
-                    Ok(p) => Arc::new(p),
-                    Err(e) => {
-                        log::error!("[workflow] failed to create local_fs persistence at '{path}': {e}; falling back to memory");
-                        Arc::new(MemoryPersistenceProvider::new())
-                    }
-                }
-            }
-        };
+        // Persistence is provided by a separately-registered component.
+        // `PersistenceClient` forwards all `persistence/*` calls through the
+        // host to the component with the configured name.
+        let persistence = Arc::new(
+            PersistenceClient::new(host_client.clone(), &config.persistence)
+        ) as Arc<dyn workaholic::traits::PersistenceProvider>;
 
-        // Spawn workers.
+        host_client.log("info", "workflow",
+            &format!("using persistence component '{}'", config.persistence));
+
+        // Spawn inline workers.
         let mut workers: Vec<WorkerHandle> = Vec::new();
         for wcfg in &config.workers {
             let ctx = WorkerContext {
-                host: host_client.clone(),
+                host:        host_client.clone(),
                 persistence: persistence.clone(),
                 worker_name: wcfg.name.clone(),
             };
             let handle = ThreadWorker::spawn(wcfg, ctx);
-            log::info!("[workflow] spawned worker '{}' (kind={})", wcfg.name, wcfg.kind);
+            host_client.log("info", "workflow",
+                &format!("spawned worker '{}' (kind={})", wcfg.name, wcfg.kind));
             workers.push(handle);
         }
 
@@ -70,7 +68,8 @@ impl WorkflowServer {
                 .filter(|r| r.status.as_ref().map(|s| !s.phase.is_terminal()).unwrap_or(true))
                 .collect();
             if !active.is_empty() {
-                log::info!("[workflow] {} active work run(s) found on startup (recovery pending)", active.len());
+                host_client.log("info", "workflow",
+                    &format!("{} active work run(s) found on startup (recovery pending)", active.len()));
             }
         }
 
@@ -99,7 +98,13 @@ pub struct CreateWorkRunRequest {
     pub trigger_ref: Option<String>,
     #[serde(default)]
     pub params: serde_json::Value,
+    /// If true (default), immediately queue the work run for execution after
+    /// creating it.  Set to false for deferred / externally triggered runs.
+    #[serde(default = "default_true")]
+    pub auto_queue: bool,
 }
+
+fn default_true() -> bool { true }
 
 #[derive(Deserialize)]
 pub struct QueueWorkRunRequest {
@@ -174,7 +179,7 @@ impl WorkflowServer {
         let namespace = req.namespace.as_deref().unwrap_or(&self.state.default_namespace).to_string();
         let id = Uuid::new_v4().to_string();
 
-        let work_run = WorkRun {
+        let mut work_run = WorkRun {
             kind: "orkester/workrun:1.0".into(),
             name: id.clone(),
             namespace,
@@ -194,8 +199,25 @@ impl WorkflowServer {
         traits::persist(&*self.state.persistence, WORK_RUNS, &id, &work_run)
             .map_err(|e| -> Error { format!("failed to persist work run: {e}").into() })?;
 
-        log::info!("[workflow] created work run '{id}'");
-        self.state.host.log("info", "workflow", &format!("work run '{id}' created"));
+        let work_ref = work_run.spec.work_ref.clone();
+        self.state.host.log("info", "workflow",
+            &format!("work run '{id}' created (work_ref={work_ref})"));
+
+        // Auto-queue unless explicitly disabled.
+        if req.auto_queue {
+            work_run.status.get_or_insert_with(WorkRunStatus::default).phase = WorkRunPhase::Ready;
+            traits::persist(&*self.state.persistence, WORK_RUNS, &id, &work_run)
+                .map_err(|e| -> Error { format!("failed to persist queued state: {e}").into() })?;
+
+            let worker = self.state.pick_worker()
+                .ok_or_else(|| -> Error { "no workers available to queue work run".into() })?;
+            let worker_name = worker.name.clone();
+            worker.enqueue(id.clone()).map_err(|e| -> Error { e.into() })?;
+
+            self.state.host.log("info", "workflow",
+                &format!("work run '{id}' queued to worker '{worker_name}'"));
+        }
+
         Ok(work_run)
     }
 
@@ -221,7 +243,6 @@ impl WorkflowServer {
 
         worker.enqueue(id.clone()).map_err(|e| -> Error { e.into() })?;
 
-        log::info!("[workflow] queued work run '{id}' to worker '{}'", worker.name);
         self.state.host.log("info", "workflow", &format!("work run '{id}' queued"));
         Ok(run)
     }
@@ -313,22 +334,6 @@ impl WorkflowServer {
         Ok(task_run)
     }
 
-    // ── Persistence operations ───────────────────────────────────────────────
-
-    #[handle("workflow/PersistWorkRun")]
-    fn persist_work_run(&mut self, run: WorkRun) -> Result<WorkRun> {
-        traits::persist(&*self.state.persistence, WORK_RUNS, &run.name.clone(), &run)
-            .map_err(|e| -> Error { format!("persist error: {e}").into() })?;
-        Ok(run)
-    }
-
-    #[handle("workflow/PersistTaskRun")]
-    fn persist_task_run(&mut self, run: workaholic::execution::TaskRun) -> Result<workaholic::execution::TaskRun> {
-        traits::persist(&*self.state.persistence, TASK_RUNS, &run.name.clone(), &run)
-            .map_err(|e| -> Error { format!("persist error: {e}").into() })?;
-        Ok(run)
-    }
-
     // ── Worker management ────────────────────────────────────────────────────
 
     #[handle("workflow/ListWorkers")]
@@ -359,7 +364,8 @@ impl WorkflowServer {
             if phase == WorkRunPhase::Running || phase == WorkRunPhase::Ready {
                 if let Some(worker) = self.state.pick_worker() {
                     if let Err(e) = worker.enqueue(id.clone()) {
-                        log::warn!("[workflow] failed to requeue work run '{id}': {e}");
+                        self.state.host.log("warn", "workflow",
+                            &format!("failed to requeue work run '{id}': {e}"));
                     } else {
                         requeued += 1;
                     }
@@ -367,7 +373,8 @@ impl WorkflowServer {
             }
         }
 
-        log::info!("[workflow] recovery: requeued {requeued}/{} active work runs", active.len());
+        self.state.host.log("info", "workflow",
+            &format!("recovery: requeued {requeued}/{} active work runs", active.len()));
         Ok(requeued)
     }
 }

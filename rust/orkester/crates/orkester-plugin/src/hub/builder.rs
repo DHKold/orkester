@@ -26,13 +26,26 @@ impl HubBuilder {
     }
 
     /// Validate all filter and target kinds without instantiating threads.
+    ///
+    /// Returns detailed error messages that identify the problematic rule,
+    /// filter kind, or target kind by name.
     pub fn validate(&self) -> Result<(), HubError> {
-        for rule in &self.config.routes {
+        for (name, rule) in &self.config.routes {
             for f in &rule.filters {
-                filter::build(f).map(drop)?;
+                filter::build(f).map(drop).map_err(|e| {
+                    HubError::InvalidConfig(format!(
+                        "route '{name}' has invalid filter kind '{}': {e}",
+                        f.kind
+                    ))
+                })?;
             }
             for t in &rule.targets {
-                dispatcher::validate(t)?;
+                dispatcher::validate(t).map_err(|e| {
+                    HubError::InvalidConfig(format!(
+                        "route '{name}' has invalid target kind '{}': {e}",
+                        t.kind
+                    ))
+                })?;
             }
         }
         Ok(())
@@ -51,21 +64,35 @@ impl HubBuilder {
         let registry  = self.registry;
 
         let mut rules = Vec::with_capacity(rules_cfg.len());
-        for rule_cfg in rules_cfg {
+        for (name, rule_cfg) in rules_cfg {
             let filters = rule_cfg
                 .filters
                 .iter()
-                .map(|f| filter::build(f))
+                .map(|f| {
+                    filter::build(f).map_err(|e| {
+                        HubError::InvalidConfig(format!(
+                            "route '{name}' filter '{}': {e}",
+                            f.kind
+                        ))
+                    })
+                })
                 .collect::<Result<Vec<_>, _>>()?;
 
             let dispatchers = rule_cfg
                 .targets
                 .iter()
-                .map(|t| dispatcher::build(t, registry.clone()))
+                .map(|t| {
+                    dispatcher::build(t, registry.clone()).map_err(|e| {
+                        HubError::InvalidConfig(format!(
+                            "route '{name}' target '{}': {e}",
+                            t.kind
+                        ))
+                    })
+                })
                 .collect::<Result<Vec<_>, _>>()?;
 
             rules.push(RouteRule {
-                name: rule_cfg.name,
+                name,
                 filters,
                 dispatchers,
             });

@@ -1,7 +1,7 @@
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     time::Duration,
 };
@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 
 use orkester_plugin::{
     abi::{AbiComponent, AbiRequest, AbiResponse},
-    hub::{Envelope, MessageHub},
+    hub::MessageHub,
     sdk::Host,
 };
 
@@ -21,13 +21,13 @@ use crate::{
     registry::{self, ComponentRegistry},
 };
 
-// ── Monotonic ID ──────────────────────────────────────────────────────────────
+// ── ABI call helpers ─────────────────────────────────────────────────────────
 
-static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+/// Shared list of raw plugin root component pointers (stored as `usize` for
+/// `Send` compatibility).  Used to forward `orkester/CreateComponent` calls
+/// to the correct plugin's factory methods.
+type PluginRoots = Arc<Mutex<Vec<usize>>>;
 
-fn next_id() -> u64 {
-    NEXT_ID.fetch_add(1, Ordering::Relaxed)
-}
 
 // ── ABI call helpers ──────────────────────────────────────────────────────────
 
@@ -70,13 +70,16 @@ pub fn call_json(ptr: *mut AbiComponent, action: &str, params: Value) -> Result<
 /// Build a `Host::with_callback` closure that routes calls through the
 /// component registry.
 ///
-/// When a plugin component (e.g. `RestServer`) calls `host.handle(...)`, the
-/// request JSON envelope's `action` field is used to find the first registered
-/// component whose `kind` starts with the namespace (e.g. `"ping"` matches
-/// `"sample/PingServer:1.0"`), and the request is forwarded to it.
-fn make_routing_host(registry: ComponentRegistry) -> Host {
+/// Routing strategy: the action's first path segment (the "namespace") is
+/// matched case-insensitively against the registered component **name**.
+/// Names are set in the config `servers[].name` field and are fully under
+/// operator control, making them a reliable routing key.
+///
+/// Special actions handled directly by the host before namespace routing:
+/// - `orkester/GetComponent`    — look up a component pointer by name
+/// - `orkester/CreateComponent` — create a new component via a plugin factory
+fn make_routing_host(registry: ComponentRegistry, plugin_roots: PluginRoots) -> Host {
     Host::with_callback(move |req: AbiRequest| -> AbiResponse {
-        // Decode the incoming JSON envelope
         let payload = unsafe {
             if req.payload.is_null() || req.payload_len == 0 {
                 &[] as &[u8]
@@ -87,30 +90,130 @@ fn make_routing_host(registry: ComponentRegistry) -> Host {
 
         let envelope: Value = serde_json::from_slice(payload).unwrap_or(Value::Null);
         let action = envelope["action"].as_str().unwrap_or("");
-        // Save id before req is potentially moved into handle()
         let req_id = req.id;
 
-        // Find a component that can handle this action
+        // ── orkester/GetComponent ─────────────────────────────────────────
+        if action == "orkester/GetComponent" {
+            let cname = envelope["params"]["name"].as_str().unwrap_or("");
+            let result = {
+                let guard = registry.lock().unwrap();
+                guard.iter().find(|e| e.name == cname).map(|e| {
+                    json!({ "ptr": e.ptr() as usize, "kind": e.kind, "name": e.name })
+                })
+            };
+            let body = result.unwrap_or_else(|| {
+                log::warn!("[host/registry] orkester/GetComponent: no component named '{cname}'");
+                json!({ "error": format!("component '{cname}' not found") })
+            });
+            let bytes = serde_json::to_vec(&body).unwrap_or_default();
+            let fmt = "std/json";
+            let len = bytes.len() as u32;
+            let ptr = Box::into_raw(bytes.into_boxed_slice()) as *mut u8;
+            return AbiResponse {
+                id: req_id,
+                format: fmt.as_ptr(),
+                format_len: fmt.len() as u32,
+                payload: ptr,
+                payload_len: len,
+            };
+        }
+
+        // ── orkester/CreateComponent ──────────────────────────────────────
+        // Forward to each plugin root's factory until one succeeds.
+        if action == "orkester/CreateComponent" {
+            let kind = envelope["params"]["kind"].as_str().unwrap_or("");
+            // Re-serialize the request for calling into the plugin root.
+            let root_body = json!({
+                "action": "orkester/CreateComponent",
+                "params": envelope["params"]
+            });
+            let root_bytes = serde_json::to_vec(&root_body).unwrap_or_default();
+            let fmt = "std/json";
+
+            let roots = plugin_roots.lock().unwrap();
+            for &root_usize in roots.iter() {
+                let root_ptr = root_usize as *mut AbiComponent;
+                let root_req = AbiRequest {
+                    id:          req_id,
+                    format:      fmt.as_ptr(),
+                    format_len:  fmt.len() as u32,
+                    payload:     root_bytes.as_ptr(),
+                    payload_len: root_bytes.len() as u32,
+                };
+                let res = unsafe { ((*root_ptr).handle)(root_ptr, root_req) };
+                // Check if the response is in component format.
+                let res_fmt = unsafe {
+                    if res.format.is_null() || res.format_len == 0 { "" }
+                    else {
+                        let s = std::slice::from_raw_parts(
+                            res.format as *const u8, res.format_len as usize
+                        );
+                        std::str::from_utf8(s).unwrap_or("")
+                    }
+                };
+                if res_fmt == "orkester/component" {
+                    // Extract pointer, free root's buffer, re-allocate for caller.
+                    let payload = unsafe {
+                        std::slice::from_raw_parts(res.payload, res.payload_len as usize)
+                    };
+                    let mut addr = [0u8; std::mem::size_of::<usize>()];
+                    let len = addr.len().min(payload.len());
+                    addr[..len].copy_from_slice(&payload[..len]);
+                    let component_ptr = usize::from_le_bytes(addr);
+                    unsafe { ((*root_ptr).free_response)(root_ptr, res) };
+
+                    log::debug!("[host/factory] created component of kind '{kind}'");
+                    let new_payload = component_ptr.to_le_bytes().to_vec();
+                    let new_len = new_payload.len() as u32;
+                    let new_ptr = Box::into_raw(new_payload.into_boxed_slice()) as *mut u8;
+                    let comp_fmt = "orkester/component";
+                    return AbiResponse {
+                        id:          req_id,
+                        format:      comp_fmt.as_ptr(),
+                        format_len:  comp_fmt.len() as u32,
+                        payload:     new_ptr,
+                        payload_len: new_len,
+                    };
+                }
+                // This plugin didn't provide the factory — free the error response.
+                unsafe { ((*root_ptr).free_response)(root_ptr, res) };
+            }
+
+            log::warn!("[host/factory] no plugin provides factory for kind '{kind}'");
+            let body = json!({ "error": format!("no factory for component kind '{kind}'") });
+            let bytes = serde_json::to_vec(&body).unwrap_or_default();
+            let err_fmt = "std/json";
+            let len = bytes.len() as u32;
+            let ptr = Box::into_raw(bytes.into_boxed_slice()) as *mut u8;
+            return AbiResponse {
+                id:          req_id,
+                format:      err_fmt.as_ptr(),
+                format_len:  err_fmt.len() as u32,
+                payload:     ptr,
+                payload_len: len,
+            };
+        }
+
+        // ── Namespace routing ─────────────────────────────────────────────
+        let namespace = action.split('/').next().unwrap_or("");
         let target_ptr: Option<*mut AbiComponent> = {
             let guard = registry.lock().unwrap();
             guard.iter().find(|e| {
-                // Heuristic: action namespace = first component of kind after "/"
-                // e.g. action "ping/Ping" → look for kind starting with "sample/PingServer"
-                // For simplicity: just forward to any component whose kind contains the
-                // action's first segment (namespace).
-                let namespace = action.split('/').next().unwrap_or("");
-                e.kind.to_lowercase().contains(&namespace.to_lowercase())
+                e.name.to_lowercase().contains(&namespace.to_lowercase())
             }).map(|e| e.ptr())
         };
 
         let result_value = match target_ptr {
             None => {
-                log::warn!("[host/router] no component found for action '{action}'");
+                log::warn!(
+                    "[host/router] no component found for action '{action}' \
+                     (namespace='{namespace}') — check that the component is registered in servers"
+                );
                 json!({ "error": format!("no handler for action '{action}'") })
             }
             Some(ptr) => {
-                // Forward the raw request to the target component
-                match unsafe {
+                log::debug!("[host/router] routing action '{action}' to component");
+                unsafe {
                     let res = ((*ptr).handle)(ptr, req);
                     let payload = if res.payload.is_null() || res.payload_len == 0 {
                         &[] as &[u8]
@@ -120,13 +223,10 @@ fn make_routing_host(registry: ComponentRegistry) -> Host {
                     let v: Value = serde_json::from_slice(payload).unwrap_or(Value::Null);
                     ((*ptr).free_response)(ptr, res);
                     v
-                } {
-                    v => v,
                 }
             }
         };
 
-        // Allocate response bytes for the ABI response
         let fmt         = "std/json";
         let bytes       = serde_json::to_vec(&result_value).unwrap_or_default();
         let len         = bytes.len() as u32;
@@ -146,15 +246,25 @@ fn make_routing_host(registry: ComponentRegistry) -> Host {
 
 /// Orchestrate the entire host lifecycle.
 pub fn run(cfg: HostConfig) -> Result<()> {
-    // 1. Create component registry and routing host
-    let registry = registry::new_registry();
-    let mut host = make_routing_host(registry.clone());
+    // 1. Create component registry, plugin roots, and routing host
+    let registry    = registry::new_registry();
+    let plugin_roots: PluginRoots = Arc::new(Mutex::new(Vec::new()));
+    let mut host    = make_routing_host(registry.clone(), plugin_roots.clone());
 
     // 2. Load plugins
     let mut catalog = Catalog::load(&mut host, &cfg.plugins)
         .context("loading plugins")?;
     if catalog.entries.is_empty() {
         log::warn!("[runner] no plugins loaded — running in demo mode");
+    }
+
+    // Publish plugin root pointers so orkester/CreateComponent can reach factories.
+    {
+        let mut roots = plugin_roots.lock().unwrap();
+        for entry in &catalog.entries {
+            roots.push(entry.plugin.root_ptr() as usize);
+            log::debug!("[runner] registered plugin root for '{}'", entry.name);
+        }
     }
 
     // 3. Instantiate servers
@@ -183,13 +293,10 @@ pub fn run(cfg: HostConfig) -> Result<()> {
         r.store(false, Ordering::SeqCst);
     }).context("setting Ctrl+C handler")?;
 
-    // 6. Main loop — REST polling + hub demo events
+    // 6. Main loop — REST polling
     log::info!("[runner] entering main loop (Ctrl+C to stop)");
-    let mut tick: u64 = 0;
 
     while running.load(Ordering::SeqCst) {
-        tick += 1;
-
         // ── Poll RestServer ──────────────────────────────────────────────
         if let Some(rest_ptr) = registry::find_by_name(&registry, "rest-server") {
             match call_json(rest_ptr, "rest/Poll", json!({})) {
@@ -213,23 +320,6 @@ pub fn run(cfg: HostConfig) -> Result<()> {
                     }
                 }
                 Err(e) => log::warn!("[runner] rest/Poll error: {e}"),
-            }
-        }
-
-        // ── Hub demo: emit a log entry every 5 seconds ───────────────────
-        if tick % 50 == 0 {
-            let envelope = Envelope::from_json(
-                next_id(),
-                None,
-                "log/Entry",
-                json!({
-                    "level":   "info",
-                    "source":  "host",
-                    "message": format!("heartbeat tick={tick}"),
-                }),
-            );
-            if let Err(e) = hub.submit(envelope) {
-                log::warn!("[runner] hub submit error: {e}");
             }
         }
 
@@ -257,16 +347,32 @@ fn route_action(
     let ptr_opt: Option<*mut AbiComponent> = {
         let guard = registry.lock().unwrap();
         guard.iter().find(|e| {
-            e.kind.to_lowercase().contains(&namespace.to_lowercase())
+            e.name.to_lowercase().contains(&namespace.to_lowercase())
         }).map(|e| e.ptr())
     };
 
     match ptr_opt {
-        None => (404, json!({ "error": format!("no handler for action '{action}'") })),
+        None => {
+            log::warn!(
+                "[runner/rest] no component for action '{action}' (namespace='{namespace}')"
+            );
+            (404, json!({ "error": format!("no handler for action '{action}'") }))
+        }
         Some(ptr) => {
+            log::debug!("[runner/rest] routing HTTP action '{action}'");
             match call_json(ptr, action, params) {
-                Ok(v)  => (200, v),
-                Err(e) => (500, json!({ "error": e.to_string() })),
+                Ok(v)  => {
+                    if v.get("error").is_some() {
+                        log::warn!("[runner/rest] action '{action}' returned error: {}", v["error"]);
+                        (400, v)
+                    } else {
+                        (200, v)
+                    }
+                }
+                Err(e) => {
+                    log::error!("[runner/rest] action '{action}' failed: {e}");
+                    (500, json!({ "error": e.to_string() }))
+                }
             }
         }
     }

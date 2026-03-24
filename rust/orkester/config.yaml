@@ -43,7 +43,7 @@ hub:
 
   routes:
     # Route all log/Entry events to the LoggingServer
-    - name: route-logs
+    route-logs:
       filters:
         - kind: match
           config:
@@ -57,7 +57,7 @@ hub:
               - name: log-server
 
     # Catch-all: silently drop everything else
-    - name: drop-unhandled
+    drop-unhandled:
       filters:
         - kind: all
       targets:

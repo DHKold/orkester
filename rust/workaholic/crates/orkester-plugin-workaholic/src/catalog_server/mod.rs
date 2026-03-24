@@ -33,6 +33,7 @@ pub struct CatalogServer {
     crons: HashMap<String, Cron>,
     worker_profiles: HashMap<String, WorkerProfile>,
     task_runner_profiles: HashMap<String, TaskRunnerProfile>,
+    #[allow(dead_code)]
     artifacts: HashMap<String, Artifact>,
 }
 
@@ -63,7 +64,8 @@ impl CatalogServer {
         let docs = match loader.load(Path::new(path)) {
             Ok(d) => d,
             Err(e) => {
-                log::error!("[catalog] failed to load docs from '{path}': {e}");
+                self.host.log("error", "catalog",
+                    &format!("failed to load docs from '{path}': {e}"));
                 return;
             }
         };
@@ -75,46 +77,46 @@ impl CatalogServer {
             if kind.starts_with("orkester/namespace:") {
                 match doc.into_typed::<_, ()>() {
                     Ok(v) => { self.namespaces.insert(key, v); counts[0] += 1; }
-                    Err(e) => log::warn!("[catalog] bad namespace doc: {e}"),
+                    Err(e) => self.host.log("warn", "catalog", &format!("bad namespace doc: {e}")),
                 }
             } else if kind.starts_with("orkester/group:") {
                 match doc.into_typed::<_, ()>() {
                     Ok(v) => { self.groups.insert(key, v); counts[1] += 1; }
-                    Err(e) => log::warn!("[catalog] bad group doc: {e}"),
+                    Err(e) => self.host.log("warn", "catalog", &format!("bad group doc: {e}")),
                 }
             } else if kind.starts_with("orkester/work:") {
                 match doc.into_typed::<_, ()>() {
                     Ok(v) => { self.works.insert(key, v); counts[2] += 1; }
-                    Err(e) => log::warn!("[catalog] bad work doc: {e}"),
+                    Err(e) => self.host.log("warn", "catalog", &format!("bad work doc: {e}")),
                 }
             } else if kind.starts_with("orkester/task:") {
                 match doc.into_typed::<_, ()>() {
                     Ok(v) => { self.tasks.insert(key, v); counts[3] += 1; }
-                    Err(e) => log::warn!("[catalog] bad task doc: {e}"),
+                    Err(e) => self.host.log("warn", "catalog", &format!("bad task doc: {e}")),
                 }
             } else if kind.starts_with("orkester/cron:") {
                 match doc.into_typed::<_, ()>() {
                     Ok(v) => { self.crons.insert(key, v); counts[4] += 1; }
-                    Err(e) => log::warn!("[catalog] bad cron doc: {e}"),
+                    Err(e) => self.host.log("warn", "catalog", &format!("bad cron doc: {e}")),
                 }
             } else if kind.starts_with("orkester/workerprofile:") || kind.starts_with("orkester/worker-profile:") {
                 match doc.into_typed::<_, ()>() {
                     Ok(v) => { self.worker_profiles.insert(key, v); counts[5] += 1; }
-                    Err(e) => log::warn!("[catalog] bad worker-profile doc: {e}"),
+                    Err(e) => self.host.log("warn", "catalog", &format!("bad worker-profile doc: {e}")),
                 }
             } else if kind.starts_with("orkester/taskrunnerprofile:") || kind.starts_with("orkester/taskrunner-profile:") {
                 match doc.into_typed::<_, ()>() {
                     Ok(v) => { self.task_runner_profiles.insert(key, v); counts[6] += 1; }
-                    Err(e) => log::warn!("[catalog] bad taskrunner-profile doc: {e}"),
+                    Err(e) => self.host.log("warn", "catalog", &format!("bad taskrunner-profile doc: {e}")),
                 }
             } else {
-                log::debug!("[catalog] skipping unknown kind '{kind}'");
+                self.host.log("debug", "catalog", &format!("skipping unknown kind '{kind}'"));
             }
         }
-        log::info!(
-            "[catalog] loaded: {} namespaces, {} groups, {} works, {} tasks, {} crons, {} worker-profiles, {} taskrunner-profiles",
+        self.host.log("info", "catalog", &format!(
+            "loaded: {} namespaces, {} groups, {} works, {} tasks, {} crons, {} worker-profiles, {} taskrunner-profiles",
             counts[0], counts[1], counts[2], counts[3], counts[4], counts[5], counts[6]
-        );
+        ));
     }
 }
 
@@ -153,6 +155,8 @@ impl CatalogServer {
         if self.namespaces.contains_key(&key) {
             return Err(format!("namespace '{}' already exists in '{}'", doc.name, doc.namespace).into());
         }
+        self.host.log("info", "catalog",
+            &format!("creating namespace '{}/{}'", doc.namespace, doc.name));
         self.namespaces.insert(key, doc.clone());
         Ok(doc)
     }
@@ -169,6 +173,8 @@ impl CatalogServer {
     #[handle("catalog/SetNamespace")]
     fn set_namespace(&mut self, doc: Namespace) -> Result<Namespace> {
         let key = resource_key(&doc.namespace, &doc.name);
+        self.host.log("info", "catalog",
+            &format!("upsert namespace '{}/{}'", doc.namespace, doc.name));
         self.namespaces.insert(key, doc.clone());
         Ok(doc)
     }
@@ -177,6 +183,10 @@ impl CatalogServer {
     fn delete_namespace(&mut self, req: ByNameRequest) -> Result<DeletedResponse> {
         let key = resource_key(&req.namespace, &req.name);
         let deleted = self.namespaces.remove(&key).is_some();
+        if deleted {
+            self.host.log("info", "catalog",
+                &format!("deleted namespace '{}/{}'", req.namespace, req.name));
+        }
         Ok(DeletedResponse { deleted })
     }
 

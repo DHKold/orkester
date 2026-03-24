@@ -1,0 +1,35 @@
+>>> Build profile: debug
+>>> Bin dir:       /orkester/bin
+
+=== Building orkester (host + sample plugin) ===
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.29s
+
+=== Building workaholic plugin ===
+   Compiling orkester-plugin-workaholic v0.1.0 (/orkester/rust/workaholic/crates/orkester-plugin-workaholic)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 26.60s
+
+=== Copying artefacts to /orkester/bin ===
+'/orkester/rust/orkester/target/debug/orkester' -> '/orkester/bin/orkester'
+'/orkester/rust/orkester/target/debug/liborkester_plugin_sample.so' -> '/orkester/bin/liborkester_plugin_sample.so'
+'/orkester/rust/workaholic/target/debug/liborkester_plugin_workaholic.so' -> '/orkester/bin/liborkester_plugin_workaholic.so'
+
+=== Bin dir contents ===
+-rwxrwxrwx 1 1000 1000 31M Mar 24 13:06 /orkester/bin/liborkester_plugin_sample.so
+-rwxrwxrwx 1 1000 1000 50M Mar 24 13:06 /orkester/bin/liborkester_plugin_workaholic.so
+-rwxrwxrwx 1 1000 1000 42M Mar 24 13:06 /orkester/bin/orkester
+
+=== Starting orkester (config: /orkester/bin/workaholic.yaml) ===
+[INFO] [persistence] storage root: /orkester/bin/data
+[INFO] [catalog] loaded: 2 namespaces, 0 groups, 2 works, 4 tasks, 2 crons, 2 worker-profiles, 2 taskrunner-profiles
+[INFO] [workflow] using persistence component 'local-fs-persistence'
+[INFO] [workflow] spawned worker 'main-worker' (kind=thread)
+[INFO] [worker/main-worker] started
+[INFO] [workflow] spawned worker 'analytics-worker' (kind=thread)
+[INFO] [worker/analytics-worker] started
+[INFO] [workflow] 1 active work run(s) found on startup (recovery pending)
+[INFO] [workflow] work run '8eabdbf7-3059-4b0c-abd9-701531e2b259' created (work_ref=smoke-test)
+[INFO] [workflow] work run '8eabdbf7-3059-4b0c-abd9-701531e2b259' queued to worker 'main-worker'
+[INFO] [worker/main-worker] starting work run '8eabdbf7-3059-4b0c-abd9-701531e2b259'
+[INFO] [worker/main-worker] task 'greet' attempt 1/1
+[INFO] [worker/main-worker] task 'greet' succeeded
+[INFO] [worker/main-worker] work run '8eabdbf7-3059-4b0c-abd9-701531e2b259' succeeded

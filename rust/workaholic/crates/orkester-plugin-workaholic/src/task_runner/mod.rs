@@ -1,9 +1,18 @@
 pub mod container;
 pub mod kubernetes;
+pub mod runner_components;
+pub mod runner_server;
 pub mod shell;
 
 pub use container::ContainerTaskRunner;
 pub use kubernetes::KubernetesTaskRunner;
+pub use runner_components::{
+    ContainerRunnerConfig, ContainerRunnerServer,
+    KubernetesRunnerConfig, KubernetesRunnerServer,
+    RunnerExecuteRequest, RunnerExecuteResponse,
+    ShellRunnerConfig, ShellRunnerServer,
+};
+pub use runner_server::RunnerServer;
 pub use shell::ShellTaskRunner;
 
 use workaholic::{
@@ -97,9 +106,6 @@ pub fn build_runner(kind: &ExecutionKind) -> Box<dyn TaskRunner> {
         ExecutionKind::Shell => Box::new(ShellTaskRunner::new()),
         ExecutionKind::Container => Box::new(ContainerTaskRunner::new()),
         ExecutionKind::Kubernetes => Box::new(KubernetesTaskRunner::new()),
-        _ => {
-            log::warn!("[task_runner] unknown execution kind {kind:?}, falling back to shell");
-            Box::new(ShellTaskRunner::new())
-        }
+        _ => Box::new(ShellTaskRunner::new()),
     }
 }

@@ -1,5 +1,0 @@
-$schema: "https://json-schema.org/draft/2020-12/schema"
-$id: "https://www.huforge.com/schemas/orkester/common/cron-expression.yaml"
-title: Cron Expression
-type: string
-minLength: 1

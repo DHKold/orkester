@@ -1,0 +1,211 @@
+plugins:
+  directories:
+    - path: /orkester/bin/
+
+servers:
+  # ── Logging ─────────────────────────────────────────────────────────────────
+  # Must come first so catalog/workflow can emit logs during their startup.
+  - name: log-server
+    kind: sample/LoggingServer:1.0
+    config:
+      formatter: { kind: text }
+      consumers:
+        - kind: console
+        - kind: file
+          path: /orkester/bin/data/orkester.log
+
+  # ── Persistence ────────────────────────────────────────────────────────────
+  # Must come before workflow-server (which reads from it during startup recovery).
+  - name: local-fs-persistence
+    kind: workaholic/LocalFsPersistence:1.0
+    config:
+      path: /orkester/bin/data
+
+  # ── Workflow catalog ────────────────────────────────────────────────────────
+  - name: catalog-server
+    kind: workaholic/CatalogServer:1.0
+    config:
+      load_on_startup: true
+      loader:
+        path: /orkester/bin/configs/
+
+  # ── Workflow execution engine ───────────────────────────────────────────────
+  - name: workflow-server
+    kind: workaholic/WorkflowServer:1.0
+    config:
+      default_namespace: testing
+      persistence: local-fs-persistence
+      workers:
+        - name: main-worker
+          kind: thread
+          max_work_runs: 4
+          max_task_runs: 16
+        - name: analytics-worker
+          kind: thread
+          max_work_runs: 2
+          max_task_runs: 8
+
+  # ── Ping / health ────────────────────────────────────────────────────────────
+  - name: ping-server
+    kind: sample/PingServer:1.0
+
+  # ── HTTP gateway ─────────────────────────────────────────────────────────────
+  - name: rest-server
+    kind: sample/RestServer:1.0
+    config:
+      bind: "0.0.0.0:8080"
+      routes:
+        # Health
+        - path:   /health
+          method: GET
+          action: ping/Ping
+        - path:   /v1/health
+          method: GET
+          action: ping/Ping
+
+        # ── Catalog: Namespaces ─────────────────────────────────────────────
+        - path:   /v1/catalog/namespaces
+          method: GET
+          action: catalog/ListNamespaces
+        - path:   /v1/catalog/namespaces
+          method: POST
+          action: catalog/CreateNamespace
+        - path:   /v1/catalog/namespaces/get
+          method: POST
+          action: catalog/GetNamespace
+        - path:   /v1/catalog/namespaces/set
+          method: POST
+          action: catalog/SetNamespace
+        - path:   /v1/catalog/namespaces/delete
+          method: POST
+          action: catalog/DeleteNamespace
+
+        # ── Catalog: Groups ─────────────────────────────────────────────────
+        - path:   /v1/catalog/groups
+          method: GET
+          action: catalog/ListGroups
+        - path:   /v1/catalog/groups
+          method: POST
+          action: catalog/CreateGroup
+        - path:   /v1/catalog/groups/get
+          method: POST
+          action: catalog/GetGroup
+
+        # ── Catalog: Works ──────────────────────────────────────────────────
+        - path:   /v1/catalog/works
+          method: GET
+          action: catalog/ListWorks
+        - path:   /v1/catalog/works
+          method: POST
+          action: catalog/CreateWork
+        - path:   /v1/catalog/works/get
+          method: POST
+          action: catalog/GetWork
+        - path:   /v1/catalog/works/set
+          method: POST
+          action: catalog/SetWork
+        - path:   /v1/catalog/works/delete
+          method: POST
+          action: catalog/DeleteWork
+
+        # ── Catalog: Tasks ──────────────────────────────────────────────────
+        - path:   /v1/catalog/tasks
+          method: GET
+          action: catalog/ListTasks
+        - path:   /v1/catalog/tasks
+          method: POST
+          action: catalog/CreateTask
+        - path:   /v1/catalog/tasks/get
+          method: POST
+          action: catalog/GetTask
+        - path:   /v1/catalog/tasks/set
+          method: POST
+          action: catalog/SetTask
+        - path:   /v1/catalog/tasks/delete
+          method: POST
+          action: catalog/DeleteTask
+
+        # ── Catalog: Crons ──────────────────────────────────────────────────
+        - path:   /v1/catalog/crons
+          method: GET
+          action: catalog/ListCrons
+        - path:   /v1/catalog/crons
+          method: POST
+          action: catalog/CreateCron
+
+        # ── Catalog: Worker profiles ────────────────────────────────────────
+        - path:   /v1/catalog/worker-profiles
+          method: GET
+          action: catalog/ListWorkerProfiles
+        - path:   /v1/catalog/worker-profiles/get
+          method: POST
+          action: catalog/GetWorkerProfile
+
+        # ── Catalog: TaskRunner profiles ────────────────────────────────────
+        - path:   /v1/catalog/taskrunner-profiles
+          method: GET
+          action: catalog/ListTaskRunnerProfiles
+        - path:   /v1/catalog/taskrunner-profiles/get
+          method: POST
+          action: catalog/GetTaskRunnerProfile
+
+        # ── Workflow: WorkRuns ──────────────────────────────────────────────
+        - path:   /v1/workflow/runs
+          method: GET
+          action: workflow/ListWorkRuns
+        - path:   /v1/workflow/runs
+          method: POST
+          action: workflow/CreateWorkRun
+        - path:   /v1/workflow/runs/get
+          method: POST
+          action: workflow/GetWorkRun
+        - path:   /v1/workflow/runs/queue
+          method: POST
+          action: workflow/QueueWorkRun
+        - path:   /v1/workflow/runs/cancel
+          method: POST
+          action: workflow/CancelWorkRun
+        - path:   /v1/workflow/runs/recover
+          method: POST
+          action: workflow/RecoverWorkRuns
+
+        # ── Workflow: TaskRuns ──────────────────────────────────────────────
+        - path:   /v1/workflow/task-runs
+          method: GET
+          action: workflow/ListTaskRuns
+        - path:   /v1/workflow/task-runs/get
+          method: POST
+          action: workflow/GetTaskRun
+        - path:   /v1/workflow/task-runs/update
+          method: POST
+          action: workflow/UpdateTaskRunState
+
+        # ── Workflow: Workers ───────────────────────────────────────────────
+        - path:   /v1/workflow/workers
+          method: GET
+          action: workflow/ListWorkers
+
+hub:
+  queue:
+    waiting_capacity: 4096
+    dispatch_capacity: 256
+    backpressure: reject
+
+  # Route rules are a map keyed by name, evaluated in insertion order.
+  routes:
+    route-logs:
+      filters:
+        - kind: match
+          config: { field: kind, mode: regex, value: "^log/" }
+      targets:
+        - kind: components
+          config:
+            targets:
+              - name: log-server
+
+    drop-unhandled:
+      filters:
+        - kind: all
+      targets:
+        - kind: drop
+

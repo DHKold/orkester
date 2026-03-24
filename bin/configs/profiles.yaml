@@ -1,0 +1,70 @@
+# ── Default worker profile ─────────────────────────────────────────────────────
+kind: orkester/workerprofile:1.0
+name: standard
+namespace: testing
+version: 1.0.0
+metadata:
+  description: Standard worker profile for general workloads
+spec:
+  enabled: true
+  scope:
+    namespaces: []  # empty = all namespaces
+  concurrency:
+    max_work_runs: 4
+    max_task_runs: 16
+  task_runners: [shell, container]
+
+---
+# ── High-throughput analytics profile ─────────────────────────────────────────
+kind: orkester/workerprofile:1.0
+name: analytics-heavy
+namespace: analytics
+version: 1.0.0
+metadata:
+  description: High-throughput profile for analytics workloads
+spec:
+  enabled: true
+  scope:
+    namespaces: [analytics]
+  concurrency:
+    max_work_runs: 8
+    max_task_runs: 32
+  task_runners: [shell, container, kubernetes]
+
+---
+# ── Shell task runner profile ──────────────────────────────────────────────────
+kind: orkester/taskrunnerprofile:1.0
+name: default-shell
+namespace: testing
+version: 1.0.0
+metadata:
+  description: Default shell task runner profile
+spec:
+  kind: shell
+  config:
+    timeout_seconds: 3600
+  allow_override: true
+  allowed_override_fields: [timeout_seconds, script, cwd]
+
+---
+# ── Kubernetes task runner profile ─────────────────────────────────────────────
+kind: orkester/taskrunnerprofile:1.0
+name: analytics-k8s
+namespace: analytics
+version: 1.0.0
+metadata:
+  description: Kubernetes runner for analytics jobs
+spec:
+  kind: kubernetes
+  config:
+    resources:
+      requests:
+        cpu: "1"
+        memory: 2Gi
+      limits:
+        cpu: "4"
+        memory: 8Gi
+    job_ttl_seconds: 86400
+    backoff_limit: 2
+  allow_override: true
+  allowed_override_fields: [resources, image, command, args]

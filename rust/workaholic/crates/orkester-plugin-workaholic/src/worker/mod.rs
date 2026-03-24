@@ -1,6 +1,8 @@
 pub mod thread;
+pub mod thread_worker_server;
 
 pub use thread::ThreadWorker;
+pub use thread_worker_server::{ThreadWorkerConfig, ThreadWorkerServer};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
