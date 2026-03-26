@@ -1,0 +1,27 @@
+kind: workaholic/WorkerProfile:1.0
+name: standard
+version: 1.0.0
+metadata:
+  namespace: testing
+  description: "Standard worker profile for general workloads"
+  tags: ["standard", "general-purpose"]
+spec:
+  concurrency:
+    max_work_runs: 4
+    max_task_runs: 16
+  runnerWhitelist:
+    - shell
+    - container
+    - kubernetes
+    - sql
+---
+kind: workaholic/TaskRunnerProfile:1.0
+name: default-shell
+version: 1.0.0
+metadata:
+  namespace: testing
+  description: "Default shell task runner profile"
+  tags: ["shell", "default"]
+spec:
+  timeout_seconds: 360
+  user: "root"

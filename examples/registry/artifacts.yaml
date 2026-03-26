@@ -1,0 +1,25 @@
+kind: workaholic/artifact:1.0
+name: example-artifact
+version: 1.0.0
+metadata:
+  # The artifact will be exposed as registry://testing/example-group/example-artifact:1.0.0
+  namespace: testing
+  groups: ["example-group"]
+  # The description and tags are optional metadata that can be used for documentation and discovery purposes.
+  description: "Example artifact representing a built binary file"
+  tags: ["example", "binary", "build"]
+spec:
+  # The type of this artifact is a file, which means it represents a single file that can be stored and retrieved from the registry.
+  type: file
+  # The registryKind field specifies the type of registry where this artifact is stored. In this case, we are using a local filesystem registry.
+  registry: local-filesystem
+  # The internalUri field specifies the location of the artifact in the registry.
+  properties:
+    internalUri: "file:///registry/3f5cb9e-8c1a-4d2e-9f0a-123456789abc"
+    checksum: "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+    sizeBytes: 31254
+status:
+  deleted: false
+  createdAt: "2024-06-01T12:00:00Z"
+  updatedAt: "2024-06-01T12:00:00Z"
+  lastUsedAt: "2026-03-15T12:00:00Z"

@@ -1,0 +1,77 @@
+kind: "workaholic/Work:1.0"
+name: "example_work"
+version: "1.0"
+metadata:
+  description: "An example workflow"
+  namespace: "testing"
+  groups: ["example-group"]
+  tags: ["example", "demo"]
+spec:
+  # Define the inputs accepted by this workflow.
+  # The `type` field specifies the type of the input, which can be used for validation and documentation purposes.
+  # The `editable` field indicates whether the input can be overridden when executing the workflow.
+  # The `required` field indicates whether the input must be provided (if no default value is set).
+  # The `default` field can be used to specify a default value for the input, which can be a literal value or a reference to an artifact.
+  inputs:
+    - name: version                                                 # Example of a simple parameter with a literal value
+      description: "Version of the application to build"            # Description of this input (optional but recommended for better documentation)
+      type: string                                                  # The type of the input value (e.g., string, number, boolean, artifact, etc.)
+      editable: true                                                # Allow overriding this input when executing the work
+      required: true                                                # This input must be provided when executing the work (if no default value is set)
+    - name: source_code                                             # Example of a folder artifact with a default global reference
+      description: "Source code for the application"                # Description of this input (optional but recommended for better documentation)
+      type: folder                                                  # The type of this input is an artifact (could also be a file, a structured data, etc.)
+      editable: false                                               # This input cannot be overridden when executing the work
+      default:
+        uri: registry://applications/app1/source_code:1.0           # Default value is a reference to an artifact in the registry
+    - name: is_release                                              # Example of a boolean parameter with a default value referencing a field in a structured artifact
+      description: "Indicates if this is a release build"           # Description of this input (optional but recommended for better documentation)
+      type: boolean                                                 # The type of this input is boolean
+      editable: true                                                # This input can be overridden when executing the work
+      default:
+        uri: registry://applications/app1/config:1.0?is_release     # Default value is a reference to a specific field in a structured artifact
+  # Define the steps of this work. Each step represents a task execution and its position in the workflow DAG.
+  # The `taskRef` field specifies the task to execute in this step, using the format `namespace/group/name:version` (namespace and group are optional).
+  # The `dependsOn` field can be used to specify dependencies between steps.
+  # The `inputMapping` field defines how the inputs of the task are fulfilled. Inputs can be mapped from the Work's inputs, from outputs of previous steps, or from artifacts in the registry.
+  # The `outputMapping` field defines what to do with the outputs produced by the task. Outputs can be stored as artifacts in the registry, passed as inputs to subsequent steps, or simply discarded.
+  steps:
+    # Each step represents a task execution and its position in the workflow DAG. The `dependsOn` field can be used to specify dependencies between steps.
+    - name: step1
+      description: First step
+      taskRef: cargo-build:1.0
+      inputMapping:
+        # Example of inheriting inputs from the Work's inputs:
+        - name: source_code
+          from:
+            uri: work://inputs?source_code
+        - name: is_release
+          from:
+            uri: work://inputs?is_release
+        - name: log_level
+          from:
+            value: "debug" # Example of a literal value as input
+      outputMapping:
+        # Store the binary output as a global artifact (so it can be consumed by other works)
+        - name: binary
+          to:
+            uri: registry://applications/build/my_application:${inputs://version}
+    # Example of a step that depends on the output of a previous step. This step will only execute after `step1` has completed successfully, and it can consume the `binary` artifact produced by `step1`.
+    - name: step2
+      description: Second step
+      taskRef: publish:2.5
+      dependsOn: ["step1"]
+      inputMapping:
+        # Example of consuming artifacts from a previous step and from the Work's inputs:
+        - name: repository-uri
+          from:
+            uri: registry://applications/app1/config:1.0?repository_uri # Reference a specific field in a structured artifact from the registry
+        - name: binary
+          from:
+            uri: work://steps/step1/outputs?binary # Reference the `binary` output artifact produced by `step1`
+      outputMapping:
+        # Store the manifest as an artifact in the registry, using the version input for the tag
+        - name: manifest
+          to:
+            uri: work://manifests/my_application:${inputs://version}
+            retention: 30d # Optional retention policy for this artifact (e.g., 30 days)

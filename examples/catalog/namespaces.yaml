@@ -1,0 +1,31 @@
+kind: workaholic/Namespace:1.0
+name: testing
+version: 1.0.0
+metadata:
+  description: Default namespace for general-purpose workflows
+spec:
+  retention:
+    work_runs_days: 30
+    task_runs_days: 30
+    logs_days: 7
+  monthly_limits:
+    max_work_runs: 1000
+    max_task_runs: 10000
+  sizing_limits:
+    max_workers: 5
+---
+kind: workaholic/Namespace:1.0
+name: analytics
+version: 1.0.0
+metadata:
+  description: Namespace for analytics workflows
+spec:
+  retention:
+    work_runs_days: 60
+    task_runs_days: 60
+    logs_days: 30
+  monthly_limits:
+    max_work_runs: 2000
+    max_task_runs: 20000
+  sizing_limits:
+    max_workers: 1

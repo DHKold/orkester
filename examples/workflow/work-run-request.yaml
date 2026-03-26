@@ -1,0 +1,29 @@
+kind: workaholic/WorkRunRequest:1.0
+name: ffae8b9a-7c6d-4e5f-8a1b-123456789abc
+version: 1.0.0
+metadata:
+  namespace: testing
+  description: "Resolved execution request for example-work"
+  tags: ["example", "manual"]
+spec:
+  workRef: testing/example-work:1.0.0
+  trigger:
+    type: manual
+    at: "2024-07-01T12:00:00Z"
+    identity: "user:alice"
+  inputs:
+    version:
+      value: "1.0.0"
+    prefix:
+      value: "GLOBAL_"
+    anInputFile:
+      uri: "registry://path/to/an_input_file:1.0.0"
+  steps:
+    - name: set-delay
+      description: "Set a delay value and produce a file"
+      dependsOn: []
+      taskRunRequestRef: worker://36cc8e4-8b9a-4d9b-9c3a-123456789abc:1.0.0
+    - name: echo-hello
+      description: "Print a message after the delay step"
+      dependsOn: ["set-delay"]
+      taskRunRequestRef: worker://d85ab9c7-1234-4e5f-9a1b-123456789abc:1.0.0

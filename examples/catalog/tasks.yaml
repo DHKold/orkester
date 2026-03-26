@@ -1,0 +1,116 @@
+kind: workaholic/Task:1.0
+name: cargo-build
+version: 1.0.0
+metadata:
+  namespace: testing
+  description: "Task to run 'cargo build' in a Rust project directory"
+  groups: ["example-group"]
+  tags: ["example", "build", "rust"]
+spec:
+  inputs:
+    - name: source_code
+      description: "Directory containing the Rust source code to build"
+      type: directory
+      required: true
+    - name: is_release
+      description: "Whether to build in release mode"
+      type: boolean
+      required: false
+      default:
+        value: false
+    - name: log_level
+      description: "Log level for the build process"
+      type: string
+      required: false
+      default:
+        value: "info"
+  outputs:
+    - name: binary
+      description: "The resulting binary artifact from the build"
+      type: file
+    - name: return_code
+      description: "The return code of the build process"
+      type: integer
+  execution:
+    kind: workaholic/shell-runner:1.0
+    profile: default-shell
+    config:
+      env:
+        IS_RELEASE: "${task://inputs?is_release}"
+        LOG_LEVEL: "${task://inputs?log_level}"
+        BINARY_NAME: "my_application"
+      files_inputs:
+        - input: source_code
+          path: /tmp/source_code
+      files_outputs:
+        - output: binary
+          path: /tmp/binary
+      env_outputs:
+        - output: return_code
+          variable: RETURN_CODE
+      script: |
+        set -e
+        echo "Building Rust project in /tmp/source_code..."
+        cd "/tmp/source_code"
+        if [ "${IS_RELEASE}" = "true" ]; then
+          cargo build --release
+          RETURN_CODE=$?
+          cp target/release/${BINARY_NAME} /tmp/binary
+        else
+          cargo build
+          RETURN_CODE=$?
+          cp target/debug/${BINARY_NAME} /tmp/binary
+        fi
+        echo "Build complete. Binary is at /tmp/binary"
+---
+kind: workaholic/Task:1.0
+name: publish
+version: 2.5.2
+metadata:
+  namespace: testing
+  description: "Task to publish a binary artifact to a repository"
+  groups: ["example-group"]
+  tags: ["example", "publish", "registry"]
+spec:
+  inputs:
+    - name: repository-uri
+      description: "The URI of the repository to publish the binary artifact to"
+      type: string
+      required: true
+    - name: binary
+      description: "The binary artifact to publish"
+      type: file
+      required: true
+    - name: version
+      description: "The version to publish the artifact as"
+      type: string
+      required: false
+      default:
+        value: "1.0.0"
+  outputs:
+    - name: manifest
+      description: "The manifest of the published artifact in the repository"
+      type: file
+  execution:
+    kind: workaholic/shell-runner:1.0
+    profile: default-shell
+    config:
+      env:
+        REPOSITORY_URI: "${task://inputs?repository-uri}"
+        VERSION: "${task://inputs?version}"
+      files_inputs:
+        - input: binary
+      files_outputs:
+        - output: manifest
+      env_outputs:
+        - output: return_code
+          variable: RETURN_CODE
+      script: |
+        set -e
+        echo "Publishing binary to ${REPOSITORY_URI} with version ${VERSION}..."
+        # Simulate publishing by copying the binary to a new location and creating a manifest file
+        mkdir -p /tmp/published
+        cp "${binary}" "/tmp/published/my_application_${VERSION}"
+        echo "manifest: /tmp/published/my_application_${VERSION}" > /tmp/published/manifest
+        RETURN_CODE=0
+        echo "Publish complete. Manifest is at /tmp/published/manifest"

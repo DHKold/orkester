@@ -1,0 +1,34 @@
+kind: workaholic/TaskRun:1.0
+name: 2f75b2ab-0b8f-4b32-b2e4-123456789abc
+version: 1.0.0
+metadata:
+  namespace: testing
+  description: "Spawned TaskRun for step `step1`"
+spec:
+  taskRunRequestRef: worker://36cc8e4-8b9a-4d9b-9c3a-123456789abc:1.0.0
+  workRunRef: worker://9d2d5a46-7b63-4c0e-9e44-4f0c9f0d1111:1.0.0
+  workRef: testing/example_work:1.0.0
+  taskRef: testing/cargo-build:1.0.0
+  stepName: step1
+  attempt: 1
+  workerRef: testing/worker-1:1.0.0
+  taskRunnerRef: testing/shell-123:1.0.0
+status:
+  state: running
+  createdAt: "2024-07-01T12:00:03Z"
+  startedAt: "2024-07-01T12:00:04Z"
+  finishedAt: null
+
+  outputs: {}
+
+  stateHistory:
+    - state: pending
+      timestamp: "2024-07-01T12:00:03Z"
+      reason: "TaskRun created from TaskRunRequest"
+    - state: running
+      timestamp: "2024-07-01T12:00:04Z"
+      reason: "TaskRun started by task runner `shell-123`"
+
+  logsRef:
+    stdout: worker://logs/taskrun/2f75b2ab-0b8f-4b32-b2e4-123456789abc/stdout:1.0.0
+    stderr: worker://logs/taskrun/2f75b2ab-0b8f-4b32-b2e4-123456789abc/stderr:1.0.0
