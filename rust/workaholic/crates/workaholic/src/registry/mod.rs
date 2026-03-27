@@ -1,3 +1,3 @@
-mod artifact;
+mod artifact_doc;
 
-pub use artifact::*;
+pub use artifact_doc::*;
