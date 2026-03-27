@@ -5,7 +5,6 @@ use clap::Parser;
 
 mod catalog;
 mod config;
-mod registry;
 mod runner;
 
 // ── CLI ───────────────────────────────────────────────────────────────────────

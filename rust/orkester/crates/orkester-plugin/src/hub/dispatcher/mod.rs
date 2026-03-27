@@ -15,7 +15,7 @@ use crate::hub::{config::TargetConfig, envelope::Envelope, error::{DispatchError
 /// router run on the router thread.
 pub trait Dispatcher: Send + Sync + 'static {
     fn name(&self) -> &str;
-    fn dispatch(&self, envelope: Envelope) -> Result<(), DispatchError>;
+    fn dispatch(&self, envelope: Envelope) -> Result<Vec<Envelope>, DispatchError>;
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────

@@ -45,7 +45,7 @@ impl ComponentEntry {
     /// JSON (will be embedded as-is under `params`).  The component's response
     /// is freed immediately — callers that need a return value must use
     /// `call_json` instead.
-    pub fn deliver(&self, envelope: &Envelope) -> Result<(), String> {
+    pub fn deliver(&self, envelope: &Envelope) -> Result<Envelope, String> {
         // Build the standard JSON envelope: { "action": "...", "params": ... }
         let params: Value = serde_json::from_slice(&*envelope.payload)
             .unwrap_or(Value::Null);
@@ -63,11 +63,23 @@ impl ComponentEntry {
             payload_len: body_bytes.len() as u32,
         };
 
-        unsafe {
+        let response = unsafe {
             let res = ((*self.ptr).handle)(self.ptr, req);
+            let envelope = Envelope {
+                id: res.id,
+                kind: envelope.kind.clone(),
+                format: "std/json".to_string(),
+                owner: None,
+                payload: if res.payload.is_null() || res.payload_len == 0 {
+                    Vec::new()
+                } else {
+                    std::slice::from_raw_parts(res.payload, res.payload_len as usize).to_vec()
+                },
+            };
             ((*self.ptr).free_response)(self.ptr, res);
-        }
-        Ok(())
+            envelope
+        };
+        Ok(response)
     }
 
     /// Call this component with a JSON payload and return the JSON response.
@@ -159,23 +171,25 @@ impl ComponentsDispatcher {
 impl Dispatcher for ComponentsDispatcher {
     fn name(&self) -> &str { "components" }
 
-    fn dispatch(&self, envelope: Envelope) -> Result<(), DispatchError> {
+    fn dispatch(&self, envelope: Envelope) -> Result<Vec<Envelope>, DispatchError> {
         let registry = self.registry.lock().map_err(|_| DispatchError {
             dispatcher: self.name().to_owned(),
             cause: "registry mutex poisoned".to_owned(),
         })?;
 
         let mut delivered = 0usize;
+        let mut responses = Vec::new();
         for entry in registry.iter() {
             if self.targets.iter().any(|t| t.matches(entry)) {
-                if let Err(e) = entry.deliver(&envelope) {
-                    log::warn!("[hub/components] delivery to '{}' failed: {e}", entry.name);
+                match entry.deliver(&envelope) {
+                    Ok(response) => responses.push(response),
+                    Err(e) => log::warn!("[hub/components] delivery to '{}' failed: {e}", entry.name),
                 }
                 delivered += 1;
             }
         }
 
         log::debug!("[hub/components] id={} kind='{}' → {delivered} component(s)", envelope.id, envelope.kind);
-        Ok(())
+        Ok(responses)
     }
 }

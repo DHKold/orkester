@@ -10,8 +10,8 @@ pub struct DropDispatcher;
 impl Dispatcher for DropDispatcher {
     fn name(&self) -> &str { "drop" }
 
-    fn dispatch(&self, envelope: Envelope) -> Result<(), DispatchError> {
+    fn dispatch(&self, envelope: Envelope) -> Result<Vec<Envelope>, DispatchError> {
         log::debug!("[hub/drop] id={} kind='{}' dropped",envelope.id, envelope.kind);
-        Ok(())
+        Ok(Vec::new())
     }
 }
