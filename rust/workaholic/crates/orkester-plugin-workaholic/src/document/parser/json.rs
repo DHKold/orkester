@@ -17,7 +17,7 @@ pub struct JsonDocumentParserComponent{
     name = "JSON Document Parser",
     description = "A simple document parser that converts JSON strings into Document structs.",
 )]
-pub impl JsonDocumentParserComponent {
+impl JsonDocumentParserComponent {
     fn new() -> Self {
         Self { parser: JsonDocumentParser }
     }

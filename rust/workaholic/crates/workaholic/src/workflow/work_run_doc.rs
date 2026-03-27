@@ -19,7 +19,7 @@ pub struct WorkRunSpec {
     pub work_ref: String,
     /// Reference to the WorkRunner executing this run.
     #[serde(rename = "workRunnerRef")]
-    pub workRunner_ref: String,
+    pub work_runner_ref: String,
     /// What caused this run to start.
     pub trigger: Trigger,
 }

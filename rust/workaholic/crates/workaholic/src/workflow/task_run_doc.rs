@@ -30,7 +30,7 @@ pub struct TaskRunSpec {
     pub attempt: u32,
     /// Reference to the WorkRunner executing this TaskRun.
     #[serde(rename = "workRunnerRef")]
-    pub workRunner_ref: String,
+    pub work_runner_ref: String,
     /// Reference to the TaskRunner handling this execution.
     #[serde(rename = "taskRunnerRef")]
     pub task_runner_ref: String,

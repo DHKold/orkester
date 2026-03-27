@@ -71,7 +71,7 @@ impl Default for NamespaceLimits {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NamespaceSizing {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_workRunners: Option<u32>,
+    pub max_work_runners: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_crons: Option<u32>,
 }
@@ -79,7 +79,7 @@ pub struct NamespaceSizing {
 impl Default for NamespaceSizing {
     fn default() -> Self {
         Self {
-            max_workRunners: None,
+            max_work_runners: None,
             max_crons: None,
         }
     }

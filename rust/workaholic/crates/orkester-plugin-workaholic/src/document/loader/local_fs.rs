@@ -5,7 +5,7 @@ pub struct LocalFsLoader {
     extensions: HashMap<String, DocumentParser>,
 }
 
-pub impl LocalFsLoader {
+impl LocalFsLoader {
     /// Create a new LocalFsLoader with the given file paths.
     pub fn new(paths: Vec<String>, recursive: bool, extensions: HashMap<String, DocumentParser>) -> Self {
         Self { paths, recursive, extensions }
@@ -61,7 +61,7 @@ pub impl LocalFsLoader {
     }
 }
 
-pub impl DocumentLoader for LocalFsLoader {
+impl DocumentLoader for LocalFsLoader {
     /// Load documents from the local filesystem based on the configured paths and parameters.
     /// Each path can be a file or a directory. If it's a directory, it will be scanned for files with the specified extensions.
     /// The `recursive` flag determines whether to scan directories recursively.
@@ -94,7 +94,7 @@ pub struct LocalFsLoaderConfig {
     name = "Local Filesystem Loader",
     description = "Loader that reads documents from the local filesystem based on specified paths and parameters.",
 )]
-pub impl LocalFsLoaderComponent {
+impl LocalFsLoaderComponent {
     /// Create a new LocalFsLoaderComponent with the given parameters.
     pub fn new(host: Host, config: LocalFsLoaderConfig) -> Self {
         let mut parsers = HashMap::new();

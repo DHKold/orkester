@@ -16,7 +16,7 @@ pub struct YamlDocumentParserComponent{
     name = "YAML Document Parser",
     description = "A simple document parser that converts YAML strings into Document structs.",
 )]
-pub impl YamlDocumentParserComponent {
+impl YamlDocumentParserComponent {
     fn new() -> Self {
         Self { parser: YamlDocumentParser }
     }

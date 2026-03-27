@@ -2,7 +2,7 @@ pub struct MemoryPersistor {
     store: std::sync::Mutex<std::collections::HashMap<EntityKey, EntityValue>>,
 }
 
-pub impl DocumentPersistor for MemoryPersistor {
+impl DocumentPersistor for MemoryPersistor {
     fn put(&self, key: &EntityKey, data: EntityValue) -> Result<(), PersistorError> {
         let mut store = self.store.lock().map_err(|e| PersistorError::Internal(e.to_string()))?;
         store.insert(key.clone(), data);
