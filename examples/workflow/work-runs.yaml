@@ -6,9 +6,9 @@ metadata:
   description: "Spawned WorkRun for example_work"
   tags: ["example", "manual"]
 spec:
-  workRunRequestRef: worker://ffae8b9a-7c6d-4e5f-8a1b-123456789abc:1.0.0
+  workRunRequestRef: WorkRunner://ffae8b9a-7c6d-4e5f-8a1b-123456789abc:1.0.0
   workRef: testing/example_work:1.0.0
-  workerRef: testing/worker-1:1.0.0
+  WorkRunnerRef: testing/WorkRunner-1:1.0.0
   trigger:
     type: manual
     at: "2024-07-01T12:00:00Z"
@@ -30,12 +30,12 @@ status:
   steps:
     - name: step1
       state: running
-      taskRunRequestRef: worker://36cc8e4-8b9a-4d9b-9c3a-123456789abc:1.0.0
-      activeTaskRunRef: worker://2f75b2ab-0b8f-4b32-b2e4-123456789abc:1.0.0
+      taskRunRequestRef: WorkRunner://36cc8e4-8b9a-4d9b-9c3a-123456789abc:1.0.0
+      activeTaskRunRef: WorkRunner://2f75b2ab-0b8f-4b32-b2e4-123456789abc:1.0.0
       attempts: 1
     - name: step2
       state: pending
-      taskRunRequestRef: worker://d85ab9c7-1234-4e5f-9a1b-123456789abc:1.0.0
+      taskRunRequestRef: WorkRunner://d85ab9c7-1234-4e5f-9a1b-123456789abc:1.0.0
       activeTaskRunRef: null
       attempts: 0
 
@@ -47,4 +47,4 @@ status:
       reason: "WorkRun created from WorkRunRequest"
     - state: running
       timestamp: "2024-07-01T12:00:02Z"
-      reason: "WorkRun started execution on worker `worker-1`"
+      reason: "WorkRun started execution on WorkRunner `WorkRunner-1`"

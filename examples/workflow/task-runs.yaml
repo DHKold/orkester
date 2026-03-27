@@ -5,13 +5,13 @@ metadata:
   namespace: testing
   description: "Spawned TaskRun for step `step1`"
 spec:
-  taskRunRequestRef: worker://36cc8e4-8b9a-4d9b-9c3a-123456789abc:1.0.0
-  workRunRef: worker://9d2d5a46-7b63-4c0e-9e44-4f0c9f0d1111:1.0.0
+  taskRunRequestRef: WorkRunner://36cc8e4-8b9a-4d9b-9c3a-123456789abc:1.0.0
+  workRunRef: WorkRunner://9d2d5a46-7b63-4c0e-9e44-4f0c9f0d1111:1.0.0
   workRef: testing/example_work:1.0.0
   taskRef: testing/cargo-build:1.0.0
   stepName: step1
   attempt: 1
-  workerRef: testing/worker-1:1.0.0
+  WorkRunnerRef: testing/WorkRunner-1:1.0.0
   taskRunnerRef: testing/shell-123:1.0.0
 status:
   state: running
@@ -30,5 +30,5 @@ status:
       reason: "TaskRun started by task runner `shell-123`"
 
   logsRef:
-    stdout: worker://logs/taskrun/2f75b2ab-0b8f-4b32-b2e4-123456789abc/stdout:1.0.0
-    stderr: worker://logs/taskrun/2f75b2ab-0b8f-4b32-b2e4-123456789abc/stderr:1.0.0
+    stdout: WorkRunner://logs/taskrun/2f75b2ab-0b8f-4b32-b2e4-123456789abc/stdout:1.0.0
+    stderr: WorkRunner://logs/taskrun/2f75b2ab-0b8f-4b32-b2e4-123456789abc/stderr:1.0.0

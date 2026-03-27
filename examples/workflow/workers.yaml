@@ -1,11 +1,11 @@
-kind: workaholic/Worker:1.0
-name: worker-1
+kind: workaholic/WorkRunner:1.0
+name: WorkRunner-1
 version: 1.0.0
 metadata:
-  description: "Example worker configuration"
+  description: "Example WorkRunner configuration"
   namespace: testing
 spec:
-  kind: workaholic/ThreadWorker:1.0
+  kind: workaholic/ThreadWorkRunner:1.0
   config:
     thread_count: 4
   concurrency:

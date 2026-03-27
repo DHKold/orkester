@@ -12,7 +12,7 @@ spec:
     max_work_runs: 1000
     max_task_runs: 10000
   sizing_limits:
-    max_workers: 5
+    max_WorkRunners: 5
 ---
 kind: workaholic/Namespace:1.0
 name: analytics
@@ -28,4 +28,4 @@ spec:
     max_work_runs: 2000
     max_task_runs: 20000
   sizing_limits:
-    max_workers: 1
+    max_WorkRunners: 1

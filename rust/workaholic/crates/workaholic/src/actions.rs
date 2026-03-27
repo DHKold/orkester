@@ -10,9 +10,9 @@ pub const PERSISTENCE_PUT_HANDLE: &str = "workaholic/Persistence/Put";
 pub const PERSISTENCE_DELETE_HANDLE: &str = "workaholic/Persistence/Delete";
 pub const PERSISTENCE_LIST_HANDLE: &str = "workaholic/Persistence/List";
 
-// === Worker actions ===
-pub const WORKER_QUEUE_HANDLE: &str = "workaholic/Worker/Queue";
-pub const WORKER_UNQUEUE_HANDLE: &str = "workaholic/Worker/Unqueue";
+// === WorkRunner actions ===
+pub const WORKER_QUEUE_HANDLE: &str = "workaholic/WorkRunner/Queue";
+pub const WORKER_UNQUEUE_HANDLE: &str = "workaholic/WorkRunner/Unqueue";
 
 // === TaskRunner actions ===
 pub const TASK_RUNNER_RUN_HANDLE: &str = "workaholic/TaskRunner/Run";

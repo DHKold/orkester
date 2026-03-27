@@ -9,7 +9,7 @@ pub use document::*;
 // Utils: internal helper functions (default_true, default_false, default_vec, default_utc)
 mod utils;
 
-// Catalog resources: Namespace, Group, Task, Work, WorkerProfile, TaskRunnerProfile
+// Catalog resources: Namespace, Group, Task, Work, WorkRunnerProfile, TaskRunnerProfile
 mod catalog;
 pub use catalog::*;
 
@@ -17,6 +17,6 @@ pub use catalog::*;
 mod registry;
 pub use registry::*;
 
-// Workflow resources: Cron, Worker, TaskRunner, WorkRun, TaskRun, WorkRunRequest, TaskRunRequest
+// Workflow resources: Cron, WorkRunner, TaskRunner, WorkRun, TaskRun, WorkRunRequest, TaskRunRequest
 mod workflow;
 pub use workflow::*;

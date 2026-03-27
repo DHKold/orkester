@@ -13,8 +13,8 @@
 
 ## Rest
 
-- Expose the full catalog (Namespaces, Groups, Works, Tasks, WorkerProfiles, TaskRunnerProfiles, Crons)
-- Expose the full workflow (Workers, WorkRuns, TaskRuns)
+- Expose the full catalog (Namespaces, Groups, Works, Tasks, WorkRunnerProfiles, TaskRunnerProfiles, Crons)
+- Expose the full workflow (WorkRunners, WorkRuns, TaskRuns)
 - Use better URI (like /v1/catalog/.../, /v1/workflow/..., etc.)
 - Add logging with various levels (from TRACE to ERROR) (using the SDK with LogEntry requests!)
 

@@ -7,7 +7,7 @@ metadata:
 spec:
   workRef: testing/example_work:1.0.0
   taskRef: testing/set-delay:1.0.0
-  workRunRequestRef: worker://ffae8b9a-7c6d-4e5f-8a1b-123456789abc:1.0.0
+  workRunRequestRef: WorkRunner://ffae8b9a-7c6d-4e5f-8a1b-123456789abc:1.0.0
   stepName: step1
   inputs:
     - name: source_code
@@ -81,7 +81,7 @@ metadata:
 spec:
   workRef: testing/example-work:1.0.0
   taskRef: testing/echo-hello:1.0.0
-  workRunRequestRef: worker://ffae8b9a-7c6d-4e5f-8a1b-123456789abc:1.0.0
+  workRunRequestRef: WorkRunner://ffae8b9a-7c6d-4e5f-8a1b-123456789abc:1.0.0
   stepName: step2
   inputs:
     - name: repository-uri

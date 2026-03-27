@@ -35,12 +35,12 @@ servers:
     config:
       default_namespace: testing
       persistence: local-fs-persistence
-      workers:
-        - name: main-worker
+      workRunners:
+        - name: main-workRunner
           kind: thread
           max_work_runs: 4
           max_task_runs: 16
-        - name: analytics-worker
+        - name: analytics-workRunner
           kind: thread
           max_work_runs: 2
           max_task_runs: 8
@@ -133,13 +133,13 @@ servers:
           method: POST
           action: catalog/CreateCron
 
-        # ── Catalog: Worker profiles ────────────────────────────────────────
-        - path:   /v1/catalog/worker-profiles
+        # ── Catalog: WorkRunner profiles ────────────────────────────────────────
+        - path:   /v1/catalog/workRunner-profiles
           method: GET
-          action: catalog/ListWorkerProfiles
-        - path:   /v1/catalog/worker-profiles/get
+          action: catalog/ListWorkRunnerProfiles
+        - path:   /v1/catalog/workRunner-profiles/get
           method: POST
-          action: catalog/GetWorkerProfile
+          action: catalog/GetWorkRunnerProfile
 
         # ── Catalog: TaskRunner profiles ────────────────────────────────────
         - path:   /v1/catalog/taskrunner-profiles
@@ -180,10 +180,10 @@ servers:
           method: POST
           action: workflow/UpdateTaskRunState
 
-        # ── Workflow: Workers ───────────────────────────────────────────────
-        - path:   /v1/workflow/workers
+        # ── Workflow: WorkRunners ───────────────────────────────────────────────
+        - path:   /v1/workflow/workRunners
           method: GET
-          action: workflow/ListWorkers
+          action: workflow/ListWorkRunners
 
 hub:
   queue:

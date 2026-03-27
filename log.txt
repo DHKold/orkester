@@ -20,16 +20,16 @@
 
 === Starting orkester (config: /orkester/bin/workaholic.yaml) ===
 [INFO] [persistence] storage root: /orkester/bin/data
-[INFO] [catalog] loaded: 2 namespaces, 0 groups, 2 works, 4 tasks, 2 crons, 2 worker-profiles, 2 taskrunner-profiles
+[INFO] [catalog] loaded: 2 namespaces, 0 groups, 2 works, 4 tasks, 2 crons, 2 workRunner-profiles, 2 taskrunner-profiles
 [INFO] [workflow] using persistence component 'local-fs-persistence'
-[INFO] [workflow] spawned worker 'main-worker' (kind=thread)
-[INFO] [worker/main-worker] started
-[INFO] [workflow] spawned worker 'analytics-worker' (kind=thread)
-[INFO] [worker/analytics-worker] started
+[INFO] [workflow] spawned workRunner 'main-workRunner' (kind=thread)
+[INFO] [workRunner/main-workRunner] started
+[INFO] [workflow] spawned workRunner 'analytics-workRunner' (kind=thread)
+[INFO] [workRunner/analytics-workRunner] started
 [INFO] [workflow] 1 active work run(s) found on startup (recovery pending)
 [INFO] [workflow] work run '8eabdbf7-3059-4b0c-abd9-701531e2b259' created (work_ref=smoke-test)
-[INFO] [workflow] work run '8eabdbf7-3059-4b0c-abd9-701531e2b259' queued to worker 'main-worker'
-[INFO] [worker/main-worker] starting work run '8eabdbf7-3059-4b0c-abd9-701531e2b259'
-[INFO] [worker/main-worker] task 'greet' attempt 1/1
-[INFO] [worker/main-worker] task 'greet' succeeded
-[INFO] [worker/main-worker] work run '8eabdbf7-3059-4b0c-abd9-701531e2b259' succeeded
+[INFO] [workflow] work run '8eabdbf7-3059-4b0c-abd9-701531e2b259' queued to workRunner 'main-workRunner'
+[INFO] [workRunner/main-workRunner] starting work run '8eabdbf7-3059-4b0c-abd9-701531e2b259'
+[INFO] [workRunner/main-workRunner] task 'greet' attempt 1/1
+[INFO] [workRunner/main-workRunner] task 'greet' succeeded
+[INFO] [workRunner/main-workRunner] work run '8eabdbf7-3059-4b0c-abd9-701531e2b259' succeeded

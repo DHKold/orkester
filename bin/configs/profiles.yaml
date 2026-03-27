@@ -1,10 +1,10 @@
-# ── Default worker profile ─────────────────────────────────────────────────────
-kind: orkester/workerprofile:1.0
+# ── Default workRunner profile ─────────────────────────────────────────────────────
+kind: orkester/workRunnerprofile:1.0
 name: standard
 namespace: testing
 version: 1.0.0
 metadata:
-  description: Standard worker profile for general workloads
+  description: Standard workRunner profile for general workloads
 spec:
   enabled: true
   scope:
@@ -16,7 +16,7 @@ spec:
 
 ---
 # ── High-throughput analytics profile ─────────────────────────────────────────
-kind: orkester/workerprofile:1.0
+kind: orkester/workRunnerprofile:1.0
 name: analytics-heavy
 namespace: analytics
 version: 1.0.0

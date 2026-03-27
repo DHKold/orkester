@@ -22,8 +22,8 @@ spec:
     - name: set-delay
       description: "Set a delay value and produce a file"
       dependsOn: []
-      taskRunRequestRef: worker://36cc8e4-8b9a-4d9b-9c3a-123456789abc:1.0.0
+      taskRunRequestRef: WorkRunner://36cc8e4-8b9a-4d9b-9c3a-123456789abc:1.0.0
     - name: echo-hello
       description: "Print a message after the delay step"
       dependsOn: ["set-delay"]
-      taskRunRequestRef: worker://d85ab9c7-1234-4e5f-9a1b-123456789abc:1.0.0
+      taskRunRequestRef: WorkRunner://d85ab9c7-1234-4e5f-9a1b-123456789abc:1.0.0

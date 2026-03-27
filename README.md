@@ -40,7 +40,7 @@ Workflow:
 - [x] ContainerTaskExecutor : Ability to run tasks in docker / podman
 - [ ] OrkesterTaskExecutor : Ability to trigger Orkester commands (e.g. create workflows)
 - [ ] Workflow archiving : Ability to archive workflows (remove logs, keep state and metrics)
-- [ ] ThreadWorker : Ability to run a worker in a separate thread
+- [ ] ThreadWorkRunner : Ability to run a workRunner in a separate thread
 
 Metrics:
 - [ ] Work metrics : Add work specific metrics (like #Workflows, Total Time, etc.)

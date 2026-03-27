@@ -16,9 +16,9 @@ Must define:
 * `Task`
 * `Artifact`
 * `Cron`
-* `Worker`
+* `WorkRunner`
 * `TaskRunner`
-* `WorkerProfile`
+* `WorkRunnerProfile`
 * `TaskRunnerProfile`
 * `WorkRun`
 * `TaskRun`
@@ -40,7 +40,7 @@ Concrete implementations built on top of the Orkester plugin SDK.
 Must contain:
 
 * `WorkflowServer` component
-* `Worker` implementations (`LocalWorker`, `ThreadWorker`, `RemoteWorker`, ...)
+* `WorkRunner` implementations (`LocalWorkRunner`, `ThreadWorkRunner`, `RemoteWorkRunner`, ...)
 * `TaskRunner` implementations (`ShellTaskRunner`, `ContainerTaskRunner`, `KubernetesTaskRunner`, ...)
 
 ---
@@ -86,7 +86,7 @@ The implementation in `workaholic` must define a shared base model/parsing strat
 
 * creating and managing execution-related objects:
 
-  * `Worker`
+  * `WorkRunner`
   * `TaskRunner`
   * `WorkRun`
   * `TaskRun`
@@ -95,7 +95,7 @@ The implementation in `workaholic` must define a shared base model/parsing strat
 * sending `LogEntry` messages through the HUB
 * loading and using a `PersistenceProvider`
 * querying the host/components registry through HUB
-* creating workers/task runners through standard `CreateComponent` calls
+* creating workRunners/task runners through standard `CreateComponent` calls
 
 ### Workflow Server is NOT responsible for
 
@@ -106,7 +106,7 @@ The implementation in `workaholic` must define a shared base model/parsing strat
   * `Work`
   * `Task`
   * `Cron`
-  * `WorkerProfile`
+  * `WorkRunnerProfile`
   * `TaskRunnerProfile`
 
 Those are managed by a Catalog Server.
@@ -140,7 +140,7 @@ The host passes the Workflow Server configuration as the component config.
 The Workflow Server must then use HUB/SDK calls to:
 
 * query available components
-* create workers
+* create workRunners
 * create task runners
 * create/load persistence provider
 * interact with logging/metrics services
@@ -157,17 +157,17 @@ Global execution manager.
 
 Responsibilities:
 
-* create workers
+* create workRunners
 * queue or assign `WorkRun`
 * persist `WorkRun` / `TaskRun`
 * publish logs and metrics
 * expose execution state
 
-### Workers
+### WorkRunners
 
-Workers are responsible for orchestration of a `WorkRun`.
+WorkRunners are responsible for orchestration of a `WorkRun`.
 
-A worker:
+A workRunner:
 
 * has a queue of `WorkRun`
 * may support priorities
@@ -179,7 +179,7 @@ A worker:
 * handles state transitions
 * reports logs/metrics/state updates
 
-Workers own orchestration logic.
+WorkRunners own orchestration logic.
 
 ### TaskRunners
 
@@ -255,17 +255,17 @@ pub trait RunningTask {
 
 ### Why this is mandatory
 
-Workers orchestrate many `TaskRun` concurrently.
+WorkRunners orchestrate many `TaskRun` concurrently.
 
-So the worker must be able to:
+So the workRunner must be able to:
 
 * start several task executions
 * wait for completion later
 * cancel if needed
 * observe updates live
-* avoid blocking the whole worker on one task
+* avoid blocking the whole workRunner on one task
 
-A blocking `run()` model is not acceptable for the Workflow Server / Worker architecture.
+A blocking `run()` model is not acceptable for the Workflow Server / WorkRunner architecture.
 
 ### TaskRunner ownership model
 
@@ -286,12 +286,12 @@ For V1:
 * `Work`
 * `Task`
 * `Cron`
-* `WorkerProfile`
+* `WorkRunnerProfile`
 * `TaskRunnerProfile`
 
 ### Managed by Workflow Server
 
-* `Worker`
+* `WorkRunner`
 * `TaskRunner`
 * `WorkRun`
 * `TaskRun`
@@ -306,7 +306,7 @@ The PersistenceProvider is used to persist:
 
 * `WorkRun`
 * `TaskRun`
-* worker state if needed
+* workRunner state if needed
 * task runner state if needed
 * internal execution metadata if needed
 
@@ -371,7 +371,7 @@ This means:
 
 Used for:
 
-* creating workers
+* creating workRunners
 * creating task runners
 * loading persistence provider
 * sending logs
@@ -394,8 +394,8 @@ Prefer smaller operations like:
 
 * `CreateWorkRun`
 * `QueueWorkRun`
-* `StartWorker`
-* `StopWorker`
+* `StartWorkRunner`
+* `StopWorkRunner`
 * `ExecuteTaskRun`
 * `UpdateTaskRunState`
 * `PersistWorkRun`
@@ -409,7 +409,7 @@ Security is not part of this implementation phase, but future compatibility is r
 
 This is critical.
 
-The Workflow Server, Workers, and TaskRunners must:
+The Workflow Server, WorkRunners, and TaskRunners must:
 
 * never panic in normal runtime conditions
 * catch and convert errors to structured failures
@@ -436,20 +436,20 @@ The Workflow Server and all execution-related components must send `LogEntry` me
 At minimum log:
 
 * workflow server startup / shutdown
-* worker creation / deletion / restart
+* workRunner creation / deletion / restart
 * task runner creation / deletion
 * `WorkRun` queued / started / completed / failed / cancelled
 * `TaskRun` created / started / retried / completed / failed / cancelled
 * persistence failures
 * catalog query failures
-* worker/task runner communication failures
+* workRunner/task runner communication failures
 * artifact injection/extraction failures
 
 Each log should include as much context as available:
 
 * `work_run_id`
 * `task_run_id`
-* `worker_id`
+* `workRunner_id`
 * `task_runner_id`
 * `work_ref`
 * `task_ref`
@@ -462,7 +462,7 @@ The Workflow Server and related execution components must send metrics updates t
 
 Track at least:
 
-* active workers
+* active workRunners
 * active task runners
 * queued work runs
 * active work runs
@@ -470,8 +470,8 @@ Track at least:
 * successful/failed/cancelled work runs
 * successful/failed/cancelled task runs
 * retry count
-* worker queue length
-* worker free slots / capacity
+* workRunner queue length
+* workRunner free slots / capacity
 * task execution duration
 * work run duration
 
@@ -479,12 +479,12 @@ Track at least:
 
 ## Resolved decisions
 
-### A. Worker creation policy
+### A. WorkRunner creation policy
 
 Chosen:
 
-* workers are created at Workflow Server startup
-* workers are recreated automatically on failure
+* workRunners are created at Workflow Server startup
+* workRunners are recreated automatically on failure
 
 ### B. TaskRunner creation policy
 
@@ -499,7 +499,7 @@ Out of scope for V1:
 * caching
 * runner reuse
 
-### C. Worker selection strategy
+### C. WorkRunner selection strategy
 
 Still to define.
 
@@ -527,7 +527,7 @@ Still to define:
 
 Chosen:
 
-* one queue per worker
+* one queue per workRunner
 * priorities are supported
 
 Still to define:
@@ -571,7 +571,7 @@ Still to define:
 
 ## Remaining open decisions
 
-### 1. Worker selection strategy
+### 1. WorkRunner selection strategy
 
 Choose initial default:
 
@@ -599,7 +599,7 @@ Choose:
 
 Choose:
 
-* how to rebind recovered `WorkRun` to recreated workers
+* how to rebind recovered `WorkRun` to recreated workRunners
 * how long to re-poll in-flight task runs before marking them lost/failed
 
 ### 5. Cancellation policy
@@ -628,7 +628,7 @@ Recommended structure:
 ### In `orkester-plugin-workaholic`
 
 * `workflow_server/`
-* `workers/`
+* `workRunners/`
 * `task_runners/`
 * `protocol/`
 * `logging/`
@@ -645,12 +645,12 @@ Recommended implementation order:
 2. define protocol messages for workflow execution in `orkester-plugin-workaholic`
 3. implement generic `PersistenceProvider` integration
 4. implement Workflow Server component skeleton
-5. implement one Worker (`LocalWorker`)
+5. implement one WorkRunner (`LocalWorkRunner`)
 6. implement one TaskRunner (`ShellTaskRunner`) with the required async `spawn()` model
 7. implement `WorkRun` orchestration
 8. implement `TaskRun` execution and retries
 9. integrate logs + metrics
-10. add more workers/runners
+10. add more workRunners/runners
 
 ---
 
@@ -660,7 +660,7 @@ Recommended implementation order:
 
 * DAG validation
 * task dependency resolution
-* worker queue behavior
+* workRunner queue behavior
 * retry logic
 * task runner selection
 * persistence adapter behavior
@@ -669,7 +669,7 @@ Recommended implementation order:
 ### Integration tests
 
 * create Workflow Server from config
-* create Worker through `CreateComponent`
+* create WorkRunner through `CreateComponent`
 * create TaskRunner through `CreateComponent`
 * execute simple one-task `WorkRun`
 * execute multi-task DAG
@@ -683,7 +683,7 @@ Recommended implementation order:
 
 * missing catalog resource
 * persistence provider failure
-* worker failure
+* workRunner failure
 * task runner failure
 * artifact injection failure
 * malformed HUB response
@@ -698,7 +698,7 @@ Implementation is complete when:
 
 * `workaholic` exposes clean public models/traits/interfaces
 * `orkester-plugin-workaholic` provides working plugin implementations
-* Workflow Server can create and manage workers/task runners/work runs/task runs
+* Workflow Server can create and manage workRunners/task runners/work runs/task runs
 * TaskRunner contract is asynchronous and supports `spawn()` + running task handle operations
 * execution state is persisted through a generic `PersistenceProvider`
 * logs and metrics are emitted through HUB
