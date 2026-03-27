@@ -1,3 +1,11 @@
+use orkester_plugin::prelude::*;
+
+use workaholic::{DocumentParser, Document, Result};
+
+use super::actions::*;
+
+pub struct JsonDocumentParser;
+
 impl DocumentParser for JsonDocumentParser {
     /// Parse a JSON string into a single Document (no multiple documents in JSON).
     fn parse(&self, content: &str) -> Result<Vec<Document>> {
@@ -23,7 +31,7 @@ impl JsonDocumentParserComponent {
     }
 
     #[handle(ACTION_PARSER_PARSE)]
-    fn handle_parse(&self, content: String) -> Result<Vec<Document>> {
+    fn handle_parse(&mut self, content: String) -> Result<Vec<Document>> {
         self.parser.parse(&content)
     }
 }

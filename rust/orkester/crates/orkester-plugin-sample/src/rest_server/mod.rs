@@ -52,8 +52,6 @@ pub struct RestServerConfig {
 
 fn default_bind() -> String { "127.0.0.1:8080".into() }
 
-// â”€â”€ Internal types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 /// A pending HTTP request that has been matched to a route action but not yet
 /// answered.  Placed in the `pending` queue by the HTTP thread.
 struct PendingHttpRequest {
@@ -69,8 +67,6 @@ struct HttpResponseData {
     status: u16,
     body:   Value,
 }
-
-// â”€â”€ Poll / Respond on-wire types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// One entry in the `rest/Poll` response.
 #[derive(Serialize)]
@@ -116,13 +112,9 @@ pub struct AddRouteAck {
     pub ok: bool,
 }
 
-// â”€â”€ Shared state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 type RouteTable   = Vec<(String, String, String)>;  // (method, path, action)
 type PendingQueue = Arc<Mutex<VecDeque<PendingHttpRequest>>>;
 type WaiterMap    = Arc<Mutex<HashMap<u64, crossbeam_channel::Sender<HttpResponseData>>>>;
-
-// â”€â”€ RestServer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Embedded HTTP server with host-polled request dispatch.
 pub struct RestServer {

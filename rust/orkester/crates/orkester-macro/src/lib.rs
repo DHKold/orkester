@@ -94,7 +94,7 @@ struct ComponentMeta {
 }
 
 struct CollectedMethods {
-    handlers: Vec<(LitStr, ImplItemFn)>,
+    handlers: Vec<(Expr, ImplItemFn)>,
     factories: Vec<(LitStr, ImplItemFn)>,
     serializers: Vec<(proc_macro2::TokenStream, ImplItemFn)>,
     deserializers: Vec<(LitStr, ImplItemFn)>,
@@ -153,7 +153,7 @@ fn collect_methods(impl_block: &mut ItemImpl) -> syn::Result<CollectedMethods> {
         let ImplItem::Fn(method) = item else { continue };
 
         let mut remaining_attrs = Vec::new();
-        let mut handle_attr = None::<LitStr>;
+        let mut handle_attr = None::<Expr>;
         let mut factory_attr = None::<LitStr>;
         let mut serializer_attr = None::<proc_macro2::TokenStream>;
         let mut deserializer_attr = None::<LitStr>;

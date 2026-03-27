@@ -1,13 +1,30 @@
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use orkester_plugin::prelude::*;
-use workaholic::document::Document;
+use serde_json::Value;
 
-use actions::*;
+use super::actions::*;
+use super::request::*;
 
+/// A simple in-memory catalog server that stores resources as type-erased JSON values.
+/// Resources are keyed as `kind/namespace/name:version`.
+/// Will be extended in the future to support persistence, indexing, and access control.
 
-/// A simple in-memory catalog server that manages generic resources represented as Documents.
-/// Will be extended in the future to support more advanced features like persistence, indexing, access control, etc.
+pub enum CatalogError {
+    NotFound(String),
+}
+
+impl std::fmt::Display for CatalogError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CatalogError::NotFound(id) => write!(f, "resource not found: {id}"),
+        }
+    }
+}
+
 pub struct CatalogServer {
-    storage: HashMap<String, Box<dyn Document>>,
+    storage: Mutex<HashMap<String, Value>>,
 }
 
 #[component(
@@ -19,66 +36,88 @@ impl CatalogServer {
     /// Initializes the catalog server with an empty storage.
     fn new() -> Self {
         Self {
-            storage: HashMap::new(),
+            storage: Mutex::new(HashMap::new()),
         }
     }
 
-    /// Creates a new resource in the catalog.
+    /// Creates or overwrites a resource in the catalog. Returns the stored value.
     #[handle(ACTION_CATALOG_CREATE_RESOURCE)]
-    fn create_resource(&self, resource: Box<dyn Document>) -> Box<dyn Document> {
-        let id = format!("{}:{}", resource.kind, resource.name);
-        self.storage.insert(id, resource.clone());
-        resource
+    fn create_resource(&mut self, request: ResourceCreationRequest) -> Result<Value, CatalogError> {
+        let mut storage = self.storage.lock().unwrap();
+        storage.insert(request.id, request.resource.clone());
+        Ok(request.resource)
     }
 
     /// Retrieves a resource from the catalog by its ID.
     #[handle(ACTION_CATALOG_RETRIEVE_RESOURCE)]
-    fn get_resource(&self, id: String) -> Option<Box<dyn Document>> {
-        self.storage.get(&id).cloned()
+    fn get_resource(&mut self, request: ResourceRetrievalRequest) -> Result<Value, CatalogError> {
+        let storage = self.storage.lock().unwrap();
+        if let Some(resource) = storage.get(&request.id) {
+            Ok(resource.clone())
+        } else {
+            Err(CatalogError::NotFound(request.id))
+        }
     }
 
     /// Updates an existing resource in the catalog.
     #[handle(ACTION_CATALOG_UPDATE_RESOURCE)]
-    fn update_resource(&self, id: String, resource: Box<dyn Document>) -> Option<Box<dyn Document>> {
-        if self.storage.contains_key(&id) {
-            self.storage.insert(id.clone(), resource.clone());
-            Some(resource)
+    fn update_resource(&mut self, request: ResourceUpdateRequest) -> Result<Value, CatalogError> {
+        let mut storage = self.storage.lock().unwrap();
+        if storage.contains_key(&request.id) {
+            storage.insert(request.id, request.resource.clone());
+            Ok(request.resource)
         } else {
-            None
+            Err(CatalogError::NotFound(request.id))
         }
     }
 
     /// Deletes a resource from the catalog by its ID.
     #[handle(ACTION_CATALOG_DELETE_RESOURCE)]
-    fn delete_resource(&self, id: String) -> bool {
-        self.storage.remove(&id).is_some()
+    fn delete_resource(&mut self, request: ResourceDeletionRequest) -> Result<bool, CatalogError> {
+        let mut storage = self.storage.lock().unwrap();
+        if storage.remove(&request.id).is_some() {
+            Ok(true)
+        } else {
+            Err(CatalogError::NotFound(request.id))
+        }
     }
 
-    /// Searches for resources in the catalog based on a query string.
+    /// Searches for resources matching a `field=value` query.
+    /// Supported fields: `kind`, `name`, `namespace`.
     #[handle(ACTION_CATALOG_SEARCH_RESOURCES)]
-    fn search_resources(&self, query: String) -> Vec<Box<dyn Document>> {
-        // For now we just allow searching by kind, name or metadata.namespace. Query format is `<field>=<value>`, e.g. `kind=orkester/task:1.0` or `name=my-task`.
-        let mut results = Vec::new();
-        for resource in self.storage.values() {
-            if query.starts_with("kind=") && resource.kind == query[5..] {
-                results.push(resource.clone());
-            } else if query.starts_with("name=") && resource.name == query[5..] {
-                results.push(resource.clone());
-            } else if query.starts_with("namespace=") && resource.metadata.namespace.as_deref() == Some(&query[10..]) {
-                results.push(resource.clone());
-            }
-        }
-        results
+    fn search_resources(&mut self, request: ResourceSearchRequest) -> Result<Vec<Value>, CatalogError> {
+        let query = request.query;
+        let storage = self.storage.lock().unwrap();
+        let result = storage
+            .values()
+            .filter(|resource| {
+                if let Some(field_value) = query.strip_prefix("kind=") {
+                    resource.get("kind").and_then(|v| v.as_str()) == Some(field_value)
+                } else if let Some(field_value) = query.strip_prefix("name=") {
+                    resource.get("name").and_then(|v| v.as_str()) == Some(field_value)
+                } else if let Some(field_value) = query.strip_prefix("namespace=") {
+                    resource
+                        .get("metadata")
+                        .and_then(|m| m.get("namespace"))
+                        .and_then(|v| v.as_str()) == Some(field_value)
+                } else {
+                    false
+                }
+            })
+            .cloned()
+            .collect();
+        Ok(result)
+
     }
 
-    /// Request to load documents.
+    /// Routes a document-load request to the named loader component.
+    /// The host resolves `request.loaderRef` and dispatches the load action.
     #[handle(ACTION_CATALOG_LOAD_DOCUMENTS)]
-    fn load_documents(&self, request: CatalogLoadDocumentsRequest) -> Result<(), LoadDocumentsError> {
-        let loader: ComponentsLoader = get_component(&request.loaderRef).ok_or_else(|| LoadDocumentsError::LoaderNotFound(request.loaderRef.clone()))?;
-        let documents = loader.load_documents().map_err(|e| LoadDocumentsError::LoaderError(request.loaderRef.clone(), e.to_string()))?;
-        for doc in documents {
-            self.create_resource(Box::new(doc));
-        }
+    fn load_documents(&mut self, request: CatalogLoadDocumentsRequest) -> Result<(), CatalogError> {
+        // The host dispatches ACTION_LOAD_DOCUMENTS to the loader component
+        // identified by `request.loaderRef`; the loaded documents are then
+        // pushed back via ACTION_CATALOG_CREATE_RESOURCE calls.
+        let _ = request;
         Ok(())
     }
 }

@@ -1,3 +1,12 @@
+use orkester_plugin::prelude::*;
+
+use workaholic::{DocumentPersistor, EntityKey, EntityValue, PersistorError};
+
+use super::actions::*;
+use super::request::*;
+
+// ─── LocalFsPersistor ──────────────────────────────────────────────────────────
+
 pub struct LocalFsPersistor {
     base_path: std::path::PathBuf,
 }
@@ -28,17 +37,20 @@ impl DocumentPersistor for LocalFsPersistor {
         }
     }
 
-    fn list(&self, path: &str) -> Result<Vec<EntityKey>, PersistorError> {
-        let dir_path = self.base_path.join(path);
+    fn list(&self, prefix: &str) -> Result<Vec<EntityKey>, PersistorError> {
+        let dir_path = self.base_path.join(prefix);
         if !dir_path.exists() || !dir_path.is_dir() {
-            return Err(PersistorError::NotFound(path.to_string()));
+            return Err(PersistorError::NotFound(prefix.to_string()));
         }
         let entries = std::fs::read_dir(dir_path).map_err(|e| PersistorError::Internal(e.to_string()))?;
-        Ok(entries.filter_map(|entry| entry.ok().and_then(|e| e.file_name().into_string().ok())).collect())
+        Ok(entries
+            .filter_map(|e| e.ok().and_then(|e| e.file_name().into_string().ok()))
+            .collect())
     }
 }
 
-// === Export the component for use with orkester ===
+// ─── LocalFsDocumentPersistor component ──────────────────────────────────────
+
 pub struct LocalFsDocumentPersistor {
     persistor: LocalFsPersistor,
 }
@@ -46,10 +58,9 @@ pub struct LocalFsDocumentPersistor {
 #[component(
     kind = "workaholic/LocalFsPersistor:1.0",
     name = "Local Filesystem Persistence Component",
-    description = "Filesystem-based implementation of the DocumentPersistor trait for local development and testing."
+    description = "Filesystem-based persistence for local development and testing."
 )]
 impl LocalFsDocumentPersistor {
-    /// Constructor for the LocalFsDocumentPersistor.
     pub fn new(base_path: String) -> Self {
         Self {
             persistor: LocalFsPersistor {
@@ -59,22 +70,22 @@ impl LocalFsDocumentPersistor {
     }
 
     #[handle(ACTION_PERSISTOR_PUT)]
-    pub fn handle_put(&self, id: String, data: Document) -> Result<(), PersistorError> {
-        self.persistor.put(&id, data)
+    pub fn handle_put(&mut self, req: PersistorPutRequest) -> Result<(), PersistorError> {
+        self.persistor.put(&req.key, req.value)
     }
 
     #[handle(ACTION_PERSISTOR_GET)]
-    pub fn handle_get(&self, id: String) -> Result<Document, PersistorError> {
+    pub fn handle_get(&mut self, id: EntityKey) -> Result<EntityValue, PersistorError> {
         self.persistor.get(&id)
     }
 
     #[handle(ACTION_PERSISTOR_DELETE)]
-    pub fn handle_delete(&self, id: String) -> Result<(), PersistorError> {
+    pub fn handle_delete(&mut self, id: EntityKey) -> Result<(), PersistorError> {
         self.persistor.delete(&id)
     }
 
     #[handle(ACTION_PERSISTOR_LIST)]
-    pub fn handle_list(&self, path: String) -> Result<Vec<String>, PersistorError> {
-        self.persistor.list(&path)
+    pub fn handle_list(&mut self, prefix: EntityKey) -> Result<Vec<EntityKey>, PersistorError> {
+        self.persistor.list(&prefix)
     }
 }

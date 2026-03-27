@@ -1,3 +1,11 @@
+use orkester_plugin::prelude::*;
+use workaholic::{DocumentPersistor, EntityKey, EntityValue, PersistorError};
+
+use super::actions::*;
+use super::request::*;
+
+// ─── MemoryPersistor ────────────────────────────────────────────────────────────
+
 pub struct MemoryPersistor {
     store: std::sync::Mutex<std::collections::HashMap<EntityKey, EntityValue>>,
 }
@@ -23,13 +31,14 @@ impl DocumentPersistor for MemoryPersistor {
         }
     }
 
-    fn list(&self, path: &str) -> Result<Vec<EntityKey>, PersistorError> {
+    fn list(&self, prefix: &str) -> Result<Vec<EntityKey>, PersistorError> {
         let store = self.store.lock().map_err(|e| PersistorError::Internal(e.to_string()))?;
-        Ok(store.keys().filter(|k| k.starts_with(path)).cloned().collect())
+        Ok(store.keys().filter(|k| k.starts_with(prefix)).cloned().collect())
     }
 }
 
-// === Export the component for use with orkester ===
+// ─── MemoryDocumentPersistor component ────────────────────────────────────────
+
 pub struct MemoryDocumentPersistor {
     persistor: MemoryPersistor,
 }
@@ -37,10 +46,9 @@ pub struct MemoryDocumentPersistor {
 #[component(
     kind = "workaholic/MemoryPersistor:1.0",
     name = "Memory Persistence Component",
-    description = "In-memory implementation of the DocumentPersistor trait for testing and development purposes."
+    description = "In-memory persistence for testing and development."
 )]
 impl MemoryDocumentPersistor {
-    /// Constructor for the MemoryDocumentPersistor.
     pub fn new() -> Self {
         Self {
             persistor: MemoryPersistor {
@@ -50,22 +58,22 @@ impl MemoryDocumentPersistor {
     }
 
     #[handle(ACTION_PERSISTOR_PUT)]
-    pub fn handle_put(&self, id: String, data: Document) -> Result<(), PersistorError> {
-        self.persistor.put(&id, data)
+    pub fn handle_put(&mut self, req: PersistorPutRequest) -> Result<(), PersistorError> {
+        self.persistor.put(&req.key, req.value)
     }
 
     #[handle(ACTION_PERSISTOR_GET)]
-    pub fn handle_get(&self, id: String) -> Result<Document, PersistorError> {
+    pub fn handle_get(&mut self, id: EntityKey) -> Result<EntityValue, PersistorError> {
         self.persistor.get(&id)
     }
 
     #[handle(ACTION_PERSISTOR_DELETE)]
-    pub fn handle_delete(&self, id: String) -> Result<(), PersistorError> {
+    pub fn handle_delete(&mut self, id: EntityKey) -> Result<(), PersistorError> {
         self.persistor.delete(&id)
     }
 
     #[handle(ACTION_PERSISTOR_LIST)]
-    pub fn handle_list(&self, path: String) -> Result<Vec<String>, PersistorError> {
-        self.persistor.list(&path)
+    pub fn handle_list(&mut self, prefix: EntityKey) -> Result<Vec<EntityKey>, PersistorError> {
+        self.persistor.list(&prefix)
     }
 }
