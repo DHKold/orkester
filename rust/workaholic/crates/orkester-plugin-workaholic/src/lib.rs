@@ -16,3 +16,32 @@ pub use workflow::{
     WorkRun, WorkRunError, WorkRunEvent, WorkRunEventStream, WorkRunResources,
     WorkRunner, WorkRunnerError,
 };
+
+// Create the root component and export the plugin.
+use orkester_plugin::prelude::*;
+
+use workaholic::WorkaholicError;
+
+orkester_plugin::export_plugin_root_with_host!(RootComponent);
+
+pub struct RootComponent {
+    host_ptr: *mut orkester_plugin::abi::AbiHost,
+}
+
+unsafe impl Send for RootComponent {}
+
+#[component(
+    kind = "workaholic/Root:1.0.0",
+    name = "Workaholic Root Component",
+    description = "Root component for the Workaholic plugin, providing workflow execution capabilities."
+)]
+impl RootComponent {
+    fn new(host_ptr: *mut orkester_plugin::abi::AbiHost) -> Self {
+        Self { host_ptr }
+    }
+
+    #[factory("workaholic/CatalogServer:1.0")]
+    fn create_catalog_server(&mut self, config: catalog::CatalogServerConfig) -> Result<catalog::CatalogServer, WorkaholicError> {
+        Ok(catalog::CatalogServer::new(self.host_ptr, config))
+    }
+}

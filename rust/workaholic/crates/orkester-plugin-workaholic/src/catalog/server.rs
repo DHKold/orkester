@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
+use serde::Deserialize;
+use serde_json::Value;
 
 use orkester_plugin::prelude::*;
-use serde_json::Value;
 
 use super::actions::*;
 use super::request::*;
@@ -23,7 +24,14 @@ impl std::fmt::Display for CatalogError {
     }
 }
 
+#[derive(Deserialize)]
+pub struct CatalogServerConfig {
+    // Future configuration options (e.g. persistence backend, indexing, etc.) can be added here.
+}
+
 pub struct CatalogServer {
+    host: orkester_plugin::sdk::Host,
+    config: CatalogServerConfig,
     storage: Mutex<HashMap<String, Value>>,
 }
 
@@ -34,8 +42,11 @@ pub struct CatalogServer {
 )]
 impl CatalogServer {
     /// Initializes the catalog server with an empty storage.
-    fn new() -> Self {
+    pub fn new(host: *mut orkester_plugin::abi::AbiHost, config: CatalogServerConfig) -> Self {
+        let host = unsafe { orkester_plugin::sdk::Host::from_abi(host) };
         Self {
+            host,
+            config,
             storage: Mutex::new(HashMap::new()),
         }
     }

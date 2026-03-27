@@ -8,7 +8,7 @@ use workaholic::{
 };
 
 use super::traits::{
-    TaskRunHandle, WorkRun, WorkRunError, WorkRunEvent, WorkRunEventStream, WorkRunResources,
+    WorkRun, WorkRunError, WorkRunEvent, WorkRunEventStream, WorkRunResources,
     WorkRunner, WorkRunnerError,
 };
 
