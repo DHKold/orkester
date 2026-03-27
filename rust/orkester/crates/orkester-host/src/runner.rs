@@ -252,49 +252,39 @@ pub fn run(cfg: HostConfig) -> Result<()> {
     let mut host    = make_routing_host(registry.clone(), plugin_roots.clone());
 
     // 2. Load plugins
-    let mut catalog = Catalog::load(&mut host, &cfg.plugins)
-        .context("loading plugins")?;
-    if catalog.entries.is_empty() {
+    let mut catalog = Catalog::load(&mut host, &cfg.plugins).context("loading plugins")?;
+    if catalog.components.is_empty() {
         log::warn!("[runner] no plugins loaded — running in demo mode");
-    }
-
-    // Publish plugin root pointers so orkester/CreateComponent can reach factories.
-    {
-        let mut roots = plugin_roots.lock().unwrap();
-        for entry in &catalog.entries {
-            roots.push(entry.plugin.root_ptr() as usize);
-            log::debug!("[runner] registered plugin root for '{}'", entry.name);
-        }
     }
 
     // 3. Instantiate servers
     for server in &cfg.servers {
         if let Err(e) = registry::instantiate_and_register(&mut catalog, &registry, server) {
-            log::error!("[runner] failed to instantiate '{}': {e}", server.name);
+            log::error!("[runner] Failed to instantiate '{}': {e}", server.name);
         }
     }
 
     // Log what we have
     for (name, kind) in registry::describe(&registry) {
-        log::info!("[runner] registered '{name}' ({kind})");
+        log::info!("[runner] Registered '{name}' ({kind})");
     }
 
     // 4. Build and start hub
     let mut hub = MessageHub::new(cfg.hub, registry.clone())
         .context("building hub")?;
     hub.start().context("starting hub")?;
-    log::info!("[runner] hub started");
+    log::info!("[runner] Hub started");
 
     // 5. Set up Ctrl+C shutdown
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
     ctrlc::set_handler(move || {
-        log::info!("[runner] shutting down…");
+        log::info!("[runner] Shutting down…");
         r.store(false, Ordering::SeqCst);
     }).context("setting Ctrl+C handler")?;
 
     // 6. Main loop — REST polling
-    log::info!("[runner] entering main loop (Ctrl+C to stop)");
+    log::info!("[runner] Entering main loop (Ctrl+C to stop)");
 
     while running.load(Ordering::SeqCst) {
         // ── Poll RestServer ──────────────────────────────────────────────
@@ -354,23 +344,23 @@ fn route_action(
     match ptr_opt {
         None => {
             log::warn!(
-                "[runner/rest] no component for action '{action}' (namespace='{namespace}')"
+                "[runner/rest] No component for action '{action}' (namespace='{namespace}')"
             );
-            (404, json!({ "error": format!("no handler for action '{action}'") }))
+            (404, json!({ "error": format!("No handler for action '{action}'") }))
         }
         Some(ptr) => {
-            log::debug!("[runner/rest] routing HTTP action '{action}'");
+            log::debug!("[runner/rest] Routing HTTP action '{action}'");
             match call_json(ptr, action, params) {
                 Ok(v)  => {
                     if v.get("error").is_some() {
-                        log::warn!("[runner/rest] action '{action}' returned error: {}", v["error"]);
+                        log::warn!("[runner/rest] Action '{action}' returned error: {}", v["error"]);
                         (400, v)
                     } else {
                         (200, v)
                     }
                 }
                 Err(e) => {
-                    log::error!("[runner/rest] action '{action}' failed: {e}");
+                    log::error!("[runner/rest] Action '{action}' failed: {e}");
                     (500, json!({ "error": e.to_string() }))
                 }
             }

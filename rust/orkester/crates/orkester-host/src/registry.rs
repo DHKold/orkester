@@ -1,13 +1,11 @@
 ﻿use std::sync::{Arc, Mutex};
 
-use anyhow::{bail, Result};
+use anyhow::{Result};
 
 use orkester_plugin::{abi::AbiComponent, hub::ComponentEntry};
 
-use crate::catalog::Catalog;
+use crate::catalog::{Catalog, CatalogComponent, CatalogPlugin};
 use crate::config::ServerConfig;
-
-// â”€â”€ ComponentRegistry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Shared registry of live ABI component instances.
 pub type ComponentRegistry = Arc<Mutex<Vec<ComponentEntry>>>;
@@ -16,15 +14,9 @@ pub fn new_registry() -> ComponentRegistry {
     Arc::new(Mutex::new(Vec::new()))
 }
 
-// â”€â”€ Instantiation helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 /// Iterate plugins until one can produce a component of `server.kind`, then
 /// register it under `server.name`.
-pub fn instantiate_and_register(
-    catalog:  &mut Catalog,
-    registry: &ComponentRegistry,
-    server:   &ServerConfig,
-) -> Result<()> {
+pub fn instantiate_and_register(catalog: &mut Catalog, registry: &ComponentRegistry, server: &ServerConfig) -> Result<()> {
     let kind   = &server.kind;
     let name   = &server.name;
     let config = &server.config;
@@ -35,35 +27,21 @@ pub fn instantiate_and_register(
         "params": { "kind": kind, "config": config }
     });
 
-    for entry in &mut catalog.entries {
-        let mut root = entry.plugin.get_root_component();
-        match root.call_factory::<serde_json::Value>(&req) {
-            Ok(ptr) if !ptr.is_null() => {
-                log::info!("[registry] instantiated '{name}' ({kind})");
-                registry.lock().unwrap().push(
-                    ComponentEntry::new(name.clone(), kind.clone(), ptr)
-                );
-                return Ok(());
-            }
-            Ok(_) => continue, // null pointer â€” plugin declined
-            Err(e) => {
-                // When a plugin doesn't have a factory for this kind, the
-                // dispatch table returns a JSON error which call_factory
-                // surfaces as "expected format 'orkester/component'".  That
-                // is a normal "not provided" signal — log at debug, not warn.
-                log::debug!(
-                    "[registry] plugin '{}' does not provide '{kind}': {e}",
-                    entry.name
-                );
-                continue;
-            }
+    // Look for the component kind in the catalog, then call its factory to get a live instance.
+    let comp_entry = catalog.components.get(kind).ok_or_else(|| anyhow::anyhow!("No loaded plugin provides component kind '{kind}'"))?;
+    let plugin: &mut CatalogPlugin = catalog.plugins.get_mut(&comp_entry.plugin_ref).ok_or_else(|| anyhow::anyhow!("Plugin '{}' not found for component kind '{kind}'", comp_entry.plugin_ref))?;
+    let mut plugin = &mut plugin.plugin;
+    let mut handle = plugin.get_root_component();
+    match handle.call_factory(&req) {
+        Ok(comp_ptr) => {
+            let mut guard = registry.lock().unwrap();
+            guard.push(ComponentEntry::new(name.clone(), kind.clone(), comp_ptr));
+            log::info!("[registry] Registered component '{}' of kind '{}' from plugin '{}'", name, kind, comp_entry.plugin_ref);
+            Ok(())
         }
+        Err(e) => Err(anyhow::anyhow!("Failed to create component of kind '{kind}' from plugin '{}': {e}", comp_entry.plugin_ref)),
     }
-
-    bail!("no loaded plugin provides component kind '{kind}'")
 }
-
-// â”€â”€ Lookup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Find a registered component by name.  Returns `None` if not found.
 pub fn find_by_name(registry: &ComponentRegistry, name: &str) -> Option<*mut AbiComponent> {

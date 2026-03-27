@@ -124,8 +124,7 @@ impl Host {
     /// Dynamically load a plugin from a shared library.
     pub fn load_plugin(&mut self, path: impl AsRef<OsStr>) -> Result<LoadedPlugin> {
         let lib = unsafe { libloading::Library::new(path.as_ref())? };
-        let entry: libloading::Symbol<FnRootComponentBuilder> =
-            unsafe { lib.get(b"orkester_plugin_entry\0")? };
+        let entry: libloading::Symbol<FnRootComponentBuilder> = unsafe { lib.get(b"orkester_plugin_entry\0")? };
         let component = unsafe { entry(self.ptr) };
         if component.is_null() {
             return Err("plugin entry returned a null component".into());

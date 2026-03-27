@@ -63,6 +63,11 @@ servers:
           method: GET
           action: ping/Ping
 
+        # Catalog Resources
+        - path:   /v1/catalog/resources
+          method: GET
+          action: workaholic/CatalogServer/SearchResources
+
         # ── Catalog: Namespaces ─────────────────────────────────────────────
         - path:   /v1/catalog/namespaces
           method: GET
@@ -193,6 +198,19 @@ hub:
 
   # Route rules are a map keyed by name, evaluated in insertion order.
   routes:
+    catalog-route:
+      filters:
+        - kind: match
+          config:
+            field: kind
+            value: "^workaholic/CatalogServer/"
+            mode: regex
+      targets:
+        - kind: components
+          config:
+            targets:
+              - name: catalog-server
+
     route-logs:
       filters:
         - kind: match
