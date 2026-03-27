@@ -1,0 +1,1 @@
+pub const ACTION_LOAD_DOCUMENTS: &str = "workaholic/DocumentLoader/Load";

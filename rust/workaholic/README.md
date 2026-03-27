@@ -22,16 +22,16 @@ Must define:
 * `TaskRunnerProfile`
 * `WorkRun`
 * `TaskRun`
-* `DocumentsLoader`
+* `DocumentLoader`
 * `DocumentParser`
-* `PersistenceProvider`
+* `DocumentPersistor`
 
 Examples:
 
 * `LocalDocumentLoader`
 * `YamlDocumentParser`
-* `MemoryPersistenceProvider`
-* `LocalFsPersistenceProvider`
+* `MemoryDocumentPersistor`
+* `LocalFsDocumentPersistor`
 
 ### `orkester-plugin-workaholic`
 

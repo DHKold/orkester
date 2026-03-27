@@ -21,7 +21,7 @@
 ## Workflows
 
 - Add logging with various levels (from TRACE to ERROR) (using the SDK with LogEntry requests!)
-- Dynamic pieces MUST be provided as component. This means there can be traits defining what a DocumentsLoader/DocumentParser/TaskRunner/... is, but then every implementation must be wrapped in a component (using the orkester SDK/macro). The goal is that they will be referenced as components (i.e. `kind: "workaholic/ShellRunner:1.0" for example) and created/used via the SDK (CreateComponent, etc.)
+- Dynamic pieces MUST be provided as component. This means there can be traits defining what a DocumentLoader/DocumentParser/TaskRunner/... is, but then every implementation must be wrapped in a component (using the orkester SDK/macro). The goal is that they will be referenced as components (i.e. `kind: "workaholic/ShellRunner:1.0" for example) and created/used via the SDK (CreateComponent, etc.)
 - Persistence is not a "called" system (I see you added handlers to persists things). It how the workflow server stores its data. So it should be automatic: the objects are stored and loaded automaticaly with the persistence provider.
 
 ## DEV

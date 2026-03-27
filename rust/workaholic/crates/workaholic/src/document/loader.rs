@@ -14,6 +14,6 @@ pub enum LoaderError {
     ReadError(String, String),
 }
 
-pub trait DocumentsLoader: Send + Sync {
+pub trait DocumentLoader: Send + Sync {
     fn load(&self) -> Result<Vec<Document>>;
 }

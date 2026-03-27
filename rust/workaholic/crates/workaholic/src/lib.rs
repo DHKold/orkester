@@ -2,7 +2,7 @@
 mod global;
 pub use global::*;
 
-// Core document model: Document, DocumentsLoader, DocumentParser, PersistenceComponent
+// Core document model: Document, DocumentLoader, DocumentParser, DocumentPersistor
 mod document;
 pub use document::*;
 

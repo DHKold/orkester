@@ -1,0 +1,1 @@
+pub const ACTION_PARSER_PARSE: &str = "workaholic/DocumentParser/Parse";

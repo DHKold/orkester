@@ -1,9 +1,9 @@
 mod document;
 mod loader;
 mod parser;
-mod persister;
+mod persistor;
 
 pub use document::*;
 pub use loader::*;
 pub use parser::*;
-pub use persister::*;
+pub use persistor::*;
