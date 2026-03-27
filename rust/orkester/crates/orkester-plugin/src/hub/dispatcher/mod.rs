@@ -36,10 +36,7 @@ pub fn validate(cfg: &TargetConfig) -> Result<(), HubError> {
 ///
 /// `registry` is threaded through for dispatchers that need to reach ABI
 /// components at dispatch time.
-pub fn build(
-    cfg: &TargetConfig,
-    registry: ComponentRegistry,
-) -> Result<Box<dyn Dispatcher>, HubError> {
+pub fn build(cfg: &TargetConfig, registry: ComponentRegistry) -> Result<Box<dyn Dispatcher>, HubError> {
     match cfg.kind.as_str() {
         "components" => {
             let d = ComponentsDispatcher::from_config(&cfg.config, registry)
@@ -47,8 +44,6 @@ pub fn build(
             Ok(Box::new(d))
         }
         "drop" => Ok(Box::new(DropDispatcher)),
-        other => Err(HubError::InvalidConfig(format!(
-            "unknown target kind '{other}'",
-        ))),
+        other => Err(HubError::InvalidConfig(format!("unknown target kind '{other}'"))),
     }
 }

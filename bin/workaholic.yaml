@@ -14,13 +14,6 @@ servers:
         - kind: file
           path: /orkester/bin/data/orkester.log
 
-  # ── Persistence ────────────────────────────────────────────────────────────
-  # Must come before workflow-server (which reads from it during startup recovery).
-  - name: local-fs-persistence
-    kind: workaholic/LocalFsPersistence:1.0
-    config:
-      path: /orkester/bin/data
-
   # ── Workflow catalog ────────────────────────────────────────────────────────
   - name: catalog-server
     kind: workaholic/CatalogServer:1.0
@@ -203,7 +196,7 @@ hub:
         - kind: match
           config:
             field: kind
-            value: "^workaholic/CatalogServer/"
+            value: "workaholic/CatalogServer/"
             mode: regex
       targets:
         - kind: components

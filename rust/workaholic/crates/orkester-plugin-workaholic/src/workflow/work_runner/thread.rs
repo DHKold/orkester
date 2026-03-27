@@ -156,10 +156,6 @@ impl ThreadWorkRun {
             receiver: rx,
         }
     }
-
-    fn self_ref(&self) -> String {
-        format!("worker://{}/{}:1.0.0", self.namespace, self.name)
-    }
 }
 
 impl WorkRun for ThreadWorkRun {

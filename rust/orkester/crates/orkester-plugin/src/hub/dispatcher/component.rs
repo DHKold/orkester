@@ -169,19 +169,13 @@ impl Dispatcher for ComponentsDispatcher {
         for entry in registry.iter() {
             if self.targets.iter().any(|t| t.matches(entry)) {
                 if let Err(e) = entry.deliver(&envelope) {
-                    log::warn!(
-                        "[hub/components] delivery to '{}' failed: {e}",
-                        entry.name
-                    );
+                    log::warn!("[hub/components] delivery to '{}' failed: {e}", entry.name);
                 }
                 delivered += 1;
             }
         }
 
-        log::debug!(
-            "[hub/components] id={} kind='{}' → {delivered} component(s)",
-            envelope.id, envelope.kind
-        );
+        log::debug!("[hub/components] id={} kind='{}' → {delivered} component(s)", envelope.id, envelope.kind);
         Ok(())
     }
 }

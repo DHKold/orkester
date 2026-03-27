@@ -1,9 +1,11 @@
 use std::path::Path;
 use std::collections::HashMap;
+use serde_json::Value;
 
 use anyhow::Result;
 use walkdir::WalkDir;
 
+use orkester_plugin::abi::AbiComponent;
 use orkester_plugin::sdk::{ComponentMetadata, Host, LoadedPlugin};
 
 use crate::config::PluginsConfig;
@@ -76,6 +78,28 @@ impl Catalog {
         }
 
         Ok(Self { plugins, components })
+    }
+
+    /// Instanciate a component of the given kind by calling the factory handler of the plugin that provides it.
+    pub fn instantiate_component(&mut self, kind: &str, config: &Value) -> Result<*mut AbiComponent> {
+        let req = serde_json::json!({
+            "action": "orkester/CreateComponent",
+            "params": { "kind": kind, "config": config }
+        });
+
+        // Look for the component kind in the catalog, then call its factory to get a live instance.
+        let comp_entry = self.components.get(kind).ok_or_else(|| anyhow::anyhow!("No loaded plugin provides component kind '{kind}'"))?;
+        let plugin: &mut CatalogPlugin = self.plugins.get_mut(&comp_entry.plugin_ref).ok_or_else(|| anyhow::anyhow!("Plugin '{}' not found for component kind '{kind}'", comp_entry.plugin_ref))?;
+        let plugin = &mut plugin.plugin;
+        let mut handle = plugin.get_root_component();
+        let component = match handle.call_factory(&req) {
+            Ok(comp_ptr) => {
+                log::info!("[catalog] Created component '{}' from plugin '{}'", kind, comp_entry.plugin_ref);
+                comp_ptr
+            }
+            Err(e) => return Err(anyhow::anyhow!("Failed to create component of kind '{kind}' from plugin '{}': {e}", comp_entry.plugin_ref)),
+        };
+        Ok(component)
     }
 }
 

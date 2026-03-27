@@ -11,10 +11,7 @@ impl Dispatcher for DropDispatcher {
     fn name(&self) -> &str { "drop" }
 
     fn dispatch(&self, envelope: Envelope) -> Result<(), DispatchError> {
-        log::debug!(
-            "[hub/drop] id={} kind='{}' dropped",
-            envelope.id, envelope.kind
-        );
+        log::debug!("[hub/drop] id={} kind='{}' dropped",envelope.id, envelope.kind);
         Ok(())
     }
 }

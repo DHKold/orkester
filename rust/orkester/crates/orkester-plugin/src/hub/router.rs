@@ -17,7 +17,7 @@ pub struct RouteRule {
 }
 
 impl RouteRule {
-    fn matches(&self, envelope: &Envelope) -> bool {
+    pub fn matches(&self, envelope: &Envelope) -> bool {
         self.filters.iter().any(|f| f.matches(envelope))
     }
 }

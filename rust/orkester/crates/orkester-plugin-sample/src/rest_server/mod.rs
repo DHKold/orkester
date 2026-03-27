@@ -1,39 +1,12 @@
-﻿//! RestServer â€” an embedded HTTP server component.
-//!
-//! ## Design
-//!
-//! `RestServer` runs a `tiny_http` listener in a background thread.  Incoming
-//! HTTP requests are placed into a shared `pending` queue.  The host's main
-//! loop polls the component via `rest/Poll` to drain pending requests, routes
-//! each one to the appropriate ABI component, and delivers the result back via
-//! `rest/Respond {id, status, body}`.  The HTTP thread is blocked waiting on a
-//! per-request one-shot channel and only unblocks when `rest/Respond` is called.
-//!
-//! This design keeps all ABI component calls on the host thread, avoiding any
-//! cross-thread sharing of `*mut AbiComponent`.
-//!
-//! ## Route config
-//!
-//! ```yaml
-//! config:
-//!   bind: "127.0.0.1:8080"
-//!   routes:
-//!     - path:   /ping
-//!       method: GET
-//!       action: ping/Ping
-//! ```
-
-use std::{
+﻿use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
     thread,
 };
 
-use orkester_plugin::{abi::AbiHost, prelude::*};
+use orkester_plugin::{abi::AbiHost, prelude::*, hub::Envelope};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-// â”€â”€ Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Deserialize)]
 pub struct RouteEntry {
@@ -125,8 +98,13 @@ pub struct RestServer {
     _http_thread: Option<thread::JoinHandle<()>>,
 }
 
+#[derive(Clone, Copy)]
+pub struct HostPtr (*mut AbiHost);
+unsafe impl Send for HostPtr {}
+unsafe impl Sync for HostPtr {}
+
 impl RestServer {
-    pub fn new(cfg: RestServerConfig, _host_ptr: *mut AbiHost) -> Self {
+    pub fn new(cfg: RestServerConfig, host_ptr: *mut AbiHost) -> Self {
         let initial: RouteTable = cfg.routes
             .into_iter()
             .map(|r| (r.method.to_uppercase(), r.path, r.action))
@@ -143,6 +121,8 @@ impl RestServer {
         let thread_next_id = next_id.clone();
         let bind_addr      = cfg.bind;
 
+        let host_box = HostPtr(host_ptr); 
+
         let http_thread = thread::Builder::new()
             .name("rest-http".to_owned())
             .spawn(move || {
@@ -153,8 +133,7 @@ impl RestServer {
 
                 for mut request in server.incoming_requests() {
                     let method = request.method().to_string().to_uppercase();
-                    let path   = request.url()
-                        .split('?').next().unwrap_or("/").to_owned();
+                    let path   = request.url().split('?').next().unwrap_or("/").to_owned();
 
                     // Match route
                     let action_opt = {
@@ -182,29 +161,32 @@ impl RestServer {
                     let _ = std::io::Read::read_to_end(request.as_reader(), &mut body_buf);
                     let body: Value = serde_json::from_slice(&body_buf).unwrap_or(Value::Null);
 
-                    // Register one-shot response channel
-                    let (tx, rx) = crossbeam_channel::bounded::<HttpResponseData>(1);
-                    let id = thread_next_id
-                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-                    thread_waiters.lock().unwrap().insert(id, tx);
-                    thread_pending.lock().unwrap().push_back(PendingHttpRequest {
-                        id, method, path, action, body,
+                    // Create a HUB Envelope and send it to the host via the ABI pointer.
+                    let id = thread_next_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let envelope = Envelope {
+                        id: id,
+                        kind: action.clone(),
+                        owner: None,
+                        format: "std/json".to_string(),
+                        payload: body_buf, // Json String as Vec<u8>
+                    };
+                    let host_box = host_box; // Move the HostPtr into the closure
+                    let mut host = unsafe { Host::from_abi(host_box.0) };
+                    let result: Value = host.handle(&envelope).unwrap_or_else(|e| {
+                        log::error!("[rest] failed to send request to host: {e}");
+                        Value::Null
                     });
 
-                    // Block until host delivers the response (or timeout)
-                    let resp = rx
-                        .recv_timeout(std::time::Duration::from_secs(30))
-                        .unwrap_or(HttpResponseData {
-                            status: 504,
-                            body:   Value::String("gateway timeout".into()),
-                        });
-                    thread_waiters.lock().unwrap().remove(&id);
-
-                    let body_str = serde_json::to_string(&resp.body).unwrap_or_default();
+                    let body_str = match serde_json::to_string(&result) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            log::error!("[rest] failed to serialize response: {e}");
+                            r#"{"error":"response serialization failed"}"#.to_string()
+                        }
+                    };
                     let _ = request.respond(
                         tiny_http::Response::from_string(body_str)
-                            .with_status_code(resp.status)
+                            .with_status_code(200)
                             .with_header(json_content_type()),
                     );
                 }
@@ -218,8 +200,6 @@ impl RestServer {
 fn json_content_type() -> tiny_http::Header {
     tiny_http::Header::from_bytes("Content-Type", "application/json").unwrap()
 }
-
-// â”€â”€ PluginComponent impl â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[component(
     kind        = "sample/RestServer:1.0",

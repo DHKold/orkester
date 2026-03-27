@@ -395,6 +395,7 @@ dependencies = [
  "env_logger",
  "log",
  "orkester-plugin",
+ "rmp-serde",
  "serde",
  "serde_json",
  "serde_yaml",
