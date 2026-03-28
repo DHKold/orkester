@@ -58,6 +58,9 @@ servers:
 
         # Catalog Resources
         - path:   /v1/catalog/resources
+          method: POST
+          action: workaholic/CatalogServer/CreateResource
+        - path:   /v1/catalog/resources
           method: GET
           action: workaholic/CatalogServer/SearchResources
 
