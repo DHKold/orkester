@@ -60,7 +60,7 @@ where T: serde::de::DeserializeOwned
     match format.as_str() {
         "std/json" => serde_json::from_slice(&payload).ok(),
         "std/yaml" => serde_yaml::from_slice(&payload).ok(),
-        "std/msgpack" => rmp_serde::from_read_ref(&payload).ok(),
+        "std/msgpack" => rmp_serde::from_slice(&payload).ok(),
         _ => None,
     }
 }
@@ -133,6 +133,25 @@ pub fn run(cfg: HostConfig) -> Result<()> {
                 log::info!("[runner] Server '{}' of kind '{}' instantiated and registered", server.name, server.kind);
             }
             Err(e) => { log::error!("[runner] Failed to instantiate '{}': {e}", server.name); }
+        }
+    }
+
+    // 4. Start servers based on their `start` confign (list of actions)
+    for server in &cfg.servers {
+        if server.start.is_empty() {
+            continue;
+        }
+        let lock_registry = registry.lock().unwrap();
+        let component_entry = match lock_registry.iter().find(|entry| entry.name == server.name) {
+            Some(entry) => entry,
+            None => {
+                log::error!("[runner] Cannot start '{}': component not found in registry", server.name);
+                continue;
+            }
+        };
+        for action in &server.start {
+            component_entry.call_json(&action.kind, action.config.clone());
+            log::info!("[runner] Server '{}' start action '{}' dispatched", server.name, action.kind);
         }
     }
 

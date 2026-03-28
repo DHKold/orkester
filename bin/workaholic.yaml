@@ -21,6 +21,21 @@ servers:
       load_on_startup: true
       loader:
         path: /orkester/bin/configs/
+  - name: catalog-loader
+    kind: workaholic/LocalFsLoader:1.0
+    config:
+      extensions:
+        yaml: workaholic/YamlDocumentParser:1.0
+        yml:  workaholic/YamlDocumentParser:1.0
+        json: workaholic/JsonDocumentParser:1.0
+    start:
+      - kind: workaholic/DocumentLoader/CreateEntry
+        config:
+          path: /orkester/bin/configs/
+          recursive: true
+          watch: true
+      - kind: workaholic/DocumentLoader/Start
+        config: {}
 
   # ── Workflow execution engine ───────────────────────────────────────────────
   - name: workflow-server
@@ -55,6 +70,20 @@ servers:
         - path:   /v1/health
           method: GET
           action: ping/Ping
+
+        # Loader documents
+        - path:   /v1/loader/documents
+          method: GET
+          action: workaholic/DocumentLoader/SearchDocuments
+        - path:   /v1/loader/entries
+          method: POST
+          action: workaholic/DocumentLoader/CreateEntry
+        - path:   /v1/loader/entries
+          method: GET
+          action: workaholic/DocumentLoader/SearchEntries
+        - path:   /v1/loader/start
+          method: POST
+          action: workaholic/DocumentLoader/Start
 
         # Catalog Resources
         - path:   /v1/catalog/resources
@@ -206,6 +235,19 @@ hub:
           config:
             targets:
               - name: catalog-server
+
+    local-fs-loader-route:
+      filters:
+        - kind: match
+          config:
+            field: kind
+            value: "workaholic/DocumentLoader"
+            mode: regex
+      targets:
+        - kind: components
+          config:
+            targets:
+              - name: catalog-loader
 
     route-logs:
       filters:

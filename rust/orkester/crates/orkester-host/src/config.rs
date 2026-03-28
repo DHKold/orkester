@@ -16,12 +16,23 @@ pub struct PluginsConfig {
 
 // ── Server (component instance) config ───────────────────────────────────────
 
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct StartActions {
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub config: Value,
+}
+
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct ServerConfig {
     pub name:   String,
     pub kind:   String,
     #[serde(default)]
     pub config: Value,
+    #[serde(default)]
+    pub start: Vec<StartActions>,
 }
 
 // ── Top-level host config ─────────────────────────────────────────────────────

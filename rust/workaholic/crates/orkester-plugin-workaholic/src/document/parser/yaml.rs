@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 use orkester_plugin::prelude::*;
 
 use workaholic::{DocumentParser, Document, Result};
@@ -9,7 +11,11 @@ pub struct YamlDocumentParser;
 impl DocumentParser for YamlDocumentParser {
     /// Parse a YAML string into a list of Document structs (YAML supports multiple documents).
     fn parse(&self, content: &str) -> Result<Vec<Document>> {
-        let documents: Vec<Document> = serde_yaml::from_str(content)?;
+        let mut documents = Vec::new();
+        for deserializer in serde_yaml::Deserializer::from_str(content) {
+            let document = Document::deserialize(deserializer)?;
+            documents.push(document);
+        }
         Ok(documents)
     }
 }
