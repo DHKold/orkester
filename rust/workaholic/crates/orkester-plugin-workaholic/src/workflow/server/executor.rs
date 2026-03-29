@@ -1,0 +1,156 @@
+//! Direct task executor — runs steps in topological order using ad-hoc runners.
+//!
+//! Bypasses the hub dispatch system to avoid pipeline re-entrancy deadlocks.
+
+use std::collections::{HashMap, HashSet};
+use std::time::Duration;
+
+use workaholic::{
+    TaskRunDoc, TaskRunRequestDoc, TaskRunnerSpec, TaskRunState,
+    WorkRunRequestDoc, WorkRunState,
+};
+
+use super::registry::WorkflowRegistry;
+use crate::workflow::task_runner::{
+    ContainerTaskRunner, HttpTaskRunner, KubernetesTaskRunner, ShellTaskRunner,
+    TaskRun, TaskRunner,
+};
+
+// ─── Public entry point ───────────────────────────────────────────────────────
+
+/// Run all steps in `request` in topological order, updating the registry.
+pub fn execute_work_run(
+    request:       &WorkRunRequestDoc,
+    task_requests: &HashMap<String, TaskRunRequestDoc>,
+    registry:      &WorkflowRegistry,
+) {
+    let run_name         = &request.name;
+    let mut completed:   HashSet<String> = HashSet::new();
+    let mut remaining:   Vec<_>          = request.spec.steps.iter().collect();
+    let mut all_ok                       = true;
+
+    while !remaining.is_empty() {
+        // Find the first step whose every dependency has completed.
+        let idx = remaining.iter().position(|s| {
+            s.depends_on.iter().all(|d| completed.contains(d))
+        });
+        let step = match idx {
+            Some(i) => remaining.remove(i),
+            None => {
+                eprintln!("[executor] {run_name}: no ready step — possible cycle");
+                all_ok = false;
+                break;
+            }
+        };
+
+        let req = match task_requests.get(&step.task_run_request_ref) {
+            Some(r) => r.clone(),
+            None => {
+                eprintln!("[executor] {run_name}: missing task_run_request for step '{}'", step.name);
+                all_ok = false;
+                break;
+            }
+        };
+
+        eprintln!(
+            "[executor] run='{}' step='{}' runner='{}'",
+            run_name, step.name, req.spec.execution.kind
+        );
+        set_step_state(registry, run_name, &step.name, WorkRunState::Running);
+
+        let ok = run_step(req);
+        eprintln!("[executor] run='{}' step='{}' succeeded={ok}", run_name, step.name);
+
+        set_step_state(
+            registry, run_name, &step.name,
+            if ok { WorkRunState::Succeeded } else { WorkRunState::Failed },
+        );
+
+        if ok {
+            completed.insert(step.name.clone());
+        } else {
+            all_ok = false;
+            break;
+        }
+    }
+
+    let final_state = if all_ok { WorkRunState::Succeeded } else { WorkRunState::Failed };
+    eprintln!("[executor] run='{run_name}' final={final_state:?}");
+    set_run_state(registry, run_name, final_state);
+}
+
+// ─── Step dispatch ────────────────────────────────────────────────────────────
+
+fn run_step(req: TaskRunRequestDoc) -> bool {
+    let kind = req.spec.execution.kind.clone();
+    let spec = TaskRunnerSpec { kind: kind.clone(), config: serde_json::Value::Null };
+    let doc  = if kind.contains("ShellTaskRunner") {
+        run_with(ShellTaskRunner::new("exec", "exec", spec), req)
+    } else if kind.contains("ContainerTaskRunner") {
+        run_with(ContainerTaskRunner::new("exec", "exec", spec), req)
+    } else if kind.contains("HttpTaskRunner") {
+        run_with(HttpTaskRunner::new("exec", "exec", spec), req)
+    } else if kind.contains("KubernetesTaskRunner") {
+        run_with(KubernetesTaskRunner::new("exec", "exec", spec), req)
+    } else {
+        eprintln!("[executor] unknown runner kind: {kind}");
+        return false;
+    };
+
+    doc.and_then(|d| d.status)
+       .map(|s| s.state == TaskRunState::Succeeded)
+       .unwrap_or(false)
+}
+
+/// Spawn and start a task, then poll until it reaches a terminal state.
+fn run_with(runner: impl TaskRunner, req: TaskRunRequestDoc) -> Option<TaskRunDoc> {
+    let task = runner.spawn(req).ok()?;
+    task.start().ok()?;
+
+    loop {
+        let doc = task.as_doc();
+        if let Some(s) = &doc.status {
+            if matches!(
+                s.state,
+                TaskRunState::Succeeded | TaskRunState::Failed | TaskRunState::Cancelled
+            ) {
+                return Some(doc);
+            }
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+// ─── Registry helpers ─────────────────────────────────────────────────────────
+
+fn set_step_state(registry: &WorkflowRegistry, run: &str, step: &str, state: WorkRunState) {
+    if let Some(mut doc) = registry.get_work_run(run) {
+        if let Some(status) = doc.status.as_mut() {
+            if let Some(s) = status.steps.iter_mut().find(|s| s.name == step) {
+                s.state = state;
+            }
+        }
+        registry.update_work_run(doc);
+    }
+}
+
+fn set_run_state(registry: &WorkflowRegistry, run: &str, state: WorkRunState) {
+    use workaholic::WorkRunSummary;
+    if let Some(mut doc) = registry.get_work_run(run) {
+        if let Some(status) = doc.status.as_mut() {
+            status.state       = state;
+            status.finished_at = Some(chrono::Utc::now().to_rfc3339());
+            // Recalculate summary from actual step states.
+            let steps = &status.steps;
+            status.summary = WorkRunSummary {
+                total_steps:     steps.len(),
+                pending_steps:   steps.iter().filter(|s| s.state == WorkRunState::Pending).count(),
+                running_steps:   steps.iter().filter(|s| s.state == WorkRunState::Running).count(),
+                succeeded_steps: steps.iter().filter(|s| s.state == WorkRunState::Succeeded).count(),
+                failed_steps:    steps.iter().filter(|s| s.state == WorkRunState::Failed).count(),
+                cancelled_steps: steps.iter().filter(|s| s.state == WorkRunState::Cancelled).count(),
+            };
+        }
+        registry.update_work_run(doc);
+    }
+}

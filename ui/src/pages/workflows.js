@@ -1,4 +1,4 @@
-import { listWorkflows, deleteWorkflow, createWorkflow, listWorks, getWork } from '../api.js'
+import { listWorkRuns, cancelWorkRun, triggerWork, listWorks } from '../api.js'
 import { esc, fmtDateShort, fmtDuration, badge, setApp, breadcrumb, renderKvEditor, readKv, kvToObject, applyFilter, applySort, paginate, pagerHTML } from '../utils.js'
 import { toastError, toastSuccess } from '../components/toast.js'
 import { openModal, closeModal } from '../components/modal.js'
@@ -12,7 +12,6 @@ let wfState = { q: '', sortKey: 'created_at', sortDir: 'desc', page: 1 }
 
 export async function renderWorkflows({ ns, query = {} }) {
   const preWork = query['new'] ?? null
-  const preVer  = query['ver'] ?? null
 
   wfState = { q: '', sortKey: 'created_at', sortDir: 'desc', page: 1 }
   wfItems = []
@@ -39,26 +38,18 @@ export async function renderWorkflows({ ns, query = {} }) {
 
   let countdown = REFRESH_INTERVAL
   let paused    = false
-
   const updateStatus = () => {
     const el = document.getElementById('wf-refresh-status')
     if (el) el.textContent = paused ? 'auto-refresh off' : `refresh in ${countdown}s`
   }
-
   const doRefresh = async () => {
-    countdown = REFRESH_INTERVAL
-    updateStatus()
-    await loadList(ns)
-    updateStatus()
+    countdown = REFRESH_INTERVAL; updateStatus(); await loadList(ns); updateStatus()
   }
-
   const timer = setInterval(() => {
     if (paused) return
-    countdown--
-    updateStatus()
+    countdown--; updateStatus()
     if (countdown <= 0) doRefresh()
   }, 1000)
-
   setCleanup(() => clearInterval(timer))
   updateStatus()
 
@@ -67,25 +58,26 @@ export async function renderWorkflows({ ns, query = {} }) {
     if (!paused) { countdown = REFRESH_INTERVAL }
     updateStatus()
   })
-
   document.getElementById('btn-refresh-now').addEventListener('click', () => doRefresh())
-
-  document.getElementById('btn-new-workflow')
-    .addEventListener('click', () => openCreateModal(ns, preWork, preVer))
-
+  document.getElementById('btn-new-workflow').addEventListener('click', () => openTriggerModal(ns, preWork))
   document.getElementById('wf-filter').addEventListener('input', (e) => {
     wfState.q = e.target.value; wfState.page = 1; renderWfList(ns)
   })
 
-  await loadList(ns, preWork, preVer, /* openPreModal= */ true)
+  await loadList(ns, preWork, /* openPreModal= */ true)
 }
 
-async function loadList(ns, preWork = null, preVer = null, openPreModal = false) {
+async function loadList(ns, preWork = null, openPreModal = false) {
   try {
-    const data = await listWorkflows(ns)
-    wfItems    = data.workflows ?? []
+    const data = await listWorkRuns()
+    // Filter by namespace: spec.work_ref starts with `{ns}/` or metadata shows namespace
+    wfItems = (data.work_runs ?? []).filter(wr => {
+      const wrNs = wr.metadata?.namespace
+      if (wrNs) return wrNs === ns
+      return (wr.spec?.work_ref ?? '').startsWith(ns + '/')
+    })
     renderWfList(ns)
-    if (openPreModal && preWork) openCreateModal(ns, preWork, preVer)
+    if (openPreModal && preWork) openTriggerModal(ns, preWork)
   } catch (e) {
     toastError(`Failed to load workflows: ${e.message}`)
     const el = document.getElementById('wf-list')
@@ -93,17 +85,21 @@ async function loadList(ns, preWork = null, preVer = null, openPreModal = false)
   }
 }
 
+function workRunState(wr) { return wr.status?.state ?? 'pending' }
+function workRunRef(wr) { return wr.spec?.work_ref ?? '—' }
+function workRunCreatedAt(wr) { return wr.status?.created_at ?? '' }
+
 function renderWfList(ns) {
   const el = document.getElementById('wf-list')
   if (!el) return
 
   const SORT_FNS = {
-    created_at: wf => wf.created_at,
-    work:       wf => wf.work_name,
-    status:     wf => wf.status,
+    created_at: wr => workRunCreatedAt(wr),
+    work:       wr => workRunRef(wr),
+    status:     wr => workRunState(wr),
   }
 
-  const filtered = applyFilter(wfItems, wfState.q, wf => wf.work_name, wf => wf.id)
+  const filtered = applyFilter(wfItems, wfState.q, wr => workRunRef(wr), wr => wr.name)
   const sorted   = applySort(filtered, SORT_FNS[wfState.sortKey], wfState.sortDir)
   const { slice, page, pages, total } = paginate(sorted, wfState.page)
   wfState.page = page
@@ -112,7 +108,7 @@ function renderWfList(ns) {
   if (countEl) countEl.textContent = total < wfItems.length ? `(${total} of ${wfItems.length})` : `(${total})`
 
   if (wfItems.length === 0) {
-    el.innerHTML = '<div class="empty-state"><p>No workflows yet. Create one to get started.</p></div>'
+    el.innerHTML = '<div class="empty-state"><p>No workflows yet. Trigger one to get started.</p></div>'
     return
   }
   if (filtered.length === 0) {
@@ -120,32 +116,35 @@ function renderWfList(ns) {
     return
   }
 
-  const nsEnc   = encodeURIComponent(ns)
-  const sortInd   = k => k === wfState.sortKey ? (wfState.sortDir === 'asc' ? ' ▲' : ' ▼') : ' ⇅'
+  const nsEnc  = encodeURIComponent(ns)
+  const sortInd  = k => k === wfState.sortKey ? (wfState.sortDir === 'asc' ? ' ▲' : ' ▼') : ' ⇅'
   const activeCls = k => k === wfState.sortKey ? ' sort-active' : ''
 
-  const rows = slice.map(wf => {
-    const id     = esc(wf.id)
-    const wfEnc  = encodeURIComponent(wf.id)
-    const status = wf.status ?? 'waiting'
+  const rows = slice.map(wr => {
+    const name   = esc(wr.name)
+    const enc    = encodeURIComponent(wr.name)
+    const status = workRunState(wr)
+    const st     = wr.status ?? {}
     const dur    = TERMINAL.has(status)
-      ? fmtDuration(wf.started_at, wf.finished_at, wf.metrics?.duration_seconds)
-      : wf.started_at ? fmtDuration(wf.started_at) + ' ⏱' : '—'
-    const metrics  = wf.metrics ?? {}
-    const progress = metrics.steps_total > 0 ? `${metrics.steps_succeeded}/${metrics.steps_total}` : '—'
+      ? fmtDuration(st.started_at, st.finished_at)
+      : st.started_at ? fmtDuration(st.started_at) + ' ⏱' : '—'
+    const summary = st.summary ?? {}
+    const progress = summary.total_steps > 0
+      ? `${summary.succeeded_steps ?? 0}/${summary.total_steps}`
+      : '—'
     return `
       <tr data-status="${esc(status)}">
-        <td><a href="#/namespaces/${nsEnc}/workflows/${wfEnc}"><code style="font-size:0.78em">${id.substring(0, 8)}…</code></a></td>
-        <td><strong>${esc(wf.work_name)}</strong><span class="muted"> @ ${esc(wf.work_version)}</span></td>
+        <td><a href="#/namespaces/${nsEnc}/workflows/${enc}"><code style="font-size:0.78em">${name.substring(0, 8)}…</code></a></td>
+        <td><strong>${esc(workRunRef(wr))}</strong></td>
         <td>${badge(status)}</td>
-        <td class="muted">${fmtDateShort(wf.created_at)}</td>
+        <td class="muted">${fmtDateShort(workRunCreatedAt(wr))}</td>
         <td class="muted">${dur}</td>
         <td class="muted">${progress}</td>
         <td><div style="display:flex;gap:0.4rem">
-          <a href="#/namespaces/${nsEnc}/workflows/${wfEnc}" role="button" class="outline btn-xs">View</a>
+          <a href="#/namespaces/${nsEnc}/workflows/${enc}" role="button" class="outline btn-xs">View</a>
           ${!TERMINAL.has(status)
-            ? `<button class="secondary outline btn-xs" data-cancel="${esc(wf.id)}">Cancel</button>`
-            : `<button class="secondary outline btn-xs" data-delete="${esc(wf.id)}">Delete</button>`
+            ? `<button class="secondary outline btn-xs" data-cancel="${esc(wr.name)}">Cancel</button>`
+            : ''
           }
         </div></td>
       </tr>`
@@ -155,7 +154,7 @@ function renderWfList(ns) {
     <figure><table>
       <thead><tr>
         <th>ID</th>
-        <th class="sortable${activeCls('work')}" data-sort="work">Work<span class="sort-ind">${sortInd('work')}</span></th>
+        <th class="sortable${activeCls('work')}" data-sort="work">Work Ref<span class="sort-ind">${sortInd('work')}</span></th>
         <th class="sortable${activeCls('status')}" data-sort="status">Status<span class="sort-ind">${sortInd('status')}</span></th>
         <th class="sortable${activeCls('created_at')}" data-sort="created_at">Created<span class="sort-ind">${sortInd('created_at')}</span></th>
         <th>Duration</th><th>Steps</th><th></th>
@@ -176,123 +175,70 @@ function renderWfList(ns) {
   el.querySelectorAll('[data-page]').forEach(btn =>
     btn.addEventListener('click', () => { wfState.page = +btn.dataset.page; renderWfList(ns) })
   )
-  el.querySelectorAll('[data-delete]').forEach(btn =>
-    btn.addEventListener('click', async () => {
-      if (!confirm(`Delete workflow ${btn.dataset.delete}?`)) return
-      try { await deleteWorkflow(ns, btn.dataset.delete); toastSuccess('Workflow deleted.'); await loadList(ns) }
-      catch (e) { toastError(e.message) }
-    })
-  )
   el.querySelectorAll('[data-cancel]').forEach(btn =>
     btn.addEventListener('click', async () => {
-      if (!confirm(`Cancel workflow ${btn.dataset.cancel}?`)) return
+      if (!confirm(`Cancel workflow run ${btn.dataset.cancel}?`)) return
       try {
-        const { updateWorkflow } = await import('../api.js')
-        await updateWorkflow(ns, btn.dataset.cancel, { status: 'cancelled' })
-        toastSuccess('Workflow cancelled.'); await loadList(ns)
+        await cancelWorkRun(btn.dataset.cancel)
+        toastSuccess('Workflow cancelled.')
+        await loadList(ns)
       } catch (e) { toastError(e.message) }
     })
   )
 }
 
+// ── Trigger Workflow Modal ────────────────────────────────────────────────────
 
-// ── Create Workflow Modal ─────────────────────────────────────────────────────
-
-async function openCreateModal(ns, preWorkName = null, preWorkVer = null) {
-  openModal('New Workflow', '<p aria-busy="true">Loading works…</p>')
+async function openTriggerModal(ns, preWorkRef = null) {
+  openModal('Trigger Workflow', '<p aria-busy="true">Loading works…</p>')
 
   try {
     const data  = await listWorks(ns)
     const works = data.works ?? []
 
-    const options = works.map(w =>
-      `<option value="${esc(w.name)}|${esc(w.version)}"
-        ${w.name === preWorkName && w.version === preWorkVer ? 'selected' : ''}>
-        ${esc(w.name)} @ ${esc(w.version)}
-      </option>`
-    ).join('')
+    const options = works.map(w => {
+      const ref = `${esc(w.metadata?.namespace ?? ns)}/${esc(w.name)}`
+      return `<option value="${ref}" ${ref === preWorkRef ? 'selected' : ''}>${ref}</option>`
+    }).join('')
 
-    const html = `
-      <form id="form-create-wf">
+    document.getElementById('modal-body').innerHTML = `
+      <form id="form-trigger-wf">
         <label>Work
           <select id="wf-work" required>
             <option value="">Select a Work…</option>
             ${options}
           </select>
         </label>
-
-        <details id="wf-schedule-details">
-          <summary>Schedule (optional)</summary>
-          <label>Start at
-            <input type="datetime-local" id="wf-start-dt" />
-            <small>Leave blank to start immediately.</small>
-          </label>
-        </details>
-
         <fieldset>
-          <legend>Parameters</legend>
-          <div id="wf-context"></div>
+          <legend>Inputs (optional)</legend>
+          <div id="wf-inputs"></div>
         </fieldset>
-
         <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
           <button type="button" class="secondary outline" id="wf-cancel-btn">Cancel</button>
-          <button type="submit" id="wf-submit-btn">Create Workflow</button>
+          <button type="submit" id="wf-submit-btn">Trigger</button>
         </div>
       </form>
     `
 
-    const { setModalBody } = await import('./modal.js').catch(() => import('../components/modal.js'))
-    document.getElementById('modal-body').innerHTML = html
-
-    // Pre-populate context if a work was pre-selected
-    const workSelect = document.getElementById('wf-work')
-    const loadContext = async (val) => {
-      if (!val) { renderKvEditor('wf-context', {}, {}); return }
-      const [wn, wv] = val.split('|')
-      try {
-        const w = await getWork(ns, wn, wv)
-        renderKvEditor('wf-context', {}, w.spec?.inputs ?? {})
-      } catch (_) { renderKvEditor('wf-context', {}, {}) }
-    }
-
-    workSelect.addEventListener('change', (e) => loadContext(e.target.value))
-    await loadContext(workSelect.value)
-
+    renderKvEditor('wf-inputs', {})
     document.getElementById('wf-cancel-btn').addEventListener('click', closeModal)
-
-    document.getElementById('form-create-wf').addEventListener('submit', async (e) => {
+    document.getElementById('form-trigger-wf').addEventListener('submit', async (e) => {
       e.preventDefault()
-      const [wn, wv] = (workSelect.value || '').split('|')
-      if (!wn) { toastError('Please select a Work.'); return }
-
+      const workRef = document.getElementById('wf-work').value
+      if (!workRef) { toastError('Please select a Work.'); return }
       const submit = document.getElementById('wf-submit-btn')
-      submit.setAttribute('aria-busy', 'true')
-      submit.disabled = true
-
+      submit.setAttribute('aria-busy', 'true'); submit.disabled = true
       try {
-        const context = kvToObject(readKv('wf-context'))
-        const startDt = document.getElementById('wf-start-dt').value
-        const body = {
-          work_name:    wn,
-          work_version: wv,
-          work_context: context,
-          ...(startDt ? { schedule: { start_datetime: new Date(startDt).toISOString() } } : {}),
-        }
-        await createWorkflow(ns, body)
-        closeModal()
-        toastSuccess('Workflow created.')
-        await loadList(ns)
+        await triggerWork({ workRef, inputs: kvToObject(readKv('wf-inputs')) })
+        closeModal(); toastSuccess('Workflow triggered.'); await loadList(ns)
       } catch (err) {
-        toastError(`Failed to create workflow: ${err.message}`)
+        toastError(`Failed to trigger: ${err.message}`)
       } finally {
-        submit.removeAttribute('aria-busy')
-        submit.disabled = false
+        submit.removeAttribute('aria-busy'); submit.disabled = false
       }
     })
-
   } catch (e) {
     document.getElementById('modal-body').innerHTML =
       `<p class="muted">Failed to load works: ${esc(e.message)}</p>`
-    toastError(e.message)
   }
 }

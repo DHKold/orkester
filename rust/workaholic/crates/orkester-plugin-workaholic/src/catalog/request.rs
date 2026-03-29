@@ -36,7 +36,7 @@ pub struct CatalogLoadDocumentsRequest{
 // ── List requests / responses ─────────────────────────────────────────────────
 
 /// Used by ListWorks and ListTasks — filters by namespace name.
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ListItemsRequest {
     /// Namespace name to filter by (matches `metadata.namespace` in the document).
     pub ns: String,

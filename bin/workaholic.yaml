@@ -41,17 +41,16 @@ servers:
   - name: workflow-server
     kind: workaholic/WorkflowServer:1.0
     config:
-      default_namespace: testing
-      persistence: local-fs-persistence
-      workRunners:
-        - name: main-workRunner
-          kind: thread
+      name: workflow-server
+      namespace: testing
+      catalog_ref: catalog-server
+      task_permits_per_grant: 4
+      work_runner:
+        kind: workaholic/ThreadWorkRunner:1.0
+        config: {}
+        concurrency:
           max_work_runs: 4
           max_task_runs: 16
-        - name: analytics-workRunner
-          kind: thread
-          max_work_runs: 2
-          max_task_runs: 8
 
   # ── Ping / health ────────────────────────────────────────────────────────────
   - name: ping-server
@@ -121,6 +120,33 @@ servers:
           method: GET
           action: workaholic/CatalogServer/SearchResources
 
+        # Workflow : Manual trigger
+        - path:   /v1/workflow/trigger
+          method: POST
+          action: workaholic/WorkflowServer/Trigger
+
+        # Workflow : WorkRun queries
+        - path:   /v1/workflow/work-runs
+          method: GET
+          action: workaholic/WorkflowServer/ListWorkRuns
+        - path:   /v1/workflow/work-runs/{name}
+          method: GET
+          action: workaholic/WorkflowServer/GetWorkRun
+        - path:   /v1/workflow/work-runs/{name}/cancel
+          method: POST
+          action: workaholic/WorkflowServer/CancelWorkRun
+
+        # Workflow : Cron management
+        - path:   /v1/workflow/crons
+          method: GET
+          action: workaholic/WorkflowServer/ListCrons
+        - path:   /v1/workflow/crons
+          method: POST
+          action: workaholic/WorkflowServer/RegisterCron
+        - path:   /v1/workflow/crons/{name}
+          method: DELETE
+          action: workaholic/WorkflowServer/UnregisterCron
+
 hub:
   queue:
     waiting_capacity: 4096
@@ -129,6 +155,20 @@ hub:
 
   # Route rules are a map keyed by name, evaluated in insertion order.
   routes:
+    # Workflow server actions go to the workflow server.
+    workflow-route:
+      filters:
+        - kind: match
+          config:
+            field: kind
+            value: "workaholic/WorkflowServer/"
+            mode: regex
+      targets:
+        - kind: components
+          config:
+            targets:
+              - name: workflow-server
+
     # Catalog-related actions go to the catalog server.
     catalog-route:
       filters:

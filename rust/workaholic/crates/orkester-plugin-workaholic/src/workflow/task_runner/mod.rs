@@ -2,6 +2,11 @@ mod traits;
 mod shell;
 mod container;
 mod http;
+mod kubernetes;
+pub mod shell_component;
+pub mod http_component;
+pub mod container_component;
+pub mod kubernetes_component;
 
 // Stream adapter shared across task runner implementations.
 pub(crate) mod stream_adapter {
@@ -40,3 +45,8 @@ pub use traits::{
 pub use shell::ShellTaskRunner;
 pub use container::ContainerTaskRunner;
 pub use http::HttpTaskRunner;
+pub use kubernetes::KubernetesTaskRunner;
+pub use shell_component::{ShellTaskRunnerComponent, ShellTaskRunnerConfig};
+pub use http_component::{HttpTaskRunnerComponent, HttpTaskRunnerConfig};
+pub use container_component::{ContainerTaskRunnerComponent, ContainerTaskRunnerConfig};
+pub use kubernetes_component::{KubernetesTaskRunnerComponent, KubernetesTaskRunnerConfig};

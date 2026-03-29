@@ -25,21 +25,19 @@ export const getTask        = (ns, n, v)     => req(`/namespaces/${enc(ns)}/task
 export const listWorks      = (ns)           => req(`/namespaces/${enc(ns)}/works`)
 export const getWork        = (ns, n, v)     => req(`/namespaces/${enc(ns)}/works/${enc(n)}/${enc(v)}`)
 
-// ── Workflows ─────────────────────────────────────────────────────────────────
-export const listWorkflows  = (ns)           => req(`/namespaces/${enc(ns)}/workflows`)
-export const getWorkflow    = (ns, id)       => req(`/namespaces/${enc(ns)}/workflows/${enc(id)}`)
-export const createWorkflow = (ns, body)     => req(`/namespaces/${enc(ns)}/workflows`,       { method: 'POST', ...json(body) })
-export const updateWorkflow = (ns, id, body) => req(`/namespaces/${enc(ns)}/workflows/${enc(id)}`, { method: 'PUT',  ...json(body) })
-export const deleteWorkflow = (ns, id)       => req(`/namespaces/${enc(ns)}/workflows/${enc(id)}`, { method: 'DELETE' })
-
-export const getWorkflowSteps = (ns, id)              => req(`/namespaces/${enc(ns)}/workflows/${enc(id)}/steps`)
-export const getStepLogs      = (ns, wfId, stepId)    => req(`/namespaces/${enc(ns)}/workflows/${enc(wfId)}/steps/${enc(stepId)}/logs`)
+// ── WorkRuns (Workflow Server) ────────────────────────────────────────────────
+export const triggerWork      = (body)       => req('/workflow/trigger',      { method: 'POST', ...json(body) })
+export const listWorkRuns     = ()           => req('/workflow/work-runs')
+export const getWorkRun       = (name)       => req(`/workflow/work-runs/${enc(name)}`)
+export const cancelWorkRun    = (name)       => req(`/workflow/work-runs/${enc(name)}/cancel`, { method: 'POST' })
 
 // ── Crons ─────────────────────────────────────────────────────────────────────
-export const listCrons   = (ns)           => req(`/namespaces/${enc(ns)}/crons`)
-export const getCron     = (ns, id)       => req(`/namespaces/${enc(ns)}/crons/${enc(id)}`)
-export const createCron  = (ns, body)     => req(`/namespaces/${enc(ns)}/crons`,           { method: 'POST', ...json(body) })
-export const updateCron  = (ns, id, body) => req(`/namespaces/${enc(ns)}/crons/${enc(id)}`, { method: 'PUT',  ...json(body) })
-export const deleteCron  = (ns, id)       => req(`/namespaces/${enc(ns)}/crons/${enc(id)}`, { method: 'DELETE' })
+export const listCrons        = ()           => req('/workflow/crons')
+export const registerCron     = (body)       => req('/workflow/crons',         { method: 'POST', ...json(body) })
+export const unregisterCron   = (name)       => req(`/workflow/crons/${enc(name)}`, { method: 'DELETE' })
+// Aliases used by crons.js
+export const createCron       = (ns, body)   => registerCron(body)
+export const updateCron       = (ns, body)   => registerCron(body)
+export const deleteCron       = (ns, name)   => unregisterCron(name)
 
 const enc = encodeURIComponent

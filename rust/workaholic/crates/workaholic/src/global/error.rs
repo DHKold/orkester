@@ -26,6 +26,12 @@ pub enum WorkaholicError {
     #[error("DAG error: {0}")]
     Dag(String),
 
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
+
+    #[error("Execution error: {0}")]
+    ExecutionError(String),
+
     #[error("{0}")]
     Other(String),
 }
