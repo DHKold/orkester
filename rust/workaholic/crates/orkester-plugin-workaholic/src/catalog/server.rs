@@ -8,6 +8,9 @@ use orkester_plugin::prelude::*;
 use super::actions::*;
 use super::request::*;
 
+use crate::document::loader::local_fs::LocalFsChangeEvent;
+use crate::document::loader::actions::*;
+
 /// A simple in-memory catalog server that stores resources as type-erased JSON values.
 /// Resources are keyed as `kind/namespace/name:version`.
 /// Will be extended in the future to support persistence, indexing, and access control.
@@ -30,7 +33,7 @@ pub struct CatalogServerConfig {
 }
 
 pub struct CatalogServer {
-    host: orkester_plugin::sdk::Host,
+    // host: orkester_plugin::sdk::Host,
     config: CatalogServerConfig,
     storage: Mutex<HashMap<String, Value>>,
 }
@@ -45,7 +48,7 @@ impl CatalogServer {
     pub fn new(host: *mut orkester_plugin::abi::AbiHost, config: CatalogServerConfig) -> Self {
         let host = unsafe { orkester_plugin::sdk::Host::from_abi(host) };
         Self {
-            host,
+            // host,
             config,
             storage: Mutex::new(HashMap::new()),
         }
@@ -118,17 +121,14 @@ impl CatalogServer {
             .cloned()
             .collect();
         Ok(result)
-
     }
 
-    /// Routes a document-load request to the named loader component.
-    /// The host resolves `request.loaderRef` and dispatches the load action.
-    #[handle(ACTION_CATALOG_LOAD_DOCUMENTS)]
-    fn load_documents(&mut self, request: CatalogLoadDocumentsRequest) -> Result<(), CatalogError> {
-        // The host dispatches ACTION_LOAD_DOCUMENTS to the loader component
-        // identified by `request.loaderRef`; the loaded documents are then
-        // pushed back via ACTION_CATALOG_CREATE_RESOURCE calls.
-        let _ = request;
+    // Handle Loader events
+    #[handle(EVENT_LOADER_DOCUMENT_ADDED)]
+    #[handle(EVENT_LOADER_DOCUMENT_REMOVED)]
+    #[handle(EVENT_LOADER_DOCUMENT_MODIFIED)]
+    fn handle_document_added(&mut self, event: LocalFsChangeEvent) -> Result<()> {
+        println!("Received document added event");
         Ok(())
     }
 }

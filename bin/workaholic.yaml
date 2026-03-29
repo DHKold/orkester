@@ -63,157 +63,44 @@ servers:
     config:
       bind: "0.0.0.0:8080"
       routes:
-        # Health
-        - path:   /health
-          method: GET
-          action: ping/Ping
-        - path:   /v1/health
-          method: GET
-          action: ping/Ping
-
-        # Loader documents
+        # Loader : Documents
         - path:   /v1/loader/documents
           method: GET
           action: workaholic/DocumentLoader/SearchDocuments
+        
+        # Loader : Entries
         - path:   /v1/loader/entries
           method: POST
           action: workaholic/DocumentLoader/CreateEntry
+        - path:   /v1/loader/entries/{id}
+          method: GET
+          action: workaholic/DocumentLoader/RetrieveEntry
+        - path:   /v1/loader/entries/{id}
+          method: PUT
+          action: workaholic/DocumentLoader/UpdateEntry
+        - path:   /v1/loader/entries/{id}
+          method: DELETE
+          action: workaholic/DocumentLoader/DeleteEntry
         - path:   /v1/loader/entries
           method: GET
           action: workaholic/DocumentLoader/SearchEntries
-        - path:   /v1/loader/start
-          method: POST
-          action: workaholic/DocumentLoader/Start
 
-        # Catalog Resources
+        # Catalog : Resources
         - path:   /v1/catalog/resources
           method: POST
           action: workaholic/CatalogServer/CreateResource
+        - path:   /v1/catalog/resources/{id}
+          method: GET
+          action: workaholic/CatalogServer/RetrieveResource
+        - path:   /v1/catalog/resources/{id}
+          method: PUT
+          action: workaholic/CatalogServer/UpdateResource
+        - path:   /v1/catalog/resources/{id}
+          method: DELETE
+          action: workaholic/CatalogServer/DeleteResource
         - path:   /v1/catalog/resources
           method: GET
           action: workaholic/CatalogServer/SearchResources
-
-        # ── Catalog: Namespaces ─────────────────────────────────────────────
-        - path:   /v1/catalog/namespaces
-          method: GET
-          action: catalog/ListNamespaces
-        - path:   /v1/catalog/namespaces
-          method: POST
-          action: catalog/CreateNamespace
-        - path:   /v1/catalog/namespaces/get
-          method: POST
-          action: catalog/GetNamespace
-        - path:   /v1/catalog/namespaces/set
-          method: POST
-          action: catalog/SetNamespace
-        - path:   /v1/catalog/namespaces/delete
-          method: POST
-          action: catalog/DeleteNamespace
-
-        # ── Catalog: Groups ─────────────────────────────────────────────────
-        - path:   /v1/catalog/groups
-          method: GET
-          action: catalog/ListGroups
-        - path:   /v1/catalog/groups
-          method: POST
-          action: catalog/CreateGroup
-        - path:   /v1/catalog/groups/get
-          method: POST
-          action: catalog/GetGroup
-
-        # ── Catalog: Works ──────────────────────────────────────────────────
-        - path:   /v1/catalog/works
-          method: GET
-          action: catalog/ListWorks
-        - path:   /v1/catalog/works
-          method: POST
-          action: catalog/CreateWork
-        - path:   /v1/catalog/works/get
-          method: POST
-          action: catalog/GetWork
-        - path:   /v1/catalog/works/set
-          method: POST
-          action: catalog/SetWork
-        - path:   /v1/catalog/works/delete
-          method: POST
-          action: catalog/DeleteWork
-
-        # ── Catalog: Tasks ──────────────────────────────────────────────────
-        - path:   /v1/catalog/tasks
-          method: GET
-          action: catalog/ListTasks
-        - path:   /v1/catalog/tasks
-          method: POST
-          action: catalog/CreateTask
-        - path:   /v1/catalog/tasks/get
-          method: POST
-          action: catalog/GetTask
-        - path:   /v1/catalog/tasks/set
-          method: POST
-          action: catalog/SetTask
-        - path:   /v1/catalog/tasks/delete
-          method: POST
-          action: catalog/DeleteTask
-
-        # ── Catalog: Crons ──────────────────────────────────────────────────
-        - path:   /v1/catalog/crons
-          method: GET
-          action: catalog/ListCrons
-        - path:   /v1/catalog/crons
-          method: POST
-          action: catalog/CreateCron
-
-        # ── Catalog: WorkRunner profiles ────────────────────────────────────────
-        - path:   /v1/catalog/workRunner-profiles
-          method: GET
-          action: catalog/ListWorkRunnerProfiles
-        - path:   /v1/catalog/workRunner-profiles/get
-          method: POST
-          action: catalog/GetWorkRunnerProfile
-
-        # ── Catalog: TaskRunner profiles ────────────────────────────────────
-        - path:   /v1/catalog/taskrunner-profiles
-          method: GET
-          action: catalog/ListTaskRunnerProfiles
-        - path:   /v1/catalog/taskrunner-profiles/get
-          method: POST
-          action: catalog/GetTaskRunnerProfile
-
-        # ── Workflow: WorkRuns ──────────────────────────────────────────────
-        - path:   /v1/workflow/runs
-          method: GET
-          action: workflow/ListWorkRuns
-        - path:   /v1/workflow/runs
-          method: POST
-          action: workflow/CreateWorkRun
-        - path:   /v1/workflow/runs/get
-          method: POST
-          action: workflow/GetWorkRun
-        - path:   /v1/workflow/runs/queue
-          method: POST
-          action: workflow/QueueWorkRun
-        - path:   /v1/workflow/runs/cancel
-          method: POST
-          action: workflow/CancelWorkRun
-        - path:   /v1/workflow/runs/recover
-          method: POST
-          action: workflow/RecoverWorkRuns
-
-        # ── Workflow: TaskRuns ──────────────────────────────────────────────
-        - path:   /v1/workflow/task-runs
-          method: GET
-          action: workflow/ListTaskRuns
-        - path:   /v1/workflow/task-runs/get
-          method: POST
-          action: workflow/GetTaskRun
-        - path:   /v1/workflow/task-runs/update
-          method: POST
-          action: workflow/UpdateTaskRunState
-
-        # ── Workflow: WorkRunners ───────────────────────────────────────────────
-        - path:   /v1/workflow/workRunners
-          method: GET
-          action: workflow/ListWorkRunners
 
 hub:
   queue:
@@ -223,6 +110,7 @@ hub:
 
   # Route rules are a map keyed by name, evaluated in insertion order.
   routes:
+    # Catalog-related actions go to the catalog server.
     catalog-route:
       filters:
         - kind: match
@@ -236,6 +124,21 @@ hub:
             targets:
               - name: catalog-server
 
+    # Document loader events go to the catalog server for processing.
+    document-loader-events-route:
+      filters:
+        - kind: match
+          config:
+            field: kind
+            value: "workaholic/DocumentLoader/Event/"
+            mode: regex
+      targets:
+        - kind: components
+          config:
+            targets:
+              - name: catalog-server
+
+    # Local filesystem loader actions go to the catalog loader.
     local-fs-loader-route:
       filters:
         - kind: match

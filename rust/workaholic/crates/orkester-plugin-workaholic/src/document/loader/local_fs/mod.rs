@@ -34,7 +34,13 @@ pub use types::{
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use orkester_plugin::sdk::Host;
+use orkester_plugin::abi::AbiHost;
+use orkester_plugin::hub::Envelope;
+
 use workaholic::{Document, DocumentLoader, DocumentParser, Result};
+
+use crate::document::loader::actions::*;
 
 use scanner::scan_entry;
 use watcher::spawn_entry_watcher;
@@ -128,8 +134,20 @@ impl LocalFsLoader {
     ///
     /// Not yet implemented — the body is intentionally left empty until an
     /// event-bus integration is wired in.
-    fn emit_change_event(&self, _event: LocalFsChangeEvent) -> Result<()> {
-        // TODO: forward to an event bus / subscriber list.
+    fn emit_change_event(&self, event: LocalFsChangeEvent) -> Result<()> {
+        let kind = match &event {
+            LocalFsChangeEvent::DocumentAdded { .. }    => EVENT_LOADER_DOCUMENT_ADDED,
+            LocalFsChangeEvent::DocumentRemoved { .. }  => EVENT_LOADER_DOCUMENT_REMOVED,
+            LocalFsChangeEvent::DocumentModified { .. } => EVENT_LOADER_DOCUMENT_MODIFIED,
+        }.to_string();
+        let envelope = Envelope{
+            id: 0,
+            kind: kind,
+            owner: None,
+            format: "std/json".to_string(),
+            payload: serde_json::to_vec(&event)?,
+        };
+        println!("Emitting event: {}", envelope.kind);
         Ok(())
     }
 }

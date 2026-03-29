@@ -8,6 +8,7 @@ use workaholic::Document;
 // ─── Change events ─────────────────────────────────────────────────────────────
 
 /// Emitted whenever the set of documents reachable from a watched path changes.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum LocalFsChangeEvent {
     /// A document was discovered for the first time.
     DocumentAdded {

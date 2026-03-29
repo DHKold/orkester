@@ -150,7 +150,7 @@ pub fn run(cfg: HostConfig) -> Result<()> {
             }
         };
         for action in &server.start {
-            component_entry.call_json(&action.kind, action.config.clone());
+            let _ = component_entry.call_json(&action.kind, action.config.clone());
             log::info!("[runner] Server '{}' start action '{}' dispatched", server.name, action.kind);
         }
     }

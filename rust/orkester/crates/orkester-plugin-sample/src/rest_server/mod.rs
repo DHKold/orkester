@@ -1,5 +1,4 @@
 ﻿use std::{
-    collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
     thread,
 };
@@ -25,52 +24,6 @@ pub struct RestServerConfig {
 
 fn default_bind() -> String { "127.0.0.1:8080".into() }
 
-/// A pending HTTP request that has been matched to a route action but not yet
-/// answered.  Placed in the `pending` queue by the HTTP thread.
-struct PendingHttpRequest {
-    id:     u64,
-    method: String,
-    path:   String,
-    action: String,
-    body:   Value,
-}
-
-/// One-shot response data sent back from `rest/Respond` to the HTTP thread.
-struct HttpResponseData {
-    status: u16,
-    body:   Value,
-}
-
-/// One entry in the `rest/Poll` response.
-#[derive(Serialize)]
-pub struct PendingRequestDto {
-    pub id:     u64,
-    pub method: String,
-    pub path:   String,
-    pub action: String,
-    pub body:   Value,
-}
-
-/// Response to `rest/Poll`.
-#[derive(Serialize)]
-pub struct PollResponse {
-    pub requests: Vec<PendingRequestDto>,
-}
-
-/// Payload for `rest/Respond`.
-#[derive(Deserialize)]
-pub struct RespondRequest {
-    pub id:     u64,
-    pub status: u16,
-    pub body:   Value,
-}
-
-/// Acknowledgement for `rest/Respond`.
-#[derive(Serialize)]
-pub struct RespondAck {
-    pub ok: bool,
-}
-
 /// Payload for `rest/AddRoute`.
 #[derive(Deserialize)]
 pub struct AddRouteRequest {
@@ -86,14 +39,10 @@ pub struct AddRouteAck {
 }
 
 type RouteTable   = Vec<(String, String, String)>;  // (method, path, action)
-type PendingQueue = Arc<Mutex<VecDeque<PendingHttpRequest>>>;
-type WaiterMap    = Arc<Mutex<HashMap<u64, crossbeam_channel::Sender<HttpResponseData>>>>;
 
 /// Embedded HTTP server with host-polled request dispatch.
 pub struct RestServer {
     routes:       Arc<Mutex<RouteTable>>,
-    pending:      PendingQueue,
-    waiters:      WaiterMap,
     _next_id:     Arc<std::sync::atomic::AtomicU64>,
     _http_thread: Option<thread::JoinHandle<()>>,
 }
@@ -111,13 +60,9 @@ impl RestServer {
             .collect();
 
         let routes  = Arc::new(Mutex::new(initial));
-        let pending = Arc::new(Mutex::new(VecDeque::new()));
-        let waiters = Arc::new(Mutex::new(HashMap::new()));
         let next_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
 
         let thread_routes  = routes.clone();
-        let thread_pending = pending.clone();
-        let thread_waiters = waiters.clone();
         let thread_next_id = next_id.clone();
         let bind_addr      = cfg.bind;
 
@@ -159,7 +104,7 @@ impl RestServer {
                     // Read body
                     let mut body_buf = Vec::new();
                     let _ = std::io::Read::read_to_end(request.as_reader(), &mut body_buf);
-                    let body: Value = serde_json::from_slice(&body_buf).unwrap_or(Value::Null);
+                    let _body: Value = serde_json::from_slice(&body_buf).unwrap_or(Value::Null);
 
                     // Create a HUB Envelope and send it to the host via the ABI pointer.
                     let id = thread_next_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -193,7 +138,7 @@ impl RestServer {
             })
             .ok();
 
-        Self { routes, pending, waiters, _next_id: next_id, _http_thread: http_thread }
+        Self { routes, _next_id: next_id, _http_thread: http_thread }
     }
 }
 
@@ -207,34 +152,6 @@ fn json_content_type() -> tiny_http::Header {
     description = "Embedded HTTP server with host-polled request dispatch."
 )]
 impl RestServer {
-    /// Drain pending HTTP requests.  Returns at most 16 per call.
-    #[handle("rest/Poll")]
-    fn poll(&mut self, _: serde_json::Value) -> Result<PollResponse> {
-        let mut queue = self.pending.lock().unwrap();
-        let n = queue.len().min(16);
-        let requests = queue
-            .drain(..n)
-            .map(|p| PendingRequestDto {
-                id:     p.id,
-                method: p.method,
-                path:   p.path,
-                action: p.action,
-                body:   p.body,
-            })
-            .collect();
-        Ok(PollResponse { requests })
-    }
-
-    /// Send the component response back to the waiting HTTP client.
-    #[handle("rest/Respond")]
-    fn respond(&mut self, req: RespondRequest) -> Result<RespondAck> {
-        let tx_opt = self.waiters.lock().unwrap().remove(&req.id);
-        if let Some(tx) = tx_opt {
-            let _ = tx.send(HttpResponseData { status: req.status, body: req.body });
-        }
-        Ok(RespondAck { ok: true })
-    }
-
     /// Register or replace a route at runtime.
     #[handle("rest/AddRoute")]
     fn add_route(&mut self, req: AddRouteRequest) -> Result<AddRouteAck> {
