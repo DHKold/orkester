@@ -123,50 +123,83 @@ impl CatalogServer {
         Ok(result)
     }
 
-    // Handle Loader events
+    // Handle Loader events — index every document into the catalog keyed by its
+    // canonical ID: {kind}/{namespace}/{name}/{version}.
     #[handle(EVENT_LOADER_DOCUMENT_ADDED)]
     #[handle(EVENT_LOADER_DOCUMENT_REMOVED)]
     #[handle(EVENT_LOADER_DOCUMENT_MODIFIED)]
-    fn handle_document_added(&mut self, event: LocalFsChangeEvent) -> Result<()> {
-        // 1. Extract relevant information from the event and create a catalog resource.
+    fn handle_document_changed(&mut self, event: LocalFsChangeEvent) -> Result<()> {
         match event {
             LocalFsChangeEvent::DocumentAdded { document, .. } => {
-                let resource = Value::Object(serde_json::Map::from_iter([
-                    ("kind".into(), Value::String("Document".into())),
-                    ("name".into(), Value::String(document.name.clone())),
-                    ("metadata".into(), Value::Object(serde_json::Map::from_iter([
-                        ("namespace".into(), Value::String("default".into())),
-                    ]))),
-                    ("spec".into(), serde_json::to_value(&document).unwrap_or(Value::Null)),
-                ]));
-                let request = ResourceCreationRequest {
-                    id: format!("Document/default/{}:1.0", document.name),
-                    resource,
-                };
-                self.create_resource(request).ok();
+                let ns  = document.metadata.namespace.as_deref().unwrap_or("global");
+                let id  = format!("{}/{}/{}/{}", document.kind, ns, document.name, document.version);
+                let res = serde_json::to_value(&document).unwrap_or(Value::Null);
+                log::debug!("[catalog] indexed '{}'", id);
+                self.create_resource(ResourceCreationRequest { id, resource: res }).ok();
             }
             LocalFsChangeEvent::DocumentRemoved { document, .. } => {
-                let request = ResourceDeletionRequest {
-                    id: format!("Document/default/{}:1.0", document.name),
-                };
-                self.delete_resource(request).ok();
+                let ns = document.metadata.namespace.as_deref().unwrap_or("global");
+                let id = format!("{}/{}/{}/{}", document.kind, ns, document.name, document.version);
+                log::debug!("[catalog] removed '{}'", id);
+                self.delete_resource(ResourceDeletionRequest { id }).ok();
             }
             LocalFsChangeEvent::DocumentModified { new, .. } => {
-                let resource = Value::Object(serde_json::Map::from_iter([
-                    ("kind".into(), Value::String("Document".into())),
-                    ("name".into(), Value::String(new.name.clone())),
-                    ("metadata".into(), Value::Object(serde_json::Map::from_iter([
-                        ("namespace".into(), Value::String("default".into())),
-                    ]))),
-                    ("spec".into(), serde_json::to_value(&new).unwrap_or(Value::Null)),
-                ]));
-                let request = ResourceUpdateRequest {
-                    id: format!("Document/default/{}:1.0", new.name),
-                    resource,
-                };
-                self.update_resource(request).ok();
+                let ns  = new.metadata.namespace.as_deref().unwrap_or("global");
+                let id  = format!("{}/{}/{}/{}", new.kind, ns, new.name, new.version);
+                let res = serde_json::to_value(&new).unwrap_or(Value::Null);
+                log::debug!("[catalog] updated '{}'", id);
+                // create_resource is an upsert — it overwrites existing entries.
+                self.create_resource(ResourceCreationRequest { id, resource: res }).ok();
             }
         }
         Ok(())
+    }
+
+    /// List all Namespace documents in the catalog.
+    #[handle(ACTION_CATALOG_LIST_NAMESPACES)]
+    fn list_namespaces(&mut self, _: serde_json::Value) -> Result<ListNamespacesResponse, CatalogError> {
+        let storage    = self.storage.lock().unwrap();
+        let namespaces = storage
+            .values()
+            .filter(|r| r.get("kind").and_then(|v| v.as_str()) == Some(workaholic::NAMESPACE_KIND))
+            .cloned()
+            .collect();
+        Ok(ListNamespacesResponse { namespaces })
+    }
+
+    /// List all Work documents that belong to the requested namespace.
+    #[handle(ACTION_CATALOG_LIST_WORKS)]
+    fn list_works(&mut self, req: ListItemsRequest) -> Result<ListWorksResponse, CatalogError> {
+        let storage = self.storage.lock().unwrap();
+        let works = storage
+            .values()
+            .filter(|r| {
+                r.get("kind").and_then(|v| v.as_str()) == Some(workaholic::WORK_KIND)
+                    && r.get("metadata")
+                        .and_then(|m| m.get("namespace"))
+                        .and_then(|v| v.as_str())
+                        == Some(req.ns.as_str())
+            })
+            .cloned()
+            .collect();
+        Ok(ListWorksResponse { works })
+    }
+
+    /// List all Task documents that belong to the requested namespace.
+    #[handle(ACTION_CATALOG_LIST_TASKS)]
+    fn list_tasks(&mut self, req: ListItemsRequest) -> Result<ListTasksResponse, CatalogError> {
+        let storage = self.storage.lock().unwrap();
+        let tasks = storage
+            .values()
+            .filter(|r| {
+                r.get("kind").and_then(|v| v.as_str()) == Some(workaholic::TASK_KIND)
+                    && r.get("metadata")
+                        .and_then(|m| m.get("namespace"))
+                        .and_then(|v| v.as_str())
+                        == Some(req.ns.as_str())
+            })
+            .cloned()
+            .collect();
+        Ok(ListTasksResponse { tasks })
     }
 }

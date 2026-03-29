@@ -62,7 +62,26 @@ servers:
     kind: sample/RestServer:1.0
     config:
       bind: "0.0.0.0:8080"
+
+      # ── Static file serving ───────────────────────────────────────────────
+      # The Orkester UI is served at /ui/ from the container filesystem.
+      # Missing files fall back to index.html for client-side SPA routing.
+      static_folders:
+        - url_path: /ui
+          dir: /orkester/ui
+
       routes:
+        # Catalog : Namespaces / Works / Tasks (used by the UI)
+        - path:   /v1/namespaces
+          method: GET
+          action: workaholic/CatalogServer/ListNamespaces
+        - path:   /v1/namespaces/{ns}/works
+          method: GET
+          action: workaholic/CatalogServer/ListWorks
+        - path:   /v1/namespaces/{ns}/tasks
+          method: GET
+          action: workaholic/CatalogServer/ListTasks
+
         # Loader : Documents
         - path:   /v1/loader/documents
           method: GET

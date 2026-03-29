@@ -58,7 +58,7 @@ export async function renderNamespace({ ns }) {
                 <thead><tr>
                   <th class="sortable" data-sort="name">Name<span class="sort-ind"></span></th>
                   <th class="sortable" data-sort="version">Version<span class="sort-ind"></span></th>
-                  <th>Executor</th><th>Description</th><th>Retries</th><th>Timeout</th>
+                  <th>Executor</th><th>Description</th><th>Inputs</th><th>Outputs</th>
                 </tr></thead>
                 <tbody></tbody>
               </table>
@@ -154,10 +154,10 @@ export async function renderNamespace({ ns }) {
       table.querySelector('tbody').innerHTML = slice.map(t => `<tr>
         <td><strong>${esc(t.name)}</strong></td>
         <td><span class="tag">${esc(t.version)}</span></td>
-        <td><code class="muted">${esc(t.spec?.executor ?? '—')}</code></td>
+        <td><code class="muted">${esc(t.spec?.execution?.kind ?? '—')}</code></td>
         <td class="muted">${esc(t.metadata?.description || '—')}</td>
-        <td>${t.spec?.retries ? `${t.spec.retries}×` : '—'}</td>
-        <td>${t.spec?.timeout_seconds ? `${t.spec.timeout_seconds}s` : '—'}</td>
+        <td>${t.spec?.inputs?.length ?? 0}</td>
+        <td>${t.spec?.outputs?.length ?? 0}</td>
       </tr>`).join('')
 
       table.querySelectorAll('th[data-sort]').forEach(th => {
@@ -196,13 +196,14 @@ export async function renderNamespace({ ns }) {
 }
 
 function showWorkDetail(work) {
-  const steps  = work.spec?.steps ?? []
-  const inputs = work.spec?.inputs ?? {}
+  const steps  = work.spec?.steps  ?? []
+  const inputs  = Array.isArray(work.spec?.inputs) ? work.spec.inputs : []
 
-  const inputRows = Object.entries(inputs).map(([k, v]) =>
+  const inputRows = inputs.map(inp =>
     `<tr>
-      <td><code>${esc(k)}</code></td>
-      <td class="muted">${esc(typeof v === 'string' ? v : (v?.description ?? '—'))}</td>
+      <td><code>${esc(inp.name)}</code></td>
+      <td class="muted">${esc(inp.description ?? '—')}</td>
+      <td><code>${esc(inp.type ?? inp.input_type ?? '—')}</code></td>
     </tr>`
   ).join('')
 
@@ -212,12 +213,12 @@ function showWorkDetail(work) {
       <span class="muted">${steps.length} step${steps.length !== 1 ? 's' : ''}</span>
     </div>
     ${work.metadata?.description ? `<p>${esc(work.metadata.description)}</p>` : ''}
-    ${Object.keys(inputs).length > 0 ? `
+    ${inputs.length > 0 ? `
       <details style="margin-bottom:1rem">
         <summary><strong>Inputs</strong></summary>
         <figure>
           <table>
-            <thead><tr><th>Name</th><th>Description</th></tr></thead>
+            <thead><tr><th>Name</th><th>Description</th><th>Type</th></tr></thead>
             <tbody>${inputRows}</tbody>
           </table>
         </figure>
