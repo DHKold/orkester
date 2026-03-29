@@ -34,8 +34,6 @@ pub use types::{
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use orkester_plugin::sdk::Host;
-use orkester_plugin::abi::AbiHost;
 use orkester_plugin::hub::Envelope;
 
 use workaholic::{Document, DocumentLoader, DocumentParser, Result};
@@ -61,12 +59,29 @@ pub struct LocalFsLoader {
     pub(crate) entries:    Vec<Arc<Mutex<LocalFsEntry>>>,
     /// Extension → parser mapping, shared with all watcher threads.
     pub(crate) extensions: Arc<HashMap<String, Box<dyn DocumentParser>>>,
+    /// Host handle used to fire change events.  `None` when the loader was
+    /// created without a host (e.g. in unit tests).
+    host_ptr: Option<orkester_plugin::sdk::HostRef>,
 }
 
 impl LocalFsLoader {
     /// Creates a new loader with the given extension → parser mapping.
+    /// The loader has no host connection; change events are silently dropped.
+    /// Use [`new_with_host`](Self::new_with_host) in production code.
     pub fn new(extensions: HashMap<String, Box<dyn DocumentParser>>) -> Self {
-        Self { entries: Vec::new(), extensions: Arc::new(extensions) }
+        Self { entries: Vec::new(), extensions: Arc::new(extensions), host_ptr: None }
+    }
+
+    /// Creates a new loader that fires change events through `host_ptr`.
+    pub fn new_with_host(
+        extensions: HashMap<String, Box<dyn DocumentParser>>,
+        host_ptr:   *mut orkester_plugin::abi::AbiHost,
+    ) -> Self {
+        Self {
+            entries:    Vec::new(),
+            extensions: Arc::new(extensions),
+            host_ptr:   Some(orkester_plugin::sdk::HostRef::new(host_ptr)),
+        }
     }
 
     /// Performs an initial scan of every registered entry, then spawns a
@@ -130,24 +145,30 @@ impl LocalFsLoader {
         }
     }
 
-    /// Forwards a change event to the configured subscriber(s).
+    /// Fires a change event to the host using fire-and-forget mode.
     ///
-    /// Not yet implemented — the body is intentionally left empty until an
-    /// event-bus integration is wired in.
+    /// Wraps the event in an [`Envelope`] keyed by the appropriate action
+    /// constant so the host hub can route it to interested components
+    /// (e.g. the catalog server).  If no host is configured the event is
+    /// silently dropped (tests, standalone use).
     fn emit_change_event(&self, event: LocalFsChangeEvent) -> Result<()> {
         let kind = match &event {
             LocalFsChangeEvent::DocumentAdded { .. }    => EVENT_LOADER_DOCUMENT_ADDED,
             LocalFsChangeEvent::DocumentRemoved { .. }  => EVENT_LOADER_DOCUMENT_REMOVED,
             LocalFsChangeEvent::DocumentModified { .. } => EVENT_LOADER_DOCUMENT_MODIFIED,
-        }.to_string();
-        let envelope = Envelope{
-            id: 0,
-            kind: kind,
-            owner: None,
-            format: "std/json".to_string(),
+        };
+        let envelope = Envelope {
+            id:      0,
+            kind:    kind.to_string(),
+            owner:   None,
+            format:  "std/json".to_string(),
             payload: serde_json::to_vec(&event)?,
         };
-        println!("Emitting event: {}", envelope.kind);
+        if let Some(host_ref) = self.host_ptr {
+            // HostRef::fire serialises as JSON+fire and returns immediately;
+            // the pipeline worker routes the envelope asynchronously.
+            host_ref.fire(&envelope);
+        }
         Ok(())
     }
 }
@@ -159,6 +180,7 @@ impl Clone for LocalFsLoader {
         Self {
             entries:    self.entries.iter().map(Arc::clone).collect(),
             extensions: Arc::clone(&self.extensions),
+            host_ptr:   self.host_ptr,  // Copy — HostRef is Copy
         }
     }
 }

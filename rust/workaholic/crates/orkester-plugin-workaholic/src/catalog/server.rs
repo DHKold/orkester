@@ -115,7 +115,7 @@ impl CatalogServer {
                         .and_then(|m| m.get("namespace"))
                         .and_then(|v| v.as_str()) == Some(field_value)
                 } else {
-                    false
+                    true // if query format is unrecognized, return all resources
                 }
             })
             .cloned()
@@ -128,7 +128,45 @@ impl CatalogServer {
     #[handle(EVENT_LOADER_DOCUMENT_REMOVED)]
     #[handle(EVENT_LOADER_DOCUMENT_MODIFIED)]
     fn handle_document_added(&mut self, event: LocalFsChangeEvent) -> Result<()> {
-        println!("Received document added event");
+        // 1. Extract relevant information from the event and create a catalog resource.
+        match event {
+            LocalFsChangeEvent::DocumentAdded { document, .. } => {
+                let resource = Value::Object(serde_json::Map::from_iter([
+                    ("kind".into(), Value::String("Document".into())),
+                    ("name".into(), Value::String(document.name.clone())),
+                    ("metadata".into(), Value::Object(serde_json::Map::from_iter([
+                        ("namespace".into(), Value::String("default".into())),
+                    ]))),
+                    ("spec".into(), serde_json::to_value(&document).unwrap_or(Value::Null)),
+                ]));
+                let request = ResourceCreationRequest {
+                    id: format!("Document/default/{}:1.0", document.name),
+                    resource,
+                };
+                self.create_resource(request).ok();
+            }
+            LocalFsChangeEvent::DocumentRemoved { document, .. } => {
+                let request = ResourceDeletionRequest {
+                    id: format!("Document/default/{}:1.0", document.name),
+                };
+                self.delete_resource(request).ok();
+            }
+            LocalFsChangeEvent::DocumentModified { new, .. } => {
+                let resource = Value::Object(serde_json::Map::from_iter([
+                    ("kind".into(), Value::String("Document".into())),
+                    ("name".into(), Value::String(new.name.clone())),
+                    ("metadata".into(), Value::Object(serde_json::Map::from_iter([
+                        ("namespace".into(), Value::String("default".into())),
+                    ]))),
+                    ("spec".into(), serde_json::to_value(&new).unwrap_or(Value::Null)),
+                ]));
+                let request = ResourceUpdateRequest {
+                    id: format!("Document/default/{}:1.0", new.name),
+                    resource,
+                };
+                self.update_resource(request).ok();
+            }
+        }
         Ok(())
     }
 }

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -10,105 +11,114 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 use orkester_plugin::{
-    abi::{AbiRequest, AbiResponse, AbiComponent},
+    abi::AbiComponent,
     hub::{Envelope, builder::HubBuilder, config::HubConfig, ComponentRegistry, ComponentEntry},
-    sdk::Host,
 };
 
-use crate::{catalog::Catalog, config::HostConfig};
+use crate::{
+    catalog::Catalog,
+    config::HostConfig,
+    pipeline::{make_pipeline_host, HostRequest, HostResponse},
+};
 
-fn extract_str(ptr: *const u8, len: u32) -> Option<String> {
-    if ptr.is_null() || len == 0 {
-        None
-    } else {
-        let bytes = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
-        std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+// ─── Encoding helpers ─────────────────────────────────────────────────────────
+
+/// Deserializes a pipeline request's payload into `T`.
+///
+/// Strips any `+modifier` suffix from the format string (e.g. `"+fire"`,
+/// `"+async"`) before selecting the codec, so the same routing logic handles
+/// all modes.
+fn decode_request<T>(req: &HostRequest) -> Option<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    // Strip the mode modifier (everything after the first '+') to get the
+    // base serialization format.
+    let base = req.format.split('+').next().unwrap_or(&req.format);
+    match base {
+        "std/json"    => serde_json::from_slice(&req.payload).ok(),
+        "std/yaml"    => serde_yaml::from_slice(&req.payload).ok(),
+        "std/msgpack" => rmp_serde::from_slice(&req.payload).ok(),
+        // Unknown or empty format — attempt JSON as a best-effort fallback.
+        _             => serde_json::from_slice(&req.payload).ok(),
     }
 }
 
-fn extract_bytes(ptr: *const u8, len: u32) -> Option<Vec<u8>> {
-    if ptr.is_null() || len == 0 {
-        None
-    } else {
-        let bytes = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
-        Some(bytes.to_vec())
+/// Serializes `body` as a JSON `HostResponse` for `request_id`.
+fn json_response(request_id: u64, body: &Value) -> HostResponse {
+    HostResponse {
+        request_id,
+        payload: serde_json::to_vec(body).unwrap_or_default(),
     }
 }
 
-fn make_error_response(id: u64, message: &str) -> AbiResponse {
-    let body = json!({ "error": message });
-    make_response(id, &body)
+/// Produces an error `HostResponse`.
+fn error_response(request_id: u64, message: &str) -> HostResponse {
+    json_response(request_id, &json!({ "error": message }))
 }
 
-fn make_response(id: u64, body: &serde_json::Value) -> AbiResponse {
-    let bytes = serde_json::to_vec(body).unwrap_or_default();
-    let fmt = "std/json";
-    let len = bytes.len() as u32;
-    let ptr = Box::into_raw(bytes.into_boxed_slice()) as *mut u8;
-    return AbiResponse {
-        id:          id,
-        format:      fmt.as_ptr(),
-        format_len:  fmt.len() as u32,
-        payload:     ptr,
-        payload_len: len,
-    };
-}
+// ─── Routing host factory ─────────────────────────────────────────────────────
 
-fn decode_abi<T>(format: String, payload: Vec<u8>) -> Option<T> 
-where T: serde::de::DeserializeOwned
-{     
-    match format.as_str() {
-        "std/json" => serde_json::from_slice(&payload).ok(),
-        "std/yaml" => serde_yaml::from_slice(&payload).ok(),
-        "std/msgpack" => rmp_serde::from_slice(&payload).ok(),
-        _ => None,
-    }
-}
-
-fn make_routing_host(registry: ComponentRegistry, hub_config: HubConfig) -> Host {
+/// Creates a `Host` backed by the async pipeline.
+///
+/// The routing closure (running on the worker thread) parses each inbound
+/// `HostRequest`, matches it against the hub rules, dispatches to the target
+/// components, and returns a `HostResponse`.  All I/O with components is still
+/// synchronous from the worker's perspective; the pipeline's value here is that
+/// the ABI ingress never blocks on routing logic.
+fn make_routing_host(registry: ComponentRegistry, hub_config: HubConfig) -> orkester_plugin::sdk::Host {
     let rules = HubBuilder::new(hub_config, registry).build_rules();
 
-    Host::with_callback(move |req: AbiRequest| -> AbiResponse {
-        // 0. Extract raw request info for logging and routing
-        let req_format: String = extract_str(req.format, req.format_len).unwrap_or("<invalid UTF-8>".to_string());
-        log::debug!("[host/router] Received request id={} format='{}' payload_len={}", req.id, req_format, req.payload_len);
-        let payload: Vec<u8> = extract_bytes(req.payload, req.payload_len).unwrap_or_default();
+    make_pipeline_host(
+        move |req: HostRequest| -> Option<HostResponse> {
+            let id = req.id;
 
-        // 1. Parse the request payload (supporting std/json, std/yaml, std/msgpack).
-        //    If parsing fails, we log an error and let the envelope be None
-        let envelope: Option<Envelope> = decode_abi(req_format, payload);
+            // Parse the inbound envelope.
+            let envelope: Option<Envelope> = decode_request(&req);
+            if envelope.is_none() {
+                log::error!("[host/worker] failed to parse request {} as Envelope", id);
+                return Some(error_response(id, "failed to parse request payload as Envelope"));
+            }
 
-        // 2. If no envelope is found, return an error response
-        if envelope.is_none() {
-            log::error!("[host/router] Failed to parse request payload as JSON/YAML/MessagePack");
-            return make_error_response(req.id, "The HUB was unable to parse request payload as JSON/YAML/MessagePack");
-        }
+            let envelope = envelope.unwrap();
+            log::debug!("[host/worker] routing request {} kind='{}'", id, envelope.kind);
 
-        // 3. Find the first matching route based on the "kind" field in the envelope, and route the request accordingly. 
-        // If no route matches, we log a warning and return an error response.
-        let envelope = envelope.unwrap();
-        let kind = &envelope.kind;
-        log::debug!("[host/router] Routing request for kind '{}'", kind);
+            // Match and dispatch through hub rules.
+            let mut dispatched = 0usize;
+            let mut responses:  Vec<Value> = Vec::new();
 
-        let mut responses: Vec<Value> = Vec::new();
-        for rule in &rules {
-            if rule.matches(&envelope) {
+            for rule in &rules {
+                if !rule.matches(&envelope) {
+                    continue;
+                }
                 for dispatcher in &rule.dispatchers {
-                    log::debug!("[host/router] Dispatching to '{}' for rule '{}'", dispatcher.name(), rule.name);
+                    log::debug!(
+                        "[host/worker] dispatching req {} to '{}' (rule '{}')",
+                        id, dispatcher.name(), rule.name
+                    );
                     match dispatcher.dispatch(envelope.clone()) {
-                        Ok(res) => responses.extend(res.into_iter().map(|e| {
-                            log::debug!("[host/router] Dispatcher '{}' produced response envelope id={} kind='{}' format='{}' payload_len={}", dispatcher.name(), e.id, e.kind, e.format, e.payload.len());
-                            let body = decode_abi(e.format.clone(), e.payload.clone()).unwrap_or(json!({"error": "failed to decode response envelope"}));
-                            body
-                        })),
-                        Err(e) => log::warn!("[hub/router] rule '{}' dispatcher '{}': {e}", rule.name, dispatcher.name()),
+                        Ok(envs) => {
+                            dispatched += envs.len();
+                            responses.extend(envs.into_iter().map(|e| {
+                                serde_json::from_slice(&e.payload)
+                                    .unwrap_or(json!({ "error": "failed to decode response" }))
+                            }));
+                        }
+                        Err(e) => {
+                            log::warn!("[host/worker] rule '{}' dispatcher '{}': {}", rule.name, dispatcher.name(), e);
+                        }
                     }
                 }
-                break;
+                break; // first matching rule wins
             }
-        }
-        make_response(req.id, &json!({ "status": "ok", "dispatched_to": responses.len(), "responses": responses }))
-    })
+
+            Some(json_response(
+                id,
+                &json!({ "status": "ok", "dispatched_to": dispatched, "responses": responses }),
+            ))
+        },
+        HashMap::new(), // no async callbacks registered yet
+    )
 }
 
 // ── Main run loop ─────────────────────────────────────────────────────────────

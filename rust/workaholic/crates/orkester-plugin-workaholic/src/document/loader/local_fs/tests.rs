@@ -80,11 +80,12 @@ fn yaml_extensions() -> HashMap<String, Box<dyn DocumentParser>> {
 
 /// Returns a minimal YAML string that deserialises to a [`Document`].
 ///
-/// The parser expects a YAML sequence (`Vec<Document>`), so the document is
-/// wrapped in a one-element list.
+/// The [`YamlDocumentParser`] uses `serde_yaml::Deserializer::from_str`, which
+/// iterates over top-level YAML documents in the stream.  Each top-level entry
+/// must therefore be a plain mapping (`kind: ...`), **not** a sequence element.
 fn doc_yaml(kind: &str, name: &str, version: &str) -> String {
     format!(
-        "- kind: {kind}\n  name: {name}\n  version: \"{version}\"\n  metadata: {{}}\n  spec: {{}}\n",
+        "kind: {kind}\nname: {name}\nversion: \"{version}\"\nmetadata: {{}}\nspec: {{}}\n",
         kind    = kind,
         name    = name,
         version = version,

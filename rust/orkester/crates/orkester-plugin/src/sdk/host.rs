@@ -5,6 +5,62 @@ use crate::sdk::{
     message::{codec, format, Serializer},
 };
 
+// ── HostRef ───────────────────────────────────────────────────────────────────
+
+/// A lightweight, `Copy`-able, `Send + Sync` handle to the host ABI pointer.
+///
+/// Unlike [`Host`], `HostRef` does **not** own the `AbiHost` allocation; it
+/// can be stored, cloned, and sent across threads freely.  Use it wherever a
+/// component needs to retain a handle to the host for fire-and-forget events
+/// without taking ownership (e.g. storing in a background watcher thread).
+///
+/// # Safety
+/// The host outlives all loaded plugins, so a `HostRef` derived from the
+/// pointer passed at plugin entry is always valid for the process lifetime.
+#[derive(Clone, Copy)]
+pub struct HostRef(*mut AbiHost);
+
+// SAFETY: The host's ABI handle function is callable from any thread.
+unsafe impl Send for HostRef {}
+unsafe impl Sync for HostRef {}
+
+impl HostRef {
+    /// Wrap a raw `*mut AbiHost` pointer.
+    ///
+    /// # Safety
+    /// `ptr` must remain valid for the lifetime of all `HostRef` values
+    /// derived from it (guaranteed by the plugin contract).
+    pub fn new(ptr: *mut AbiHost) -> Self {
+        Self(ptr)
+    }
+
+    /// Fire a one-way event to the host (no reply expected).
+    ///
+    /// Serialises `value` as JSON with format `"std/json+fire"`.  The
+    /// pipeline worker routes the envelope but never sends a response back.
+    /// Use this for document change events and other one-way notifications.
+    pub fn fire<T: serde::Serialize>(&self, value: &T) {
+        static FMT: &str = "std/json+fire";
+        let payload = serde_json::to_vec(value).unwrap_or_default();
+        let req = AbiRequest {
+            id:          0,
+            format:      FMT.as_ptr(),
+            format_len:  FMT.len() as u32,
+            payload:     payload.as_ptr(),
+            payload_len: payload.len() as u32,
+        };
+        unsafe {
+            let res = ((*self.0).handle)(self.0, req);
+            ((*self.0).free_response)(self.0, res);
+        }
+    }
+
+    /// Return the raw `*mut AbiHost` pointer.
+    pub fn as_ptr(&self) -> *mut AbiHost {
+        self.0
+    }
+}
+
 // ── Host ──────────────────────────────────────────────────────────────────────
 
 /// SDK handle to the orkester host.
@@ -117,6 +173,30 @@ impl Host {
         let result = codec::decode_response::<R>(&res);
         unsafe { ((*self.ptr).free_response)(self.ptr, res) };
         result
+    }
+
+    /// Send a fire-and-forget message to the host.
+    ///
+    /// Serialises `value` as JSON with format `"std/json+fire"` and calls the
+    /// ABI handle.  The response (an empty ack) is freed immediately so the
+    /// host pipeline can return as soon as it has enqueued the request.
+    ///
+    /// Use this for one-way events that do not require a reply — e.g. document
+    /// change notifications from a loader component.
+    pub fn fire<T: serde::Serialize>(&mut self, value: &T) {
+        static FMT: &str = "std/json+fire";
+        // Keep `payload` alive across the unsafe ABI call — the raw pointer is
+        // only valid while the Vec is on the stack.
+        let payload = serde_json::to_vec(value).unwrap_or_default();
+        let req = crate::abi::AbiRequest {
+            id:          0,
+            format:      FMT.as_ptr(),
+            format_len:  FMT.len() as u32,
+            payload:     payload.as_ptr(),
+            payload_len: payload.len() as u32,
+        };
+        let res = unsafe { ((*self.ptr).handle)(self.ptr, req) };
+        unsafe { ((*self.ptr).free_response)(self.ptr, res) };
     }
 
     // ── Plugin loading ─────────────────────────────────────────────────────

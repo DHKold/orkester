@@ -74,8 +74,8 @@ fn find_entry_arc<'a>(
     description = "Loader that reads documents from the local filesystem based on specified paths and parameters.",
 )]
 impl LocalFsLoaderComponent {
-    pub fn new(config: LocalFsLoaderConfig) -> Self {
-        Self { loader: LocalFsLoader::new(build_parsers(&config)) }
+    pub fn new(host_ptr: *mut orkester_plugin::abi::AbiHost, config: LocalFsLoaderConfig) -> Self {
+        Self { loader: LocalFsLoader::new_with_host(build_parsers(&config), host_ptr) }
     }
 
     /// Returns all documents currently held in the cache across all entries.

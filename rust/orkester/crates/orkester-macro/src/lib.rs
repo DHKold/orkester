@@ -153,7 +153,7 @@ fn collect_methods(impl_block: &mut ItemImpl) -> syn::Result<CollectedMethods> {
         let ImplItem::Fn(method) = item else { continue };
 
         let mut remaining_attrs = Vec::new();
-        let mut handle_attr = None::<Expr>;
+        let mut handle_attrs: Vec<Expr> = Vec::new();
         let mut factory_attr = None::<LitStr>;
         let mut serializer_attr = None::<proc_macro2::TokenStream>;
         let mut deserializer_attr = None::<LitStr>;
@@ -161,7 +161,8 @@ fn collect_methods(impl_block: &mut ItemImpl) -> syn::Result<CollectedMethods> {
         for attr in method.attrs.drain(..) {
             let path = attr.path();
             if path.is_ident("handle") {
-                handle_attr = Some(attr.parse_args()?);
+                // Collect ALL #[handle(...)] attrs so a method can serve multiple actions.
+                handle_attrs.push(attr.parse_args()?);
             } else if path.is_ident("factory") {
                 factory_attr = Some(attr.parse_args()?);
             } else if path.is_ident("serializer") {
@@ -174,7 +175,8 @@ fn collect_methods(impl_block: &mut ItemImpl) -> syn::Result<CollectedMethods> {
         }
         method.attrs = remaining_attrs;
 
-        if let Some(action) = handle_attr {
+        // Each #[handle] attribute generates a separate handler registration.
+        for action in handle_attrs {
             handlers.push((action, method.clone()));
         }
         if let Some(kind) = factory_attr {

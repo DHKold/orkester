@@ -47,6 +47,6 @@ impl RootComponent {
 
     #[factory("workaholic/LocalFsLoader:1.0")]
     fn create_local_fs_loader(&mut self, config: document::loader::local_fs::LocalFsLoaderConfig) -> Result<document::loader::local_fs::LocalFsLoaderComponent, WorkaholicError> {
-        Ok(document::loader::local_fs::LocalFsLoaderComponent::new(config))
+        Ok(document::loader::local_fs::LocalFsLoaderComponent::new(self.host_ptr, config))
     }
 }

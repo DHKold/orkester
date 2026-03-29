@@ -5,6 +5,6 @@
 pub use crate::abi::AbiRequest;
 pub use crate::sdk::{
     Error, Result,
-    AbiComponentBuilder, ComponentMetadata, Host, PluginComponent,
+    AbiComponentBuilder, ComponentMetadata, Host, HostRef, PluginComponent,
 };
 pub use crate::{component, export_plugin_root};
