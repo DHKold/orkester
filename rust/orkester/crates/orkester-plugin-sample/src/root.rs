@@ -1,13 +1,6 @@
-use orkester_plugin::{
-    abi::{AbiComponent, AbiHost},
-    sdk::{AbiComponentBuilder, ComponentMetadata, PluginComponent, Result},
-};
+use orkester_plugin::{abi::AbiHost, prelude::*};
 
-use crate::{
-    log_server::{LoggingServer, LoggingServerConfig},
-    ping::PingServer,
-    rest_server::{RestServer, RestServerConfig},
-};
+use crate::rest_server::{RestServer, RestServerConfig};
 
 // ── RootComponent ─────────────────────────────────────────────────────────────
 
@@ -23,55 +16,21 @@ pub struct RootComponent {
 // child components synchronously and is never written after construction.
 unsafe impl Send for RootComponent {}
 
+#[component(
+    kind = "sample/Root:1.0",
+    name = "Sample Root Component",
+    description = "Root component for the Sample plugin, providing a REST server.",
+)]
 impl RootComponent {
     /// Called by `export_plugin_root_with_host!` instead of `Default::default`.
     pub fn new(host_ptr: *mut AbiHost) -> Self {
         Self { host_ptr }
     }
-}
 
-impl PluginComponent for RootComponent {
-    fn get_metadata() -> ComponentMetadata {
-        ComponentMetadata {
-            kind:        "sample/Root:1.0".into(),
-            name:        "SampleRoot".into(),
-            description: "Root component of the Orkester sample plugin.".into(),
-        }
-    }
-
-    fn to_abi(self) -> AbiComponent {
-        // Convert to usize before the closure so no raw pointer is captured.
-        // A usize is always Send + Sync, and we restore the pointer inside.
-        let host_ptr_usize: usize = self.host_ptr as usize;
-
-        AbiComponentBuilder::new()
-            .with_metadata(Self::get_metadata())
-            // ── PingServer ───────────────────────────────────────────────
-            .with_factory(
-                "sample/PingServer:1.0",
-                |_root: &mut Self, _cfg: serde_json::Value| -> Result<PingServer> {
-                    Ok(PingServer::default())
-                },
-                PingServer::get_metadata,
-            )
-            // ── LoggingServer ────────────────────────────────────────────
-            .with_factory(
-                "sample/LoggingServer:1.0",
-                |_root: &mut Self, cfg: LoggingServerConfig| LoggingServer::new(cfg),
-                LoggingServer::get_metadata,
-            )
-            // ── RestServer ───────────────────────────────────────────────
-            .with_factory(
-                "sample/RestServer:1.0",
-                move |_root: &mut Self, cfg: RestServerConfig| -> Result<RestServer> {
-                    // SAFETY: host_ptr_usize was cast from a valid *mut AbiHost that
-                    // remains live for the process lifetime.
-                    let ptr = host_ptr_usize as *mut AbiHost;
-                    Ok(RestServer::new(cfg, ptr))
-                },
-                RestServer::get_metadata,
-            )
-            .build(self)
+    /// Factory method for the REST server component, which receives the host pointer so it can call back into the host router.
+    #[factory("sample/RestServer:1.0")]
+    fn create_rest_server(&mut self, config: RestServerConfig) -> Result<RestServer> {
+        Ok(RestServer::new(config, self.host_ptr))
     }
 }
 
