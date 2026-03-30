@@ -151,7 +151,15 @@ impl TaskRun for ShellTaskRun {
                 created_at: None,
                 started_at: None,
                 finished_at: None,
-                outputs: Default::default(),
+                outputs: {
+                    let total = self.request.spec.outputs.len();
+                    self.request.spec.outputs.iter()
+                        .filter_map(|o| {
+                            extract_output_value(&o.name, &state.stdout, total)
+                                .map(|v| (o.name.clone(), v))
+                        })
+                        .collect()
+                },
                 inputs: self.request.spec.inputs.iter().map(|i| {
                     let val = match &i.from {
                         workaholic::TaskInputSource::Literal { value } => value.clone(),
@@ -288,5 +296,27 @@ impl TaskRun for ShellTaskRun {
     fn subscribe(&self) -> TaskRunEventStream {
         use super::stream_adapter::CrossbeamStream;
         Box::pin(CrossbeamStream::new(self.receiver.clone()))
+    }
+}
+
+// ─── Output extraction ────────────────────────────────────────────────────────
+
+/// Extract a named output value from shell stdout.
+///
+/// Tries two conventions in order:
+/// 1. A line of the form `<name>=<value>`.
+/// 2. If `total_outputs == 1`, the last non-empty trimmed line.
+fn extract_output_value(name: &str, stdout: &str, total_outputs: usize) -> Option<serde_json::Value> {
+    let prefix = format!("{name}=");
+    for line in stdout.lines() {
+        if let Some(val) = line.trim().strip_prefix(&prefix) {
+            return Some(serde_json::Value::String(val.to_string()));
+        }
+    }
+    if total_outputs == 1 {
+        stdout.lines().filter(|l| !l.trim().is_empty()).last()
+            .map(|l| serde_json::Value::String(l.trim().to_string()))
+    } else {
+        None
     }
 }

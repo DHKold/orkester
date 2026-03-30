@@ -59,6 +59,13 @@ fn parse_work_input_name(uri: &str) -> Option<&str> {
     uri.strip_prefix("work://inputs?")
 }
 
+/// Extract `(step_name, output_name)` from a `work://steps/<step>/outputs?<name>` URI.
+pub fn parse_step_output_ref(uri: &str) -> Option<(&str, &str)> {
+    let rest = uri.strip_prefix("work://steps/")?;
+    let (step, output) = rest.split_once("/outputs?")?;
+    Some((step, output))
+}
+
 // ─── Output ───────────────────────────────────────────────────────────────────
 
 /// Resolve one output mapping into a `ResolvedOutput`.

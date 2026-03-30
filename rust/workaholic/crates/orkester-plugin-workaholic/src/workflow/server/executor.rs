@@ -5,15 +5,17 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
+use serde_json::Value;
 use workaholic::{
     TaskRunDoc, TaskRunRequestDoc, TaskRunnerSpec, TaskRunState,
     WorkRunRequestDoc, WorkRunState,
 };
 
 use super::registry::WorkflowRegistry;
+use super::step_io::{collect_step_outputs, resolve_step_inputs};
 use crate::workflow::task_runner::{
     ContainerTaskRunner, HttpTaskRunner, KubernetesTaskRunner, ShellTaskRunner,
-    TaskRun, TaskRunner,
+    TaskRunner,
 };
 
 // ─── Public entry point ───────────────────────────────────────────────────────
@@ -25,7 +27,8 @@ pub fn execute_work_run(
     registry:      &WorkflowRegistry,
 ) {
     let run_name         = &request.name;
-    let mut completed:   HashSet<String> = HashSet::new();
+    let mut completed:    HashSet<String>                      = HashSet::new();
+    let mut step_outputs: HashMap<String, HashMap<String, Value>> = HashMap::new();
     let mut remaining:   Vec<_>          = request.spec.steps.iter().collect();
     let mut all_ok                       = true;
 
@@ -52,6 +55,9 @@ pub fn execute_work_run(
             }
         };
 
+        // Resolve any `work://steps/<step>/outputs?<name>` references at runtime.
+        let req = resolve_step_inputs(req, &step_outputs);
+
         eprintln!(
             "[executor] run='{}' step='{}' runner='{}'",
             run_name, step.name, req.spec.execution.kind
@@ -65,8 +71,9 @@ pub fn execute_work_run(
             .unwrap_or(false);
         eprintln!("[executor] run='{}' step='{}' succeeded={ok}", run_name, step.name);
 
-        // Save the TaskRun doc (with captured logs/inputs) to the registry.
+        // Collect the step's outputs before saving so later steps can use them.
         if let Some(doc) = task_doc {
+            step_outputs.insert(step.name.clone(), collect_step_outputs(&doc));
             let task_run_name = doc.name.clone();
             registry.insert_task_run(doc);
             set_step_task_run_ref(registry, run_name, &step.name, &task_run_name);
