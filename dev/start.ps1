@@ -44,7 +44,7 @@ try {
 }
 
 # Recreate the container only if the image changed or the container is gone.
-$RunningImageId = (podman inspect $ContainerName --format "{{.Image}}" 2>$null)
+$RunningImageId = try { podman inspect $ContainerName --format "{{.Image}}" 2>$null } catch { "" }
 $NeedsRecreate  = ($RunningImageId -ne $NewImageId)
 
 if ($NeedsRecreate) {

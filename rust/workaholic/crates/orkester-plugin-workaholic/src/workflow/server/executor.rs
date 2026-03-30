@@ -74,11 +74,19 @@ pub fn execute_work_run(
             .map(|s| s.state == TaskRunState::Succeeded)
             .unwrap_or(false);
         eprintln!("[executor] run='{}' step='{}' succeeded={ok}", run_name, step.name);
-        append_run_log(
-            registry, run_name,
-            if ok { "info" } else { "error" },
-            format!("Step '{}' {}", step.name, if ok { "succeeded" } else { "failed" }),
-        );
+
+        if ok {
+            append_run_log(registry, run_name, "info", format!("Step '{}' succeeded", step.name));
+        } else {
+            let stderr = task_doc.as_ref()
+                .and_then(|d| d.status.as_ref())
+                .and_then(|s| s.logs_ref.as_ref())
+                .map(|l| l.stderr.trim())
+                .filter(|s| !s.is_empty())
+                .unwrap_or("no details captured");
+            append_run_log(registry, run_name, "error",
+                format!("Step '{}' failed — {}", step.name, stderr));
+        }
 
         // Collect the step's outputs before saving so later steps can use them.
         if let Some(doc) = task_doc {
