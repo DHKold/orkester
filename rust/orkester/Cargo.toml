@@ -4,6 +4,7 @@ members = [
     "crates/orkester-host",
     "crates/orkester-macro",
     "crates/orkester-plugin",
+    "crates/orkester-plugin-logging",
     "crates/orkester-plugin-sample",
     "crates/orkester-plugin-metrics",
 ]

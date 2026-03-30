@@ -47,6 +47,18 @@ servers:
       retention_secs: 86400          # 24 hours
       max_granularity_per_minute: 12 # one point per 5 seconds
 
+  # ── Logging (structured log records) ──────────────────────────────────────
+  - name: log-server
+    kind: logging/LoggingServer:1.0
+    config:
+      queue_capacity: 1024
+      antispam:
+        max_per_minute: 1000
+      sinks:
+        - kind: logging/ConsoleLogSink:1.0
+          formatter:
+            kind: logging/ConsoleLogFormatter:1.0
+
   # ── HTTP gateway ─────────────────────────────────────────────────────────────
   - name: rest-server
     kind: sample/RestServer:1.0
@@ -269,10 +281,7 @@ hub:
         - kind: match
           config: { field: kind, mode: regex, value: "^log/" }
       targets:
-        - kind: components
-          config:
-            targets:
-              - name: log-server
+        - kind: drop
 
     drop-unhandled:
       filters:

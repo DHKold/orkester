@@ -1,74 +1,151 @@
-import { getLoaderMetrics } from '../api.js'
-import { esc, fmtDate, setApp } from '../utils.js'
+import { getMetricsSnapshot, getMetricsHistory } from '../api.js'
+import { esc, setApp } from '../utils.js'
 import { toastError } from '../components/toast.js'
 
+const REFRESH_MS = 30_000
+let _refreshTimer = null
+let _charts = {}
+
+// ─── Entry point ──────────────────────────────────────────────────────────────
+
 export async function renderMetrics() {
+  stopAutoRefresh()
   setApp('<p aria-busy="true">Loading metrics…</p>')
+  await loadAndRender()
+  startAutoRefresh()
+}
+
+// ─── Data loading ─────────────────────────────────────────────────────────────
+
+async function loadAndRender() {
   try {
-    const base = window.ORKESTER_API_BASE ?? ''
-    const [res, scanMetrics] = await Promise.all([
-      fetch(`${base}/v1/metrics`),
-      getLoaderMetrics().catch(() => []),
+    const [snapRes, histRes] = await Promise.all([
+      getMetricsSnapshot().catch(() => ({ metrics: {} })),
+      getMetricsHistory().catch(() => ({ history: {} })),
     ])
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-
-    const rows = Object.entries(data)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, val]) => `
-        <tr>
-          <td style="font-family:monospace">${key}</td>
-          <td style="text-align:right;font-family:monospace;font-weight:600">${val}</td>
-        </tr>`)
-      .join('')
-
-    const scanRows = (Array.isArray(scanMetrics) ? scanMetrics : [])
-      .slice().reverse()
-      .map(m => `<tr>
-        <td class="muted" style="font-size:0.8rem">${esc(fmtDate(m.scanned_at ?? m.scannedAt))}</td>
-        <td><code style="font-size:0.8rem">${esc(m.entry_path ?? m.entryPath ?? '')}</code></td>
-        <td style="text-align:center">${m.is_initial ?? m.isInitial ? '<span class="tag" style="background:#dbeafe">initial</span>' : 'poll'}</td>
-        <td style="text-align:right;font-family:monospace">${m.duration_ms ?? m.durationMs ?? 0} ms</td>
-        <td style="text-align:right;color:var(--status-succeeded)">${m.events_added ?? m.eventsAdded ?? 0}</td>
-        <td style="text-align:right;color:var(--status-running)">${m.events_modified ?? m.eventsModified ?? 0}</td>
-        <td style="text-align:right;color:var(--status-failed)">${m.events_removed ?? m.eventsRemoved ?? 0}</td>
-      </tr>`)
-      .join('')
-
-    setApp(`
-      <hgroup>
-        <h2>Metrics</h2>
-        <p>${Object.keys(data).length} server metrics</p>
-      </hgroup>
-      <figure>
-        <table>
-          <thead><tr><th>Metric</th><th style="text-align:right">Value</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </figure>
-
-      <hgroup style="margin-top:2rem">
-        <h3>Loader Scan History</h3>
-        <p>Recent filesystem scans (newest first)</p>
-      </hgroup>
-      ${scanRows
-        ? `<figure>
-            <table>
-              <thead><tr>
-                <th>Time</th><th>Path</th><th>Type</th>
-                <th style="text-align:right">Duration</th>
-                <th style="text-align:right">Added</th>
-                <th style="text-align:right">Modified</th>
-                <th style="text-align:right">Removed</th>
-              </tr></thead>
-              <tbody>${scanRows}</tbody>
-            </table>
-          </figure>`
-        : '<p class="muted">No scan history yet.</p>'}
-    `)
+    const snapshot = snapRes?.metrics ?? {}
+    const history  = histRes?.history  ?? {}
+    render(snapshot, history)
   } catch (e) {
     toastError(`Failed to load metrics: ${e.message}`)
     setApp('<div class="empty-state"><p>Failed to load metrics.</p></div>')
   }
+}
+
+// ─── Rendering ────────────────────────────────────────────────────────────────
+
+function render(snapshot, history) {
+  const keys = Object.keys(snapshot).sort()
+  if (keys.length === 0) {
+    setApp(`
+      <hgroup>
+        <h2>Metrics</h2>
+        <p>No metrics recorded yet.</p>
+      </hgroup>`)
+    return
+  }
+
+  const cards = keys.map(key => buildCard(key, snapshot[key], history[key] ?? [])).join('')
+  setApp(`
+    <hgroup>
+      <h2>Metrics</h2>
+      <p>${keys.length} metric${keys.length !== 1 ? 's' : ''} · auto-refreshes every ${REFRESH_MS / 1000}s</p>
+    </hgroup>
+    <div class="metrics-grid">${cards}</div>`)
+
+  // Render charts after DOM update.
+  requestAnimationFrame(() => {
+    destroyAllCharts()
+    keys.forEach(key => renderChart(key, history[key] ?? []))
+  })
+}
+
+function buildCard(key, value, points) {
+  const shortKey = key.split('.').slice(-2).join('.')
+  const formatted = formatValue(value)
+  const trend = trendIcon(points)
+  return `
+    <div class="metric-card" data-key="${esc(key)}">
+      <div class="metric-card-header">
+        <span class="metric-key" title="${esc(key)}">${esc(shortKey)}</span>
+        <span class="metric-trend">${trend}</span>
+      </div>
+      <div class="metric-value">${esc(formatted)}</div>
+      <canvas id="chart-${cssId(key)}" class="metric-chart" height="60"></canvas>
+    </div>`
+}
+
+// ─── Charts ───────────────────────────────────────────────────────────────────
+
+function renderChart(key, points) {
+  if (!window.Chart) return
+  const id = `chart-${cssId(key)}`
+  const canvas = document.getElementById(id)
+  if (!canvas || points.length < 2) return
+
+  const labels = points.map(p => new Date(p.timestamp_ms).toLocaleTimeString())
+  const data   = points.map(p => p.value)
+
+  _charts[key] = new window.Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor:     '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,0.08)',
+        borderWidth:     2,
+        pointRadius:     0,
+        fill:            true,
+        tension:         0.3,
+      }],
+    },
+    options: {
+      animation:   false,
+      responsive:  true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+      scales: {
+        x: { display: false },
+        y: { display: true, ticks: { maxTicksLimit: 3, font: { size: 10 } }, grid: { color: '#f1f5f9' } },
+      },
+    },
+  })
+}
+
+function destroyAllCharts() {
+  Object.values(_charts).forEach(c => c.destroy())
+  _charts = {}
+}
+
+// ─── Auto-refresh ─────────────────────────────────────────────────────────────
+
+function startAutoRefresh() {
+  _refreshTimer = setInterval(loadAndRender, REFRESH_MS)
+}
+
+function stopAutoRefresh() {
+  if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatValue(v) {
+  if (typeof v !== 'number') return String(v)
+  if (Number.isInteger(v)) return v.toLocaleString()
+  return v.toLocaleString(undefined, { maximumFractionDigits: 2 })
+}
+
+function trendIcon(points) {
+  if (points.length < 2) return ''
+  const last = points[points.length - 1].value
+  const prev = points[points.length - 2].value
+  if (last > prev) return '<span style="color:#22c55e">▲</span>'
+  if (last < prev) return '<span style="color:#ef4444">▼</span>'
+  return '<span style="color:#94a3b8">–</span>'
+}
+
+function cssId(key) {
+  return key.replace(/[^a-z0-9]/gi, '-')
 }
 

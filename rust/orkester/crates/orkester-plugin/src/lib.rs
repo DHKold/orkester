@@ -1,5 +1,6 @@
 pub mod abi;
 pub mod hub;
+pub mod logging;
 pub mod sdk;
 pub mod prelude;
 
@@ -18,8 +19,9 @@ macro_rules! export_plugin_root {
     ($ty:ty) => {
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn orkester_plugin_entry(
-            _host: *mut $crate::abi::AbiHost,
+            host: *mut $crate::abi::AbiHost,
         ) -> *mut $crate::abi::AbiComponent {
+            $crate::logging::init_logging(host, env!("CARGO_PKG_NAME"));
             use $crate::sdk::PluginComponent as _;
             let component = <$ty as ::std::default::Default>::default();
             ::std::boxed::Box::into_raw(::std::boxed::Box::new(
@@ -50,11 +52,94 @@ macro_rules! export_plugin_root_with_host {
         pub unsafe extern "C" fn orkester_plugin_entry(
             host: *mut $crate::abi::AbiHost,
         ) -> *mut $crate::abi::AbiComponent {
+            $crate::logging::init_logging(host, env!("CARGO_PKG_NAME"));
             use $crate::sdk::PluginComponent as _;
             let component = <$ty>::new(host);
             ::std::boxed::Box::into_raw(::std::boxed::Box::new(
                 <$ty as $crate::sdk::PluginComponent>::to_abi(component),
             ))
         }
+    };
+}
+
+// ─── Logging macros ───────────────────────────────────────────────────────────
+
+/// Log at TRACE level.  Arguments are identical to `format!`.
+#[macro_export]
+macro_rules! log_trace {
+    ($($arg:tt)*) => {
+        $crate::logging::send_log($crate::logging::LogRecord {
+            level:        $crate::logging::LogLevel::Trace,
+            target:       module_path!().to_owned(),
+            message:      format!($($arg)*),
+            file:         file!().to_owned(),
+            line:         line!(),
+            timestamp_ms: $crate::logging::now_ms(),
+            plugin_id:    $crate::logging::plugin_id().to_owned(),
+        })
+    };
+}
+
+/// Log at DEBUG level.  Arguments are identical to `format!`.
+#[macro_export]
+macro_rules! log_debug {
+    ($($arg:tt)*) => {
+        $crate::logging::send_log($crate::logging::LogRecord {
+            level:        $crate::logging::LogLevel::Debug,
+            target:       module_path!().to_owned(),
+            message:      format!($($arg)*),
+            file:         file!().to_owned(),
+            line:         line!(),
+            timestamp_ms: $crate::logging::now_ms(),
+            plugin_id:    $crate::logging::plugin_id().to_owned(),
+        })
+    };
+}
+
+/// Log at INFO level.  Arguments are identical to `format!`.
+#[macro_export]
+macro_rules! log_info {
+    ($($arg:tt)*) => {
+        $crate::logging::send_log($crate::logging::LogRecord {
+            level:        $crate::logging::LogLevel::Info,
+            target:       module_path!().to_owned(),
+            message:      format!($($arg)*),
+            file:         file!().to_owned(),
+            line:         line!(),
+            timestamp_ms: $crate::logging::now_ms(),
+            plugin_id:    $crate::logging::plugin_id().to_owned(),
+        })
+    };
+}
+
+/// Log at WARN level.  Arguments are identical to `format!`.
+#[macro_export]
+macro_rules! log_warn {
+    ($($arg:tt)*) => {
+        $crate::logging::send_log($crate::logging::LogRecord {
+            level:        $crate::logging::LogLevel::Warn,
+            target:       module_path!().to_owned(),
+            message:      format!($($arg)*),
+            file:         file!().to_owned(),
+            line:         line!(),
+            timestamp_ms: $crate::logging::now_ms(),
+            plugin_id:    $crate::logging::plugin_id().to_owned(),
+        })
+    };
+}
+
+/// Log at ERROR level.  Arguments are identical to `format!`.
+#[macro_export]
+macro_rules! log_error {
+    ($($arg:tt)*) => {
+        $crate::logging::send_log($crate::logging::LogRecord {
+            level:        $crate::logging::LogLevel::Error,
+            target:       module_path!().to_owned(),
+            message:      format!($($arg)*),
+            file:         file!().to_owned(),
+            line:         line!(),
+            timestamp_ms: $crate::logging::now_ms(),
+            plugin_id:    $crate::logging::plugin_id().to_owned(),
+        })
     };
 }

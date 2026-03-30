@@ -429,6 +429,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "orkester-plugin-logging"
+version = "0.1.0"
+dependencies = [
+ "crossbeam-channel",
+ "log",
+ "orkester-macro",
+ "orkester-plugin",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+]
+
+[[package]]
 name = "orkester-plugin-metrics"
 version = "0.1.0"
 dependencies = [

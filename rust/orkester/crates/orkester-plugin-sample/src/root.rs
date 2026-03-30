@@ -3,17 +3,12 @@ use orkester_plugin::{abi::AbiHost, prelude::*};
 use crate::rest_server::{RestServer, RestServerConfig};
 
 // ── RootComponent ─────────────────────────────────────────────────────────────
-
-/// Root component of the sample plugin.
-///
-/// Implemented manually (instead of with `#[component]`) so we can capture the
-/// host pointer at construction time and pass it to `RestServer`.
 pub struct RootComponent {
     host_ptr: *mut AbiHost,
 }
 
-// SAFETY: host_ptr is valid for the process lifetime; it is only used to build
-// child components synchronously and is never written after construction.
+// SAFETY: The host ABI pointer is valid for the process lifetime and callable
+// from any thread (same guarantee as `HostRef: Send + Sync`).
 unsafe impl Send for RootComponent {}
 
 #[component(

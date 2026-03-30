@@ -43,7 +43,10 @@ export const createCron       = (ns, body)   => registerCron(body)
 export const updateCron       = (ns, body)   => registerCron(body)
 export const deleteCron       = (ns, name)   => unregisterCron(name)
 
-// ── Loader ────────────────────────────────────────────────────────────────────
+// ── Metrics ───────────────────────────────────────────────────────────────────
+export const getMetricsSnapshot  = ()     => req('/metrics/snapshot')
+export const getMetricsHistory   = ()     => req('/metrics/history')
+
 export const getLoaderMetrics = ()           => req('/loader/metrics')
 
 const enc = encodeURIComponent

@@ -1,6 +1,6 @@
 mod metrics;
 mod root;
 
-pub use root::MetricsRoot;
+pub use root::MetricsPlugin;
 
-orkester_plugin::export_plugin_root!(MetricsRoot);
+orkester_plugin::export_plugin_root!(MetricsPlugin);

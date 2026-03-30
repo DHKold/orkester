@@ -19,6 +19,7 @@ use orkester_plugin::{
 use crate::{
     catalog::Catalog,
     config::HostConfig,
+    logging::{HostLogBridge, LOGGING_SERVER_KIND_PREFIX},
     pipeline::{make_pipeline_host, HostRequest, HostResponse},
     server::{ComponentInfo, ComponentInfoRegistry, HostServer},
 };
@@ -68,12 +69,25 @@ fn error_response(request_id: u64, message: &str) -> HostResponse {
 /// components, and returns a `HostResponse`.  All I/O with components is still
 /// synchronous from the worker's perspective; the pipeline's value here is that
 /// the ABI ingress never blocks on routing logic.
-fn make_routing_host(registry: ComponentRegistry, hub_config: HubConfig) -> orkester_plugin::sdk::Host {
+///
+/// Requests with a `log/*` format are intercepted before hub routing and
+/// forwarded directly to the `HostLogBridge` (dedicated logging path).
+fn make_routing_host(
+    registry: ComponentRegistry,
+    hub_config: HubConfig,
+    log_bridge: Arc<HostLogBridge>,
+) -> orkester_plugin::sdk::Host {
     let rules = HubBuilder::new(hub_config, registry).build_rules();
 
     make_pipeline_host(
         move |req: HostRequest| -> Option<HostResponse> {
             let id = req.id;
+
+            // Dedicated logging path — bypass hub routing entirely.
+            if req.format.starts_with("log/") {
+                log_bridge.submit(&req.payload);
+                return Some(HostResponse { request_id: id, payload: Vec::new() });
+            }
 
             // Parse the inbound envelope.
             let envelope: Option<Envelope> = decode_request(&req);
@@ -127,10 +141,11 @@ fn make_routing_host(registry: ComponentRegistry, hub_config: HubConfig) -> orke
 
 /// Orchestrate the entire host lifecycle.
 pub fn run(cfg: HostConfig) -> Result<()> {
-    // 1. Create component registry, host and internal server.
+    // 1. Create component registry, logging bridge, host and internal server.
     let registry: Arc<Mutex<Vec<ComponentEntry>>> = Arc::new(Mutex::new(Vec::new()));
     let info_registry: ComponentInfoRegistry = Arc::new(Mutex::new(Vec::new()));
-    let mut host = make_routing_host(registry.clone(), cfg.hub.clone());
+    let log_bridge = HostLogBridge::new();
+    let mut host = make_routing_host(registry.clone(), cfg.hub.clone(), log_bridge.clone());
     // 2. Load plugins
     let mut catalog = Catalog::load(&mut host, &cfg.plugins).context("loading plugins")?;
     if catalog.components.is_empty() {
@@ -141,6 +156,13 @@ pub fn run(cfg: HostConfig) -> Result<()> {
     for server in &cfg.servers {
         match Catalog::instantiate_component(&mut catalog, server.kind.as_str(), &server.config) {
             Ok(component) => {
+                // Connect the logging bridge before generic registration so the
+                // server is fully registered even if bridge connection fails.
+                if server.kind.starts_with(LOGGING_SERVER_KIND_PREFIX) {
+                    let entry = ComponentEntry::new(server.name.clone(), server.kind.clone(), component);
+                    log_bridge.connect(entry);
+                    log::info!("[runner] Logging bridge connected to '{}'", server.name);
+                }
                 register_component(&registry, &info_registry, &server.name, component, server.kind.clone());
                 log::info!("[runner] Server '{}' of kind '{}' instantiated and registered", server.name, server.kind);
             }
