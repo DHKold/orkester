@@ -7,6 +7,7 @@ mod catalog;
 mod config;
 mod pipeline;
 mod runner;
+mod server;
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 

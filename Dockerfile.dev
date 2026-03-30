@@ -1,10 +1,10 @@
 # Dev / demo image for Orkester
 #
 # Builds the release binary + plugins, then packages them together with the
-# example workspace into a Debian-based image that has:
+# default workaholic config into a Debian-based image that has:
 #   • a shell (bash)          — for exec / debugging
 #   • the Docker CLI          — so the container executor can reach the host socket
-#   • the example workspace   — pre-loaded at /orkester/workspace/
+#   • the example configs     — pre-loaded at /orkester/bin/configs/
 #
 # This image is intended to be deployed with the Helm chart for quick demos and
 # integration testing.  It is NOT hardened for production use.
@@ -14,9 +14,8 @@
 #
 # Run locally:
 #   podman run --rm -p 8080:8080 \
-#     -v ./dev/config.yaml:/orkester/config.yaml:ro,z \
 #     -v /var/run/docker.sock:/var/run/docker.sock \
-#     orkester:dev -c /orkester/config.yaml
+#     orkester:dev
 
 # ── Stage 1: build ────────────────────────────────────────────────────────────
 # Pin to Bookworm so the glibc version matches the runtime stage.
@@ -25,22 +24,26 @@ WORKDIR /build
 
 COPY rust/ .
 
-# Build with persistent cache mounts:
-#   /usr/local/cargo/registry  — downloaded crate sources (survives across builds)
-#   /usr/local/cargo/git       — git-sourced dependencies
-#   /build/target              — incremental compilation artefacts
-#
-# The target/ dir is NOT part of the image layer (mount is ephemeral), so we
-# copy the final binaries to permanent paths inside the same RUN step.
+# ── orkester workspace: host binary + sample + metrics plugins ─────────────────
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/build/target \
-    cargo build --release -p orkester \
-                          -p orkester-plugin-core \
-                          -p orkester-plugin-k8s \
- && cp target/release/orkester                   /usr/local/bin/orkester \
- && cp target/release/liborkester_plugin_core.so /tmp/ \
- && cp target/release/liborkester_plugin_k8s.so  /tmp/
+    --mount=type=cache,target=/build/orkester/target \
+    cd /build/orkester \
+ && cargo build --release \
+        -p orkester-host \
+        -p orkester-plugin-sample \
+        -p orkester-plugin-metrics \
+ && cp target/release/orkester                        /usr/local/bin/orkester \
+ && cp target/release/liborkester_plugin_sample.so    /tmp/ \
+ && cp target/release/liborkester_plugin_metrics.so   /tmp/
+
+# ── workaholic workspace: workaholic plugin ────────────────────────────────────
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/workaholic/target \
+    cd /build/workaholic \
+ && cargo build --release -p orkester-plugin-workaholic \
+ && cp target/release/liborkester_plugin_workaholic.so /tmp/
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
@@ -65,22 +68,27 @@ RUN apt-get update \
 # Orkester binary
 COPY --from=builder /usr/local/bin/orkester /usr/local/bin/orkester
 
-# Plugins
-RUN mkdir -p /orkester/plugins
-COPY --from=builder /tmp/liborkester_plugin_core.so /orkester/plugins/
-COPY --from=builder /tmp/liborkester_plugin_k8s.so  /orkester/plugins/
+# Plugins (dev config expects them at /orkester/bin/)
+RUN mkdir -p /orkester/bin
+COPY --from=builder /tmp/liborkester_plugin_sample.so     /orkester/bin/
+COPY --from=builder /tmp/liborkester_plugin_metrics.so    /orkester/bin/
+COPY --from=builder /tmp/liborkester_plugin_workaholic.so /orkester/bin/
 
-# Example workspace — pre-loaded so the demo is self-contained.
-COPY examples/workspace/ /orkester/workspace/
+# Embedded configs and default workaholic config
+COPY bin/configs/        /orkester/bin/configs/
+COPY bin/workaholic.yaml /orkester/bin/workaholic.yaml
+COPY bin/workaholic.yaml /orkester/config.yaml
+
+# UI — served at /ui/ by the rest-server static_folders config
 COPY ui/ /orkester/ui/
 
-# Writable directories expected by the default config.
+# Writable data directory expected by the default config.
 # Create the orkester user (UID 10001) that matches the pod security context,
 # then chown all writable paths so the process can create subdirectories.
 RUN groupadd --gid 10001 orkester \
  && useradd  --uid 10001 --gid 10001 --no-create-home --shell /sbin/nologin orkester \
- && mkdir -p /orkester/data/workflows \
- && chown -R 10001:10001 /orkester/data
+ && mkdir -p /orkester/bin/data \
+ && chown -R 10001:10001 /orkester/bin/data
 
 USER orkester
 WORKDIR /orkester

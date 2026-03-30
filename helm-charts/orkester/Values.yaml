@@ -422,74 +422,276 @@ persistence:
 config:
 
   # ---------------------------------------------------------------------------
-  # Logging
-  # ---------------------------------------------------------------------------
-  logging:
-    console:
-      enabled: true
-      filters:
-        # Minimum log level: debug | info | warn | error
-        - level: INFO
-
-  # ---------------------------------------------------------------------------
   # Plugins
   # ---------------------------------------------------------------------------
-  # Orkester loads plugins from the directory below at startup.
-  # The production image ships plugin-core and plugin-k8s here.
+  # The production image ships sample, metrics and workaholic plugins here.
   plugins:
-    dir: /orkester/plugins
-    recursive: false
+    directories:
+      - path: /orkester/plugins
 
   # ---------------------------------------------------------------------------
   # Servers
   # ---------------------------------------------------------------------------
-  # Each server declares which plugin component it uses and which other server
-  # it publishes its endpoints to (rest_target / metrics_target).
   servers:
 
-    rest_api:
-      component:
-        plugin: orkester-plugin-core
-        server: axum-rest-server
-      enabled: true
-      # Must match `service.containerPort`.
-      port: 8080
-      metrics_target: metrics
+    # Must come first so other servers can emit logs during their startup.
+    - name: log-server
+      kind: sample/LoggingServer:1.0
+      config:
+        formatter: { kind: text }
+        consumers:
+          - kind: console
+          - kind: file
+            path: /orkester/data/orkester.log
 
-    metrics:
-      component:
-        plugin: orkester-plugin-core
-        server: metrics-server
-      rest_server: rest_api
-      enabled: true
+    # Catalog: loads workflow definitions from the data volume.
+    # Pre-populate /orkester/data/configs/ (via initContainer or PVC) with
+    # groups.yaml, namespaces.yaml, profiles.yaml, tasks.yaml, works.yaml.
+    - name: catalog-server
+      kind: workaholic/CatalogServer:1.0
+      config:
+        load_on_startup: true
+        loader:
+          path: /orkester/data/configs/
+    - name: catalog-loader
+      kind: workaholic/LocalFsLoader:1.0
+      config:
+        extensions:
+          yaml: workaholic/YamlDocumentParser:1.0
+          yml:  workaholic/YamlDocumentParser:1.0
+          json: workaholic/JsonDocumentParser:1.0
+      start:
+        - kind: workaholic/DocumentLoader/CreateEntry
+          config:
+            path: /orkester/data/configs/
+            recursive: true
+            watch: true
+        - kind: workaholic/DocumentLoader/Start
+          config: {}
 
-    workspace:
-      component:
-        plugin: orkester-plugin-core
-        server: workspace-server
-      enabled: true
-      rest_target: rest_api
-      metrics_target: metrics
-      loaders:
-        # Local loader reads workflow definitions from a directory on disk.
-        # - type: local
-        #   dir: /orkester/samples
-        # S3 loader reads workflow definitions from an S3 bucket. Requires the AWS plugin.
-        # - type: s3
-        #   bucket: my-workflow-bucket
-        #   ... additional S3 connection config (region, credentials/secret, etc.)
+    # Workflow execution engine.
+    - name: workflow-server
+      kind: workaholic/WorkflowServer:1.0
+      config:
+        name: workflow-server
+        namespace: default
+        catalog_ref: catalog-server
+        task_permits_per_grant: 4
+        work_runner:
+          kind: workaholic/ThreadWorkRunner:1.0
+          config: {}
+          concurrency:
+            max_work_runs: 4
+            max_task_runs: 16
 
-    workflows:
-      component:
-        plugin: orkester-plugin-core
-        server: workflows-server
-      enabled: true
-      rest_target: rest_api
-      metrics_target: metrics
-      # How often (in seconds) the scheduler polls for pending workflow runs.
-      scheduler_interval_seconds: 30
-      persistence:
-        # type: file-persistence stores state on the PVC mounted at `mountPath`.
-        # Switch to a database backend for multi-replica deployments.
-        type: file-persistence
-        root-dir: /orkester/data/workflows
+    # Health check endpoint (GET /v1/health → ping/Ping).
+    - name: ping-server
+      kind: sample/PingServer:1.0
+
+    # In-process metrics store with full history for dashboard graphs.
+    - name: metrics-server
+      kind: metrics/MetricsServer:1.0
+      config:
+        keep_history: true
+        retention_secs: 86400          # 24 hours
+        max_granularity_per_minute: 12 # one point per 5 seconds
+
+    # HTTP gateway — must come last so all components are registered first.
+    - name: rest-server
+      kind: sample/RestServer:1.0
+      config:
+        bind: "0.0.0.0:8080"
+        static_folders:
+          - url_path: /ui
+            dir: /orkester/ui
+        routes:
+          # Health check
+          - path:   /v1/health
+            method: GET
+            action: orkester/HostServer/HealthCheck:1.0
+          # Host introspection
+          - path:   /v1/host/plugins
+            method: GET
+            action: orkester/HostServer/Catalog/ListPlugins:1.0
+          - path:   /v1/host/components
+            method: GET
+            action: orkester/HostServer/Catalog/ListComponents:1.0
+          - path:   /v1/host/registry
+            method: GET
+            action: orkester/HostServer/Registry/List:1.0
+          # Metrics
+          - path:   /v1/metrics/snapshot
+            method: GET
+            action: metrics/GetSnapshot
+          - path:   /v1/metrics/history
+            method: GET
+            action: metrics/GetHistory
+          - path:   /v1/metrics/record
+            method: POST
+            action: metrics/Record
+          # Catalog : Namespaces / Works / Tasks
+          - path:   /v1/namespaces
+            method: GET
+            action: workaholic/CatalogServer/ListNamespaces
+          - path:   /v1/namespaces/{ns}/works
+            method: GET
+            action: workaholic/CatalogServer/ListWorks
+          - path:   /v1/namespaces/{ns}/tasks
+            method: GET
+            action: workaholic/CatalogServer/ListTasks
+          # Catalog : Resources
+          - path:   /v1/catalog/resources
+            method: POST
+            action: workaholic/CatalogServer/CreateResource
+          - path:   /v1/catalog/resources/{id}
+            method: GET
+            action: workaholic/CatalogServer/RetrieveResource
+          - path:   /v1/catalog/resources/{id}
+            method: PUT
+            action: workaholic/CatalogServer/UpdateResource
+          - path:   /v1/catalog/resources/{id}
+            method: DELETE
+            action: workaholic/CatalogServer/DeleteResource
+          - path:   /v1/catalog/resources
+            method: GET
+            action: workaholic/CatalogServer/SearchResources
+          # Loader
+          - path:   /v1/loader/metrics
+            method: GET
+            action: workaholic/DocumentLoader/GetMetrics
+          - path:   /v1/loader/documents
+            method: GET
+            action: workaholic/DocumentLoader/SearchDocuments
+          - path:   /v1/loader/entries
+            method: POST
+            action: workaholic/DocumentLoader/CreateEntry
+          - path:   /v1/loader/entries/{id}
+            method: GET
+            action: workaholic/DocumentLoader/RetrieveEntry
+          - path:   /v1/loader/entries/{id}
+            method: PUT
+            action: workaholic/DocumentLoader/UpdateEntry
+          - path:   /v1/loader/entries/{id}
+            method: DELETE
+            action: workaholic/DocumentLoader/DeleteEntry
+          - path:   /v1/loader/entries
+            method: GET
+            action: workaholic/DocumentLoader/SearchEntries
+          # Workflow
+          - path:   /v1/workflow/trigger
+            method: POST
+            action: workaholic/WorkflowServer/Trigger
+          - path:   /v1/workflow/work-runs
+            method: GET
+            action: workaholic/WorkflowServer/ListWorkRuns
+          - path:   /v1/workflow/work-runs/{name}
+            method: GET
+            action: workaholic/WorkflowServer/GetWorkRun
+          - path:   /v1/workflow/work-runs/{name}/cancel
+            method: POST
+            action: workaholic/WorkflowServer/CancelWorkRun
+          - path:   /v1/workflow/task-runs
+            method: GET
+            action: workaholic/WorkflowServer/ListTaskRuns
+          - path:   /v1/workflow/task-runs/{name}
+            method: GET
+            action: workaholic/WorkflowServer/GetTaskRun
+          - path:   /v1/workflow/crons
+            method: GET
+            action: workaholic/WorkflowServer/ListCrons
+          - path:   /v1/workflow/crons
+            method: POST
+            action: workaholic/WorkflowServer/RegisterCron
+          - path:   /v1/workflow/crons/{name}
+            method: DELETE
+            action: workaholic/WorkflowServer/UnregisterCron
+
+  # ---------------------------------------------------------------------------
+  # Hub
+  # ---------------------------------------------------------------------------
+  hub:
+    queue:
+      waiting_capacity: 4096
+      dispatch_capacity: 256
+      backpressure: reject
+    routes:
+      workflow-route:
+        filters:
+          - kind: match
+            config:
+              field: kind
+              value: "workaholic/WorkflowServer/"
+              mode: regex
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: workflow-server
+      catalog-route:
+        filters:
+          - kind: match
+            config:
+              field: kind
+              value: "workaholic/CatalogServer/"
+              mode: regex
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: catalog-server
+      document-loader-events-route:
+        filters:
+          - kind: match
+            config:
+              field: kind
+              value: "workaholic/DocumentLoader/Event/"
+              mode: regex
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: catalog-server
+      local-fs-loader-route:
+        filters:
+          - kind: match
+            config:
+              field: kind
+              value: "workaholic/DocumentLoader"
+              mode: regex
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: catalog-loader
+      metrics-route:
+        filters:
+          - kind: match
+            config: { field: kind, value: "^metrics/", mode: regex }
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: metrics-server
+      host-route:
+        filters:
+          - kind: match
+            config: { field: kind, value: "^orkester/HostServer/", mode: regex }
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: host-server
+      route-logs:
+        filters:
+          - kind: match
+            config: { field: kind, mode: regex, value: "^log/" }
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: log-server
+      drop-unhandled:
+        filters:
+          - kind: all
+        targets:
+          - kind: drop

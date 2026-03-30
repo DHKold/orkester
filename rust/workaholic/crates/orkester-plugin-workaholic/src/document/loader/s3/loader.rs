@@ -57,7 +57,8 @@ impl S3Loader {
             let events = { let mut e = arc.lock().unwrap(); scan_entry(&mut e, &self.extensions) };
             let m = build_metrics_pub(entry_id, true, started, &events);
             eprintln!("[s3] initial scan '{}': {}ms +{} ~{} -{}", m.entry_id, m.duration_ms, m.events_added, m.events_modified, m.events_removed);
-            { let mut s = self.metrics.lock().unwrap(); if s.len() >= 200 { s.pop_front(); } s.push_back(m); }
+            { let mut s = self.metrics.lock().unwrap(); if s.len() >= 200 { s.pop_front(); } s.push_back(m.clone()); }
+            emit_scan_metrics(self.host_ptr, &m);
             for ev in events { if let Err(e) = self.emit(ev) { log::error!("emit: {e}"); } }
         }
     }
@@ -67,7 +68,15 @@ impl S3Loader {
             let poll_secs = arc.lock().map(|e| e.config.poll_interval_secs).unwrap_or(30);
             if !arc.lock().map(|e| e.config.watch).unwrap_or(false) { continue; }
             let loader = self.clone();
-            spawn_entry_watcher(Arc::clone(arc), Arc::clone(&self.extensions), Arc::clone(&self.metrics), poll_secs, move |ev| { if let Err(e) = loader.emit(ev) { log::error!("emit: {e}"); } });
+            let host_opt = self.host_ptr;
+            spawn_entry_watcher(
+                Arc::clone(arc),
+                Arc::clone(&self.extensions),
+                Arc::clone(&self.metrics),
+                poll_secs,
+                move |ev| { if let Err(e) = loader.emit(ev) { log::error!("emit: {e}"); } },
+                move |m|  { emit_scan_metrics(host_opt, m); },
+            );
         }
     }
 
@@ -78,6 +87,23 @@ impl S3Loader {
         host.fire(&envelope);
         Ok(())
     }
+}
+
+// ─── Metric emission helpers ───────────────────────────────────────────────────
+
+fn fire_metric(host_ptr: Option<orkester_plugin::sdk::HostRef>, key: &str, operation: &str, value: f64) {
+    let Some(host) = host_ptr else { return };
+    let payload = serde_json::json!({ "key": key, "operation": operation, "value": value });
+    let envelope = Envelope { id: 0, kind: "metrics/Record".to_string(), owner: None, format: "std/json".to_string(), payload: serde_json::to_vec(&payload).unwrap_or_default() };
+    host.fire(&envelope);
+}
+
+fn emit_scan_metrics(host_ptr: Option<orkester_plugin::sdk::HostRef>, m: &S3ScanMetrics) {
+    fire_metric(host_ptr, "workaholic.s3_loader.scans",              "increase", 1.0);
+    fire_metric(host_ptr, "workaholic.s3_loader.documents.added",    "increase", m.events_added    as f64);
+    fire_metric(host_ptr, "workaholic.s3_loader.documents.modified", "increase", m.events_modified as f64);
+    fire_metric(host_ptr, "workaholic.s3_loader.documents.removed",  "increase", m.events_removed  as f64);
+    fire_metric(host_ptr, "workaholic.s3_loader.scan_duration_ms",   "set",      m.duration_ms     as f64);
 }
 
 impl Clone for S3Loader {

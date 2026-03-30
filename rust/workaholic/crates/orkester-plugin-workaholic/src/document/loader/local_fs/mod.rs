@@ -148,13 +148,14 @@ impl LocalFsLoader {
             {
                 let mut store = self.metrics.lock().unwrap();
                 if store.len() >= 200 { store.pop_front(); }
-                store.push_back(m);
+                store.push_back(m.clone());
             }
             for event in events {
                 if let Err(e) = self.emit_change_event(event) {
                     log::error!("emit_change_event failed during initial scan: {}", e);
                 }
             }
+            emit_scan_metrics(self.host_ptr, &m);
         }
     }
 
@@ -166,6 +167,7 @@ impl LocalFsLoader {
             }
             let loader = self.clone();
             let metrics_store = Arc::clone(&self.metrics);
+            let host_opt = self.host_ptr;
             spawn_entry_watcher(
                 Arc::clone(entry_arc),
                 Arc::clone(&self.extensions),
@@ -175,6 +177,7 @@ impl LocalFsLoader {
                         log::error!("emit_change_event failed in watcher: {}", e);
                     }
                 },
+                move |m| emit_scan_metrics(host_opt, m),
             );
         }
     }
@@ -205,6 +208,32 @@ impl LocalFsLoader {
         }
         Ok(())
     }
+}
+
+// ─── Metric emission helpers ───────────────────────────────────────────────────
+
+/// Fire a single `metrics/Record` envelope through the host (fire-and-forget).
+/// Does nothing when `host_ptr` is `None` (tests / standalone use).
+fn fire_metric(host_ptr: Option<orkester_plugin::sdk::HostRef>, key: &str, operation: &str, value: f64) {
+    let Some(host) = host_ptr else { return };
+    let payload = serde_json::json!({ "key": key, "operation": operation, "value": value });
+    let envelope = Envelope {
+        id:      0,
+        kind:    "metrics/Record".to_string(),
+        owner:   None,
+        format:  "std/json".to_string(),
+        payload: serde_json::to_vec(&payload).unwrap_or_default(),
+    };
+    host.fire(&envelope);
+}
+
+/// Emit one `metrics/Record` fire-and-forget event per scan counter.
+fn emit_scan_metrics(host_ptr: Option<orkester_plugin::sdk::HostRef>, m: &LocalFsScanMetrics) {
+    fire_metric(host_ptr, "workaholic.local_fs_loader.scans",              "increase", 1.0);
+    fire_metric(host_ptr, "workaholic.local_fs_loader.documents.added",    "increase", m.events_added    as f64);
+    fire_metric(host_ptr, "workaholic.local_fs_loader.documents.modified", "increase", m.events_modified as f64);
+    fire_metric(host_ptr, "workaholic.local_fs_loader.documents.removed",  "increase", m.events_removed  as f64);
+    fire_metric(host_ptr, "workaholic.local_fs_loader.scan_duration_ms",   "set",      m.duration_ms     as f64);
 }
 
 // ─── Trait implementations ─────────────────────────────────────────────────────

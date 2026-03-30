@@ -1,30 +1,40 @@
-import { getHealth, getServers, getPlugins } from '../api.js'
-import { esc, fmtUptime, setApp } from '../utils.js'
+import { getHealth, getHostPlugins, getHostComponents, getHostRegistry } from '../api.js'
+import { esc, setApp, fmtUptime } from '../utils.js'
 import { toastError } from '../components/toast.js'
 
 export async function renderHealth() {
   setApp('<p aria-busy="true">Loading…</p>')
 
   try {
-    const [health, servers, plugins] = await Promise.all([
-      getHealth(), getServers(), getPlugins()
+    const [health, plugins, components, registry] = await Promise.all([
+      getHealth(),
+      getHostPlugins().catch(() => []),
+      getHostComponents().catch(() => []),
+      getHostRegistry().catch(() => []),
     ])
 
     const statusClass = health.status === 'ok' ? 'succeeded' : 'failed'
 
-    const serverRows = (servers.servers ?? []).map(s => `
+    const metaRows = (Array.isArray(plugins) ? plugins : []).map(p => `
       <tr>
-        <td>${esc(s.instance_name)}</td>
-        <td><code>${esc(s.component)}</code></td>
+        <td><code>${esc(p.kind)}</code></td>
+        <td>${esc(p.name)}</td>
+        <td class="muted">${esc(p.description ?? '')}</td>
       </tr>
     `).join('')
 
-    const pluginRows = (plugins.plugins ?? []).map(p => `
+    const componentRows = (Array.isArray(components) ? components : []).map(c => `
       <tr>
-        <td><strong>${esc(p.id)}</strong></td>
-        <td>${esc(p.version)}</td>
-        <td>${esc(p.description)}</td>
-        <td class="muted">${(p.authors ?? []).map(esc).join(', ')}</td>
+        <td><code>${esc(c.kind)}</code></td>
+        <td>${esc(c.name)}</td>
+        <td class="muted">${esc(c.description ?? '')}</td>
+      </tr>
+    `).join('')
+
+    const registryRows = (Array.isArray(registry) ? registry : []).map(r => `
+      <tr>
+        <td>${esc(r.name)}</td>
+        <td><code>${esc(r.kind)}</code></td>
       </tr>
     `).join('')
 
@@ -42,27 +52,41 @@ export async function renderHealth() {
           <div class="metric-label">Status</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value">${esc(fmtUptime(health.uptime_seconds))}</div>
+          <div class="metric-value">${esc(fmtUptime(health.uptime_secs))}</div>
           <div class="metric-label">Uptime</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">${esc(health.version)}</div>
+          <div class="metric-label">Version</div>
         </div>
       </div>
 
       <article>
-        <header><strong>Servers</strong></header>
+        <header><strong>Plugin Catalogue</strong> &mdash; component types available for instantiation</header>
         <figure>
           <table>
-            <thead><tr><th>Name</th><th>Component</th></tr></thead>
-            <tbody>${serverRows || '<tr><td colspan="2" class="muted">No servers</td></tr>'}</tbody>
+            <thead><tr><th>Kind</th><th>Name</th><th>Description</th></tr></thead>
+            <tbody>${metaRows || '<tr><td colspan="3" class="muted">No plugins loaded</td></tr>'}</tbody>
           </table>
         </figure>
       </article>
 
       <article>
-        <header><strong>Plugins</strong></header>
+        <header><strong>Component Types</strong> &mdash; all registered component types</header>
         <figure>
           <table>
-            <thead><tr><th>ID</th><th>Version</th><th>Description</th><th>Authors</th></tr></thead>
-            <tbody>${pluginRows || '<tr><td colspan="4" class="muted">No plugins</td></tr>'}</tbody>
+            <thead><tr><th>Kind</th><th>Name</th><th>Description</th></tr></thead>
+            <tbody>${componentRows || '<tr><td colspan="3" class="muted">None</td></tr>'}</tbody>
+          </table>
+        </figure>
+      </article>
+
+      <article>
+        <header><strong>Running Instances</strong> &mdash; live component registry</header>
+        <figure>
+          <table>
+            <thead><tr><th>Name</th><th>Kind</th></tr></thead>
+            <tbody>${registryRows || '<tr><td colspan="2" class="muted">No instances</td></tr>'}</tbody>
           </table>
         </figure>
       </article>

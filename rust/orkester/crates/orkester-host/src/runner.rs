@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 
 use orkester_plugin::{
     abi::AbiComponent,
+    sdk::PluginComponent,
     hub::{Envelope, builder::HubBuilder, config::HubConfig, ComponentRegistry, ComponentEntry},
 };
 
@@ -19,6 +20,7 @@ use crate::{
     catalog::Catalog,
     config::HostConfig,
     pipeline::{make_pipeline_host, HostRequest, HostResponse},
+    server::{ComponentInfo, ComponentInfoRegistry, HostServer},
 };
 
 // ─── Encoding helpers ─────────────────────────────────────────────────────────
@@ -125,10 +127,10 @@ fn make_routing_host(registry: ComponentRegistry, hub_config: HubConfig) -> orke
 
 /// Orchestrate the entire host lifecycle.
 pub fn run(cfg: HostConfig) -> Result<()> {
-    // 1. Create component registry, plugin roots, and routing host
-    let registry    = Arc::new(Mutex::new(Vec::new()));
-    let mut host    = make_routing_host(registry.clone(), cfg.hub.clone());
-
+    // 1. Create component registry, host and internal server.
+    let registry: Arc<Mutex<Vec<ComponentEntry>>> = Arc::new(Mutex::new(Vec::new()));
+    let info_registry: ComponentInfoRegistry = Arc::new(Mutex::new(Vec::new()));
+    let mut host = make_routing_host(registry.clone(), cfg.hub.clone());
     // 2. Load plugins
     let mut catalog = Catalog::load(&mut host, &cfg.plugins).context("loading plugins")?;
     if catalog.components.is_empty() {
@@ -139,12 +141,16 @@ pub fn run(cfg: HostConfig) -> Result<()> {
     for server in &cfg.servers {
         match Catalog::instantiate_component(&mut catalog, server.kind.as_str(), &server.config) {
             Ok(component) => {
-                register_component(&registry, &server.name, component, server.kind.clone());
+                register_component(&registry, &info_registry, &server.name, component, server.kind.clone());
                 log::info!("[runner] Server '{}' of kind '{}' instantiated and registered", server.name, server.kind);
             }
             Err(e) => { log::error!("[runner] Failed to instantiate '{}': {e}", server.name); }
         }
     }
+
+    // 3.5. Register the internal host server for introspection and plugin management.
+    let host_server = HostServer::new(catalog, info_registry.clone());
+    register_component(&registry, &info_registry, "host-server", &mut host_server.to_abi(), "orkester/HostServer:1.0".to_string());
 
     // 4. Start servers based on their `start` confign (list of actions)
     for server in &cfg.servers {
@@ -184,8 +190,8 @@ pub fn run(cfg: HostConfig) -> Result<()> {
     Ok(())
 }
 
-pub fn register_component(registry: &ComponentRegistry, name: &str, component: *mut AbiComponent, kind: String) {
-    let entry = ComponentEntry::new( name.to_string(), kind, component);
-    let mut guard = registry.lock().unwrap();
-    guard.push(entry);
+pub fn register_component(registry: &ComponentRegistry, info_registry: &ComponentInfoRegistry, name: &str, component: *mut AbiComponent, kind: String) {
+    let entry = ComponentEntry::new(name.to_string(), kind.clone(), component);
+    registry.lock().unwrap().push(entry);
+    info_registry.lock().unwrap().push(ComponentInfo { name: name.to_string(), kind });
 }

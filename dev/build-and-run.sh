@@ -45,7 +45,8 @@ echo "=== Building orkester (host + sample plugin) ==="
     cd "${ORKESTER_WS}"
     cargo build ${CARGO_FLAGS} \
         -p orkester-host \
-        -p orkester-plugin-sample 2>&1
+        -p orkester-plugin-sample \
+        -p orkester-plugin-metrics 2>&1
 )
 
 # ── 2. Build workaholic plugin ────────────────────────────────────────────────
@@ -70,6 +71,10 @@ cp -v "${ORKESTER_WS}/target/${CARGO_PROFILE}/orkester" \
 
 # Sample plugin (provides LoggingServer, PingServer, RestServer)
 cp -v "${ORKESTER_WS}/target/${CARGO_PROFILE}/liborkester_plugin_sample.so" \
+      "${BIN_DIR}/"
+
+# Metrics plugin
+cp -v "${ORKESTER_WS}/target/${CARGO_PROFILE}/liborkester_plugin_metrics.so" \
       "${BIN_DIR}/"
 
 # Workaholic plugin

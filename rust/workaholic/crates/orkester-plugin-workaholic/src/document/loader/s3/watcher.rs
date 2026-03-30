@@ -35,6 +35,7 @@ fn watcher_loop(
     extensions:    Arc<HashMap<String, Box<dyn DocumentParser>>>,
     metrics_store: Arc<Mutex<VecDeque<S3ScanMetrics>>>,
     on_event:      impl Fn(S3ChangeEvent),
+    on_metrics:    impl Fn(&S3ScanMetrics),
     poll_secs:     u64,
 ) {
     loop {
@@ -49,20 +50,24 @@ fn watcher_loop(
         if m.events_added + m.events_modified + m.events_removed > 0 {
             eprintln!("[s3] poll '{}': {}ms +{} ~{} -{}", m.entry_id, m.duration_ms, m.events_added, m.events_modified, m.events_removed);
         }
-        push_metrics(&metrics_store, m);
+        push_metrics(&metrics_store, m.clone());
+        on_metrics(&m);
         for event in events { on_event(event); }
     }
 }
 
 /// Spawn a background watcher thread for one S3 entry.
+/// `on_metrics` is called after every scan so scan counters can be forwarded
+/// to the metrics server via fire-and-forget envelopes.
 pub fn spawn_entry_watcher(
     entry_arc:     Arc<Mutex<S3Entry>>,
     extensions:    Arc<HashMap<String, Box<dyn DocumentParser>>>,
     metrics_store: Arc<Mutex<VecDeque<S3ScanMetrics>>>,
     poll_secs:     u64,
     on_event:      impl Fn(S3ChangeEvent) + Send + 'static,
+    on_metrics:    impl Fn(&S3ScanMetrics) + Send + 'static,
 ) {
     std::thread::spawn(move || {
-        watcher_loop(entry_arc, extensions, metrics_store, on_event, poll_secs);
+        watcher_loop(entry_arc, extensions, metrics_store, on_event, on_metrics, poll_secs);
     });
 }

@@ -3,24 +3,11 @@ plugins:
     - path: /orkester/bin/
 
 servers:
-  # ── Logging ─────────────────────────────────────────────────────────────────
-  # Must come first so catalog/workflow can emit logs during their startup.
-  - name: log-server
-    kind: sample/LoggingServer:1.0
-    config:
-      formatter: { kind: text }
-      consumers:
-        - kind: console
-        - kind: file
-          path: /orkester/bin/data/orkester.log
-
   # ── Workflow catalog ────────────────────────────────────────────────────────
   - name: catalog-server
     kind: workaholic/CatalogServer:1.0
-    config:
-      load_on_startup: true
-      loader:
-        path: /orkester/bin/configs/
+    config: {}
+
   - name: catalog-loader
     kind: workaholic/LocalFsLoader:1.0
     config:
@@ -52,9 +39,13 @@ servers:
           max_work_runs: 4
           max_task_runs: 16
 
-  # ── Ping / health ────────────────────────────────────────────────────────────
-  - name: ping-server
-    kind: sample/PingServer:1.0
+  # ── Metrics ─────────────────────────────────────────────────────────────────
+  - name: metrics-server
+    kind: metrics/MetricsServer:1.0
+    config:
+      keep_history: true
+      retention_secs: 86400          # 24 hours
+      max_granularity_per_minute: 12 # one point per 5 seconds
 
   # ── HTTP gateway ─────────────────────────────────────────────────────────────
   - name: rest-server
@@ -70,6 +61,31 @@ servers:
           dir: /orkester/ui
 
       routes:
+        # Host Server
+        - path:   /v1/host/plugins
+          method: GET
+          action: orkester/HostServer/Catalog/ListPlugins:1.0
+        - path:   /v1/host/components
+          method: GET
+          action: orkester/HostServer/Catalog/ListComponents:1.0
+        - path:   /v1/host/registry/components
+          method: GET
+          action: orkester/HostServer/Registry/List:1.0
+        - path:   /v1/health
+          method: GET
+          action: orkester/HostServer/HealthCheck:1.0
+
+        # Metrics
+        - path:   /v1/metrics/snapshot
+          method: GET
+          action: metrics/GetSnapshot
+        - path:   /v1/metrics/history
+          method: GET
+          action: metrics/GetHistory
+        - path:   /v1/metrics/record
+          method: POST
+          action: metrics/Record
+
         # Catalog : Namespaces / Works / Tasks (used by the UI)
         - path:   /v1/namespaces
           method: GET
@@ -168,6 +184,20 @@ hub:
 
   # Route rules are a map keyed by name, evaluated in insertion order.
   routes:
+    # Host requests (e.g. plugin/registry management, catalog queries) go to the workflow server.
+    host-route:
+      filters:
+        - kind: match
+          config:
+            field: kind
+            value: "orkester/HostServer/"
+            mode: regex
+      targets:
+        - kind: components
+          config:
+            targets:
+              - name: host-server
+
     # Workflow server actions go to the workflow server.
     workflow-route:
       filters:
@@ -223,6 +253,16 @@ hub:
           config:
             targets:
               - name: catalog-loader
+
+    metrics-route:
+      filters:
+        - kind: match
+          config: { field: kind, value: "^metrics/", mode: regex }
+      targets:
+        - kind: components
+          config:
+            targets:
+              - name: metrics-server
 
     route-logs:
       filters:

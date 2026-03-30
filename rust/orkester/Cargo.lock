@@ -429,6 +429,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "orkester-plugin-metrics"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "orkester-plugin",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "orkester-plugin-sample"
 version = "0.1.0"
 dependencies = [

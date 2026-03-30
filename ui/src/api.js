@@ -14,9 +14,10 @@ const json = (body) => ({
 })
 
 // ── Management ────────────────────────────────────────────────────────────────
-export const getHealth  = () => req('/health')
-export const getServers = () => req('/servers')
-export const getPlugins = () => req('/plugins')
+export const getHealth         = () => req('/health')
+export const getHostPlugins    = () => req('/host/plugins')
+export const getHostComponents = () => req('/host/components')
+export const getHostRegistry   = () => req('/host/registry/components')
 
 // ── Workspace ─────────────────────────────────────────────────────────────────
 export const listNamespaces = ()             => req('/namespaces')

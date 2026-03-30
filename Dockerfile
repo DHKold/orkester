@@ -7,7 +7,6 @@
 #
 #   podman run --rm -p 8080:8080 \
 #     -v ./config.yaml:/orkester/config.yaml:ro,z \
-#     -v ./plugins:/orkester/plugins:ro,z \
 #     -v orkester-data:/orkester/data:z \
 #     orkester:latest -c /orkester/config.yaml
 
@@ -18,33 +17,40 @@
 FROM rust:1-slim-bookworm AS builder
 WORKDIR /build
 
-# Only copy Rust sources — changes to helm charts, examples, etc. don't
+# Only copy Rust sources — changes to helm charts, ui, etc. don't
 # invalidate the build layer.
 COPY rust/ .
 
-# Build with persistent cache mounts:
-#   /usr/local/cargo/registry  — downloaded crate sources (survives across builds)
-#   /usr/local/cargo/git       — git-sourced dependencies
-#   /build/target              — incremental compilation artefacts
-#
-# The target/ dir is NOT part of the image layer (mount is ephemeral), so we
-# copy the final binaries to permanent paths inside the same RUN step.
+# ── orkester workspace: host binary + sample + metrics plugins ─────────────────
+# Cache mounts survive across builds; binaries are extracted via cp before the
+# ephemeral target/ mount is discarded.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/build/target \
-    cargo build --release -p orkester \
-                          -p orkester-plugin-core \
-                          -p orkester-plugin-k8s \
- && cp target/release/orkester                   /usr/local/bin/orkester \
- && cp target/release/liborkester_plugin_core.so /tmp/ \
- && cp target/release/liborkester_plugin_k8s.so  /tmp/
+    --mount=type=cache,target=/build/orkester/target \
+    cd /build/orkester \
+ && cargo build --release \
+        -p orkester-host \
+        -p orkester-plugin-sample \
+        -p orkester-plugin-metrics \
+ && cp target/release/orkester                        /usr/local/bin/orkester \
+ && cp target/release/liborkester_plugin_sample.so    /tmp/ \
+ && cp target/release/liborkester_plugin_metrics.so   /tmp/
+
+# ── workaholic workspace: workaholic plugin ────────────────────────────────────
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/workaholic/target \
+    cd /build/workaholic \
+ && cargo build --release -p orkester-plugin-workaholic \
+ && cp target/release/liborkester_plugin_workaholic.so /tmp/
 
 # Prepare runtime filesystem layout and credentials while we have a shell.
 RUN echo 'orkester:x:10001:10001:Orkester:/orkester:/sbin/nologin' > /etc/orkester-passwd \
  && echo 'orkester:x:10001:' > /etc/orkester-group \
  && mkdir -p /build/rootfs/orkester/plugins /build/rootfs/orkester/data \
- && cp /tmp/liborkester_plugin_core.so /build/rootfs/orkester/plugins/ \
- && cp /tmp/liborkester_plugin_k8s.so  /build/rootfs/orkester/plugins/ \
+ && cp /tmp/liborkester_plugin_sample.so     /build/rootfs/orkester/plugins/ \
+ && cp /tmp/liborkester_plugin_metrics.so    /build/rootfs/orkester/plugins/ \
+ && cp /tmp/liborkester_plugin_workaholic.so /build/rootfs/orkester/plugins/ \
  && chmod 755 /build/rootfs/orkester/plugins /build/rootfs/orkester/data \
  && chmod 644 /build/rootfs/orkester/plugins/*.so
 
@@ -57,12 +63,13 @@ RUN echo 'orkester:x:10001:10001:Orkester:/orkester:/sbin/nologin' > /etc/orkest
 # :nonroot sets USER 65532 by default; we override with our named user below.
 FROM gcr.io/distroless/cc-debian12
 
-COPY --from=builder /etc/orkester-passwd                /etc/passwd
-COPY --from=builder /etc/orkester-group                 /etc/group
+COPY --from=builder /etc/orkester-passwd                      /etc/passwd
+COPY --from=builder /etc/orkester-group                       /etc/group
 COPY --chown=10001:10001 --from=builder /build/rootfs/orkester /orkester
-COPY --from=builder /usr/local/bin/orkester             /usr/local/bin/orkester
+COPY --from=builder /usr/local/bin/orkester                   /usr/local/bin/orkester
+COPY --chown=10001:10001 ui/                                  /orkester/ui/
 
-VOLUME ["/orkester/plugins", "/orkester/data"]
+VOLUME ["/orkester/data"]
 WORKDIR /orkester
 EXPOSE 8080
 USER orkester

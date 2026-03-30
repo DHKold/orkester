@@ -27,6 +27,7 @@ fn watcher_loop(
     extensions:    Arc<HashMap<String, Box<dyn DocumentParser>>>,
     metrics_store: Arc<Mutex<VecDeque<LocalFsScanMetrics>>>,
     on_event:      impl Fn(LocalFsChangeEvent),
+    on_metrics:    impl Fn(&LocalFsScanMetrics),
 ) {
     loop {
         std::thread::sleep(POLL_INTERVAL);
@@ -59,8 +60,9 @@ fn watcher_loop(
         {
             let mut store = metrics_store.lock().unwrap();
             if store.len() >= METRICS_CAPACITY { store.pop_front(); }
-            store.push_back(m);
+            store.push_back(m.clone());
         }
+        on_metrics(&m);
 
         for event in events {
             on_event(event);
@@ -72,13 +74,15 @@ fn watcher_loop(
 
 /// Spawns a background thread that polls `entry_arc` every [`POLL_INTERVAL`].
 ///
-/// `on_event` is called from the background thread for every change detected.
-/// It must be `Send + 'static` because it is moved into the thread.
+/// `on_event` is called for every change detected; `on_metrics` is called after
+/// every scan so the caller can forward counters to an external metrics store.
+/// Both must be `Send + 'static` because they are moved into the thread.
 pub fn spawn_entry_watcher(
     entry_arc:     Arc<Mutex<LocalFsEntry>>,
     extensions:    Arc<HashMap<String, Box<dyn DocumentParser>>>,
     metrics_store: Arc<Mutex<VecDeque<LocalFsScanMetrics>>>,
     on_event:      impl Fn(LocalFsChangeEvent) + Send + 'static,
+    on_metrics:    impl Fn(&LocalFsScanMetrics) + Send + 'static,
 ) {
-    std::thread::spawn(move || watcher_loop(entry_arc, extensions, metrics_store, on_event));
+    std::thread::spawn(move || watcher_loop(entry_arc, extensions, metrics_store, on_event, on_metrics));
 }

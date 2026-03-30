@@ -5,6 +5,7 @@ members = [
     "crates/orkester-macro",
     "crates/orkester-plugin",
     "crates/orkester-plugin-sample",
+    "crates/orkester-plugin-metrics",
 ]
 
 [profile.release]
