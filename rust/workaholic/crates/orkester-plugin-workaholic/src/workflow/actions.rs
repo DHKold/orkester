@@ -30,6 +30,14 @@ pub const ACTION_WORKFLOW_GET_WORK_RUN: &str = "workaholic/WorkflowServer/GetWor
 /// Payload: `WorkRunRefRequest`.  Response: `()`.
 pub const ACTION_WORKFLOW_CANCEL_WORK_RUN: &str = "workaholic/WorkflowServer/CancelWorkRun";
 
+/// List all TaskRuns (across all WorkRuns).
+/// Payload: `()`.  Response: `ListTaskRunsResponse`.
+pub const ACTION_WORKFLOW_LIST_TASK_RUNS: &str = "workaholic/WorkflowServer/ListTaskRuns";
+
+/// Get a specific TaskRun by name.
+/// Payload: `TaskRunRefRequest`.  Response: `TaskRunDoc`.
+pub const ACTION_WORKFLOW_GET_TASK_RUN: &str = "workaholic/WorkflowServer/GetTaskRun";
+
 /// Register a Cron with the workflow server's scheduler.
 /// Payload: `CronDoc`.  Response: `()`.
 pub const ACTION_WORKFLOW_REGISTER_CRON: &str = "workaholic/WorkflowServer/RegisterCron";

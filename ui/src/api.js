@@ -30,6 +30,8 @@ export const triggerWork      = (body)       => req('/workflow/trigger',      { 
 export const listWorkRuns     = ()           => req('/workflow/work-runs')
 export const getWorkRun       = (name)       => req(`/workflow/work-runs/${enc(name)}`)
 export const cancelWorkRun    = (name)       => req(`/workflow/work-runs/${enc(name)}/cancel`, { method: 'POST' })
+export const listTaskRuns     = ()           => req('/workflow/task-runs')
+export const getTaskRun       = (name)       => req(`/workflow/task-runs/${enc(name)}`)
 
 // ── Crons ─────────────────────────────────────────────────────────────────────
 export const listCrons        = ()           => req('/workflow/crons')
@@ -39,5 +41,8 @@ export const unregisterCron   = (name)       => req(`/workflow/crons/${enc(name)
 export const createCron       = (ns, body)   => registerCron(body)
 export const updateCron       = (ns, body)   => registerCron(body)
 export const deleteCron       = (ns, name)   => unregisterCron(name)
+
+// ── Loader ────────────────────────────────────────────────────────────────────
+export const getLoaderMetrics = ()           => req('/loader/metrics')
 
 const enc = encodeURIComponent

@@ -9,8 +9,9 @@
 //! * The caller (usually the WorkflowServer) drains that channel and resolves
 //!   the trigger into a full WorkRunRequest.
 
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 use std::cmp::Reverse;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, Datelike, Timelike, Utc};
@@ -24,8 +25,10 @@ use super::state::{CronEntry, CronSchedulerState, cron_trigger};
 
 /// Manages active cron definitions and fires triggers on schedule.
 pub struct CronScheduler {
-    control:  CronControl,
-    fire_tx:  Sender<(CronDoc, workaholic::Trigger)>,
+    control:    CronControl,
+    fire_tx:    Sender<(CronDoc, workaholic::Trigger)>,
+    /// Shared copy of registered crons for read-only queries (e.g. list_crons).
+    registered: Arc<Mutex<HashMap<String, CronDoc>>>,
 }
 
 impl CronScheduler {
@@ -37,26 +40,38 @@ impl CronScheduler {
         let (ctrl_tx, ctrl_rx) = crossbeam_channel::unbounded();
         let (fire_tx, fire_rx) = crossbeam_channel::unbounded();
 
-        let fire_tx_clone = fire_tx.clone();
-        std::thread::spawn(move || scheduler_loop(ctrl_rx, fire_tx_clone));
+        let registered     = Arc::new(Mutex::new(HashMap::new()));
+        let registered_bg  = Arc::clone(&registered);
+        let fire_tx_clone  = fire_tx.clone();
+        std::thread::spawn(move || scheduler_loop(ctrl_rx, fire_tx_clone, registered_bg));
 
         let scheduler = Self {
             control: CronControl::new(ctrl_tx),
             fire_tx,
+            registered,
         };
         (scheduler, fire_rx)
     }
 
     pub fn register(&self, cron: CronDoc) {
+        // Update shared state immediately so list_crons() sees it without delay.
+        self.registered.lock().unwrap().insert(cron.name.clone(), cron.clone());
         self.control.register(cron);
     }
 
     pub fn unregister(&self, name: impl Into<String>) {
+        let name = name.into();
+        self.registered.lock().unwrap().remove(&name);
         self.control.unregister(name);
     }
 
     pub fn shutdown(&self) {
         self.control.shutdown();
+    }
+
+    /// Returns a snapshot of all currently registered cron definitions.
+    pub fn list_crons(&self) -> Vec<CronDoc> {
+        self.registered.lock().unwrap().values().cloned().collect()
     }
 }
 
@@ -66,8 +81,9 @@ impl CronScheduler {
 type HeapEntry = Reverse<(i64, String, u64)>;
 
 fn scheduler_loop(
-    ctrl_rx: crossbeam_channel::Receiver<CronControlEvent>,
-    fire_tx: Sender<(CronDoc, workaholic::Trigger)>,
+    ctrl_rx:    crossbeam_channel::Receiver<CronControlEvent>,
+    fire_tx:    Sender<(CronDoc, workaholic::Trigger)>,
+    _registered: Arc<Mutex<HashMap<String, CronDoc>>>,
 ) {
     let mut state = CronSchedulerState::default();
     let mut heap: BinaryHeap<HeapEntry> = BinaryHeap::new();
@@ -76,10 +92,10 @@ fn scheduler_loop(
         // Drain control events without blocking.
         loop {
             match ctrl_rx.try_recv() {
-                Ok(CronControlEvent::Register(cron))   => handle_register(&mut state, &mut heap, cron),
+                Ok(CronControlEvent::Register(cron))      => handle_register(&mut state, &mut heap, cron),
                 Ok(CronControlEvent::Unregister { name }) => { state.remove(&name); }
-                Ok(CronControlEvent::Shutdown)           => return,
-                Err(_)                                   => break,
+                Ok(CronControlEvent::Shutdown)            => return,
+                Err(_)                                    => break,
             }
         }
 
@@ -115,7 +131,7 @@ fn scheduler_loop(
         };
 
         if !fired {
-            let _ = ctrl_rx.recv_timeout(Duration::from_millis(sleep_ms));
+            std::thread::sleep(Duration::from_millis(sleep_ms));
         }
     }
 }

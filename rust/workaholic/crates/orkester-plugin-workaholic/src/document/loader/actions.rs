@@ -6,6 +6,7 @@ pub const ACTION_LOADER_RETRIEVE_ENTRY: &str = "workaholic/DocumentLoader/Retrie
 pub const ACTION_LOADER_UPDATE_ENTRY:   &str = "workaholic/DocumentLoader/UpdateEntry";
 pub const ACTION_LOADER_DELETE_ENTRY:   &str = "workaholic/DocumentLoader/DeleteEntry";
 pub const ACTION_LOADER_SEARCH_ENTRIES: &str = "workaholic/DocumentLoader/SearchEntries";
+pub const ACTION_LOADER_GET_METRICS:    &str = "workaholic/DocumentLoader/GetMetrics";
 
 // Events
 pub const EVENT_LOADER_DOCUMENT_ADDED:    &str = "workaholic/DocumentLoader/Event/DocumentAdded";

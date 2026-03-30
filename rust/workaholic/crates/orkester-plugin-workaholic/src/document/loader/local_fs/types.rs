@@ -33,6 +33,27 @@ pub enum LocalFsChangeEvent {
     },
 }
 
+// ─── Scan metrics ─────────────────────────────────────────────────────────────
+
+/// Timing and event counters recorded for a single scan of one watched entry.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct LocalFsScanMetrics {
+    /// Root path of the entry that was scanned.
+    pub entry_path:      String,
+    /// ISO 8601 timestamp when this scan started.
+    pub scanned_at:      String,
+    /// Whether this was the initial startup scan (`true`) or a background poll (`false`).
+    pub is_initial:      bool,
+    /// Wall-clock time spent performing the scan in milliseconds.
+    pub duration_ms:     u64,
+    /// Number of `DocumentAdded` events produced.
+    pub events_added:    usize,
+    /// Number of `DocumentModified` events produced.
+    pub events_modified: usize,
+    /// Number of `DocumentRemoved` events produced.
+    pub events_removed:  usize,
+}
+
 // ─── Runtime state ─────────────────────────────────────────────────────────────
 
 /// A single watched root path together with its cached document state.

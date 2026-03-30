@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use workaholic::{TaskRunRequestDoc, WorkRunDoc, WorkRunRequestDoc};
+use workaholic::{TaskRunDoc, TaskRunRequestDoc, WorkRunDoc, WorkRunRequestDoc};
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
@@ -13,6 +13,7 @@ pub struct WorkflowRegistry {
     work_requests:  Mutex<HashMap<String, WorkRunRequestDoc>>,
     task_requests:  Mutex<HashMap<String, TaskRunRequestDoc>>,
     work_runs:      Mutex<HashMap<String, WorkRunDoc>>,
+    task_runs:      Mutex<HashMap<String, TaskRunDoc>>,
 }
 
 impl WorkflowRegistry {
@@ -55,5 +56,19 @@ impl WorkflowRegistry {
 
     pub fn list_work_runs(&self) -> Vec<WorkRunDoc> {
         self.work_runs.lock().unwrap().values().cloned().collect()
+    }
+
+    // ── TaskRun ──────────────────────────────────────────────────────────────
+
+    pub fn insert_task_run(&self, doc: TaskRunDoc) {
+        self.task_runs.lock().unwrap().insert(doc.name.clone(), doc);
+    }
+
+    pub fn get_task_run(&self, name: &str) -> Option<TaskRunDoc> {
+        self.task_runs.lock().unwrap().get(name).cloned()
+    }
+
+    pub fn list_task_runs(&self) -> Vec<TaskRunDoc> {
+        self.task_runs.lock().unwrap().values().cloned().collect()
     }
 }

@@ -1,4 +1,4 @@
-import { getWorkRun, cancelWorkRun, listWorks } from '../api.js'
+import { getWorkRun, cancelWorkRun, listWorks, getTaskRun } from '../api.js'
 import { esc, fmtDate, fmtDuration, badge, setApp, breadcrumb } from '../utils.js'
 import { toastError, toastSuccess } from '../components/toast.js'
 import { renderDag, updateDagColors } from '../components/dag.js'
@@ -6,6 +6,9 @@ import { setCleanup, navigate } from '../router.js'
 
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled'])
 const REFRESH_MS = 3000
+
+// Cache loaded TaskRunDocs by their name to avoid redundant fetches.
+const taskRunCache = new Map()
 
 export async function renderWorkflow({ ns, id }) {
   setApp(`
@@ -159,14 +162,9 @@ function stepsInner(steps) {
 function stepCard(s) {
   const status = s.state ?? 'pending'
   const trRef  = s.activeTaskRunRef ?? ''
-  const logs   = s.logsRef ?? null
-  const inputs = s.inputs ?? {}
-  const outputs = s.outputs ?? {}
-  const inputKeys = Object.keys(inputs)
-  const outputKeys = Object.keys(outputs)
   return `
     <div class="step-card" id="step-${esc(s.name)}">
-      <div class="step-header" data-step="${esc(s.name)}">
+      <div class="step-header" data-step="${esc(s.name)}" data-tr-ref="${esc(trRef)}">
         <span class="step-chevron">▶</span>
         ${badge(status)}
         <span class="step-name">${esc(s.name)}</span>
@@ -174,32 +172,77 @@ function stepCard(s) {
         <span class="step-meta muted" style="font-size:0.8rem">attempts: ${s.attempts ?? 0}</span>
       </div>
       <div class="step-body">
-        <p class="muted" style="font-size:0.85rem">Task run request: <code>${esc(s.taskRunRequestRef ?? '—')}</code></p>
-        ${inputKeys.length > 0 ? `
-          <details style="margin:0.5rem 0">
-            <summary style="font-size:0.85rem"><strong>Inputs</strong> (${inputKeys.length})</summary>
-            <table style="font-size:0.82rem;margin-top:0.25rem">
-              <thead><tr><th>Name</th><th>Value</th></tr></thead>
-              <tbody>${inputKeys.map(k => `<tr><td><code>${esc(k)}</code></td><td>${esc(JSON.stringify(inputs[k]))}</td></tr>`).join('')}</tbody>
-            </table>
-          </details>` : ''}
-        ${outputKeys.length > 0 ? `
-          <details style="margin:0.5rem 0">
-            <summary style="font-size:0.85rem"><strong>Outputs</strong> (${outputKeys.length})</summary>
-            <table style="font-size:0.82rem;margin-top:0.25rem">
-              <thead><tr><th>Name</th><th>Value</th></tr></thead>
-              <tbody>${outputKeys.map(k => `<tr><td><code>${esc(k)}</code></td><td>${esc(JSON.stringify(outputs[k]))}</td></tr>`).join('')}</tbody>
-            </table>
-          </details>` : ''}
-        ${logs ? `
-          <details style="margin:0.5rem 0">
-            <summary style="font-size:0.85rem"><strong>Logs</strong></summary>
-            ${logs.stdout ? `<pre style="font-size:0.78rem;max-height:200px;overflow-y:auto;background:#f0f4f8;padding:0.5rem;border-radius:4px;margin:0.25rem 0"><strong>stdout</strong>\n${esc(logs.stdout)}</pre>` : ''}
-            ${logs.stderr ? `<pre style="font-size:0.78rem;max-height:200px;overflow-y:auto;background:#fff5f5;padding:0.5rem;border-radius:4px;margin:0.25rem 0"><strong>stderr</strong>\n${esc(logs.stderr)}</pre>` : ''}
-          </details>` : ''}
+        <p class="muted" style="font-size:0.85rem">Request: <code>${esc(s.taskRunRequestRef ?? '—')}</code></p>
+        <div class="step-tr-details"></div>
       </div>
     </div>
   `
+}
+
+function renderTaskRunDetails(tr) {
+  const sp      = tr?.spec    ?? {}
+  const s       = tr?.status  ?? {}
+  const inputs  = s.inputs    ?? {}
+  const outputs = s.outputs   ?? {}
+  const logs    = s.logsRef   ?? null
+  const inputKeys  = Object.keys(inputs)
+  const outputKeys = Object.keys(outputs)
+
+  const dur = fmtDuration(s.startedAt ?? s.started_at, s.finishedAt ?? s.finished_at)
+
+  // ── Meta header ────────────────────────────────────────────────────────
+  let html = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0.4rem;margin-bottom:0.5rem;font-size:0.82rem">
+      ${sp.taskRef || sp.task_ref ? `<div><span class="muted">Task:</span> <code>${esc(sp.taskRef ?? sp.task_ref)}</code></div>` : ''}
+      ${sp.stepName || sp.step_name ? `<div><span class="muted">Step:</span> <strong>${esc(sp.stepName ?? sp.step_name)}</strong></div>` : ''}
+      <div><span class="muted">Attempt:</span> ${esc(sp.attempt ?? 1)}</div>
+      ${s.startedAt || s.started_at ? `<div><span class="muted">Started:</span> ${fmtDate(s.startedAt ?? s.started_at)}</div>` : ''}
+      ${s.finishedAt || s.finished_at ? `<div><span class="muted">Finished:</span> ${fmtDate(s.finishedAt ?? s.finished_at)}</div>` : ''}
+      ${s.startedAt || s.started_at ? `<div><span class="muted">Duration:</span> <strong>${dur}</strong></div>` : ''}
+    </div>`
+
+  // ── Inputs ─────────────────────────────────────────────────────────────
+  if (inputKeys.length > 0) {
+    html += `
+      <details open style="margin:0.5rem 0">
+        <summary style="font-size:0.85rem"><strong>Inputs</strong> <span class="muted">(${inputKeys.length})</span></summary>
+        <table style="font-size:0.82rem;margin-top:0.25rem">
+          <thead><tr><th>Name</th><th>Value</th></tr></thead>
+          <tbody>${inputKeys.map(k => `<tr><td><code>${esc(k)}</code></td><td>${esc(JSON.stringify(inputs[k]))}</td></tr>`).join('')}</tbody>
+        </table>
+      </details>`
+  }
+
+  // ── Outputs ────────────────────────────────────────────────────────────
+  if (outputKeys.length > 0) {
+    html += `
+      <details open style="margin:0.5rem 0">
+        <summary style="font-size:0.85rem"><strong>Outputs</strong> <span class="muted">(${outputKeys.length})</span></summary>
+        <table style="font-size:0.82rem;margin-top:0.25rem">
+          <thead><tr><th>Name</th><th>Value</th></tr></thead>
+          <tbody>${outputKeys.map(k => `<tr><td><code>${esc(k)}</code></td><td>${esc(JSON.stringify(outputs[k]))}</td></tr>`).join('')}</tbody>
+        </table>
+      </details>`
+  }
+
+  // ── Logs ───────────────────────────────────────────────────────────────
+  if (logs) {
+    const hasStdout = logs.stdout && logs.stdout.trim()
+    const hasStderr = logs.stderr && logs.stderr.trim()
+    if (hasStdout || hasStderr) {
+      html += `
+        <details open style="margin:0.5rem 0">
+          <summary style="font-size:0.85rem"><strong>Logs</strong></summary>
+          ${hasStdout ? `<pre style="font-size:0.78rem;max-height:200px;overflow-y:auto;background:#f0f4f8;padding:0.5rem;border-radius:4px;margin:0.25rem 0"><strong>stdout</strong>\n${esc(logs.stdout)}</pre>` : ''}
+          ${hasStderr ? `<pre style="font-size:0.78rem;max-height:200px;overflow-y:auto;background:#fff5f5;padding:0.5rem;border-radius:4px;margin:0.25rem 0"><strong>stderr</strong>\n${esc(logs.stderr)}</pre>` : ''}
+        </details>`
+    }
+  }
+
+  if (!html.trim() || (!inputKeys.length && !outputKeys.length && !logs)) {
+    return (html || '') + '<p class="muted" style="font-size:0.85rem">No details available.</p>'
+  }
+  return html
 }
 
 function refreshHeader(wr) {
@@ -216,7 +259,13 @@ function refreshSteps(wr) {
   container.innerHTML = stepsInner(wr.status?.steps ?? [])
   openIds.forEach(sid => {
     const card = document.getElementById(`step-${sid}`)
-    if (card) card.classList.add('open')
+    if (!card) return
+    card.classList.add('open')
+    const trRef = card.querySelector('.step-header')?.dataset?.trRef
+    if (trRef && taskRunCache.has(trRef)) {
+      const detailsEl = card.querySelector('.step-tr-details')
+      if (detailsEl) detailsEl.innerHTML = renderTaskRunDetails(taskRunCache.get(trRef))
+    }
   })
   attachStepToggleHandlers()
   const metricsEl = document.getElementById('wf-metrics')
@@ -225,7 +274,27 @@ function refreshSteps(wr) {
 
 function attachStepToggleHandlers() {
   document.querySelectorAll('.step-header').forEach(header => {
-    header.addEventListener('click', () => header.closest('.step-card').classList.toggle('open'))
+    header.addEventListener('click', async () => {
+      const card = header.closest('.step-card')
+      card.classList.toggle('open')
+      if (!card.classList.contains('open')) return
+      const trRef = header.dataset.trRef
+      if (!trRef) return
+      const detailsEl = card.querySelector('.step-tr-details')
+      if (!detailsEl) return
+      if (taskRunCache.has(trRef)) {
+        detailsEl.innerHTML = renderTaskRunDetails(taskRunCache.get(trRef))
+        return
+      }
+      detailsEl.innerHTML = '<p class="muted" aria-busy="true" style="font-size:0.85rem">Loading…</p>'
+      try {
+        const tr = await getTaskRun(trRef)
+        taskRunCache.set(trRef, tr)
+        detailsEl.innerHTML = renderTaskRunDetails(tr)
+      } catch (e) {
+        detailsEl.innerHTML = `<p class="muted" style="font-size:0.85rem">Could not load task run: ${esc(e.message)}</p>`
+      }
+    })
   })
 }
 

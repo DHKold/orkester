@@ -196,39 +196,102 @@ export async function renderNamespace({ ns }) {
 }
 
 function showWorkDetail(work) {
-  const steps  = work.spec?.steps  ?? []
-  const inputs  = Array.isArray(work.spec?.inputs) ? work.spec.inputs : []
+  const steps   = work.spec?.steps  ?? []
+  const inputs  = Array.isArray(work.spec?.inputs)  ? work.spec.inputs  : []
+  const outputs = Array.isArray(work.spec?.outputs) ? work.spec.outputs : []
+  const tags    = work.metadata?.tags   ?? []
+  const owner   = work.metadata?.owner  ?? ''
 
   const inputRows = inputs.map(inp =>
     `<tr>
-      <td><code>${esc(inp.name)}</code></td>
+      <td><code>${esc(inp.name)}</code>${inp.required === false ? ' <span class="tag" style="font-size:0.75rem">optional</span>' : ''}</td>
       <td class="muted">${esc(inp.description ?? '—')}</td>
-      <td><code>${esc(inp.type ?? inp.input_type ?? '—')}</code></td>
+      <td><code>${esc(inp.type ?? inp.input_type ?? inp.inputType ?? '—')}</code></td>
+      <td>${inp.default != null ? `<code>${esc(JSON.stringify(inp.default))}</code>` : '<span class="muted">—</span>'}</td>
     </tr>`
   ).join('')
 
+  const outputRows = outputs.map(out =>
+    `<tr>
+      <td><code>${esc(out.name)}</code></td>
+      <td class="muted">${esc(out.description ?? '—')}</td>
+      <td><code>${esc(out.type ?? out.output_type ?? out.outputType ?? '—')}</code></td>
+    </tr>`
+  ).join('')
+
+  const stepCards = steps.map(s => {
+    const deps     = s.depends_on ?? s.dependsOn ?? []
+    const inMap    = s.input_mapping  ?? s.inputMapping  ?? []
+    const outMap   = s.output_mapping ?? s.outputMapping ?? []
+    const taskRef   = s.task_ref ?? s.taskRef ?? '—'
+    return `
+      <div style="border-left:3px solid var(--pico-primary,#3b82f6);padding:0.4rem 0.75rem;margin-bottom:0.5rem;background:var(--pico-card-background,#fff);border-radius:0 4px 4px 0">
+        <div class="row" style="gap:0.5rem;flex-wrap:wrap;align-items:center">
+          <strong>${esc(s.name)}</strong>
+          <code class="muted" style="font-size:0.8rem">${esc(taskRef)}</code>
+          ${deps.length ? `<span class="muted" style="font-size:0.78rem">← ${deps.map(d => `<code>${esc(d)}</code>`).join(', ')}</span>` : ''}
+        </div>
+        ${s.description ? `<p class="muted" style="margin:0.2rem 0 0;font-size:0.82rem">${esc(s.description)}</p>` : ''}
+        ${inMap.length > 0 ? `
+          <div style="font-size:0.78rem;margin-top:0.25rem">
+            <span class="muted">inputs:</span>
+            ${inMap.map(m => `<code>${esc(m.name)}</code>`).join(', ')}
+          </div>` : ''}
+        ${outMap.length > 0 ? `
+          <div style="font-size:0.78rem">
+            <span class="muted">outputs:</span>
+            ${outMap.map(m => `<code>${esc(m.name)}</code>`).join(', ')}
+          </div>` : ''}
+      </div>`
+  }).join('')
+
   const html = `
-    <div class="row" style="margin-bottom:0.75rem">
+    <div class="row" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.4rem;align-items:center">
       <span class="tag">${esc(work.version ?? '')}</span>
-      <span class="muted">${steps.length} step${steps.length !== 1 ? 's' : ''}</span>
+      <span class="muted" style="font-size:0.85rem">${steps.length} step${steps.length !== 1 ? 's' : ''}</span>
+      ${tags.map(t => `<span class="tag" style="background:#dbeafe;color:#1e40af">${esc(t)}</span>`).join('')}
+      ${owner ? `<span class="muted" style="font-size:0.82rem">owner: <strong>${esc(owner)}</strong></span>` : ''}
     </div>
-    ${work.metadata?.description ? `<p>${esc(work.metadata.description)}</p>` : ''}
+    ${work.metadata?.description ? `<p style="margin-bottom:0.75rem">${esc(work.metadata.description)}</p>` : ''}
+
     ${inputs.length > 0 ? `
-      <details style="margin-bottom:1rem">
-        <summary><strong>Inputs</strong></summary>
-        <figure>
+      <details open style="margin-bottom:0.75rem">
+        <summary><strong>Inputs</strong> <span class="muted">(${inputs.length})</span></summary>
+        <figure style="margin-top:0.5rem">
           <table>
-            <thead><tr><th>Name</th><th>Description</th><th>Type</th></tr></thead>
+            <thead><tr><th>Name</th><th>Description</th><th>Type</th><th>Default</th></tr></thead>
             <tbody>${inputRows}</tbody>
           </table>
         </figure>
       </details>
     ` : ''}
-    <div id="work-detail-dag" style="width:100%;height:320px;border:1px solid var(--pico-muted-border-color,#e2e8f0);border-radius:0.5rem;background:#f8fafc"></div>
+
+    ${outputs.length > 0 ? `
+      <details style="margin-bottom:0.75rem">
+        <summary><strong>Outputs</strong> <span class="muted">(${outputs.length})</span></summary>
+        <figure style="margin-top:0.5rem">
+          <table>
+            <thead><tr><th>Name</th><th>Description</th><th>Type</th></tr></thead>
+            <tbody>${outputRows}</tbody>
+          </table>
+        </figure>
+      </details>
+    ` : ''}
+
+    ${steps.length > 0 ? `
+      <details open style="margin-bottom:0.75rem">
+        <summary><strong>Steps</strong> <span class="muted">(${steps.length})</span></summary>
+        <div style="margin-top:0.5rem">${stepCards}</div>
+      </details>
+    ` : ''}
+
+    <details open style="margin-bottom:0.5rem">
+      <summary><strong>Execution Graph</strong></summary>
+      <div id="work-detail-dag" style="width:100%;height:280px;border:1px solid var(--pico-muted-border-color,#e2e8f0);border-radius:0.5rem;background:#f8fafc;margin-top:0.5rem"></div>
+    </details>
   `
 
   openModal(work.name, html)
-  // showModal() is synchronous — container is visible immediately
   const dagEl = document.getElementById('work-detail-dag')
   if (dagEl) renderDag(dagEl, work, {}, null)
 }

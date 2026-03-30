@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use workaholic::{CronDoc, WorkRunDoc};
+use workaholic::{CronDoc, TaskRunDoc, WorkRunDoc};
 
 // ─── TaskRunner requests ──────────────────────────────────────────────────────
 
@@ -31,6 +31,12 @@ pub struct WorkRunRefRequest {
     pub name: String,
 }
 
+/// Reference to a TaskRun by its name.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskRunRefRequest {
+    pub name: String,
+}
+
 /// Reference to a Cron by its name.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CronRefRequest {
@@ -43,6 +49,12 @@ pub struct CronRefRequest {
 #[derive(Debug, Clone, Serialize)]
 pub struct ListWorkRunsResponse {
     pub work_runs: Vec<WorkRunDoc>,
+}
+
+/// Response to `ACTION_WORKFLOW_LIST_TASK_RUNS`.
+#[derive(Debug, Clone, Serialize)]
+pub struct ListTaskRunsResponse {
+    pub task_runs: Vec<TaskRunDoc>,
 }
 
 /// Response to `ACTION_WORKFLOW_LIST_CRONS`.

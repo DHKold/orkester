@@ -28,12 +28,14 @@ mod tests;
 pub use component::LocalFsLoaderComponent;
 pub use types::{
     LocalFsChangeEvent, LocalFsEntry, LocalFsLoadedFile,
-    LocalFsLoaderConfig, LocalFsLoaderEntryConfig,
+    LocalFsLoaderConfig, LocalFsLoaderEntryConfig, LocalFsScanMetrics,
 };
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
+use chrono::Utc;
 use orkester_plugin::hub::Envelope;
 
 use workaholic::{Document, DocumentLoader, DocumentParser, Result};
@@ -62,6 +64,8 @@ pub struct LocalFsLoader {
     /// Host handle used to fire change events.  `None` when the loader was
     /// created without a host (e.g. in unit tests).
     host_ptr: Option<orkester_plugin::sdk::HostRef>,
+    /// Ring buffer of the last 200 scan results across all entries (shared with watcher threads).
+    pub(crate) metrics: Arc<Mutex<VecDeque<LocalFsScanMetrics>>>,
 }
 
 impl LocalFsLoader {
@@ -69,7 +73,7 @@ impl LocalFsLoader {
     /// The loader has no host connection; change events are silently dropped.
     /// Use [`new_with_host`](Self::new_with_host) in production code.
     pub fn new(extensions: HashMap<String, Box<dyn DocumentParser>>) -> Self {
-        Self { entries: Vec::new(), extensions: Arc::new(extensions), host_ptr: None }
+        Self { entries: Vec::new(), extensions: Arc::new(extensions), host_ptr: None, metrics: Arc::new(Mutex::new(VecDeque::new())) }
     }
 
     /// Creates a new loader that fires change events through `host_ptr`.
@@ -81,6 +85,7 @@ impl LocalFsLoader {
             entries:    Vec::new(),
             extensions: Arc::new(extensions),
             host_ptr:   Some(orkester_plugin::sdk::HostRef::new(host_ptr)),
+            metrics:    Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
@@ -106,6 +111,11 @@ impl LocalFsLoader {
         }
         Ok(documents)
     }
+
+    /// Returns a snapshot of recent scan metrics (up to the last 200 scans across all entries).
+    pub fn recent_metrics(&self) -> Vec<LocalFsScanMetrics> {
+        self.metrics.lock().unwrap().iter().cloned().collect()
+    }
 }
 
 // ─── Private implementation ────────────────────────────────────────────────────
@@ -114,10 +124,32 @@ impl LocalFsLoader {
     /// Scans every entry once and emits the resulting change events.
     fn initial_scan(&mut self) {
         for entry_arc in &self.entries {
+            let started = Instant::now();
+            let scanned_at = Utc::now().to_rfc3339();
+            let entry_path = entry_arc.lock().unwrap().path.clone();
             let events = {
                 let mut entry = entry_arc.lock().unwrap();
                 scan_entry(&mut entry, &self.extensions)
             };
+            let duration_ms = started.elapsed().as_millis() as u64;
+            let m = LocalFsScanMetrics {
+                entry_path,
+                scanned_at,
+                is_initial:      true,
+                duration_ms,
+                events_added:    events.iter().filter(|e| matches!(e, LocalFsChangeEvent::DocumentAdded { .. })).count(),
+                events_modified: events.iter().filter(|e| matches!(e, LocalFsChangeEvent::DocumentModified { .. })).count(),
+                events_removed:  events.iter().filter(|e| matches!(e, LocalFsChangeEvent::DocumentRemoved { .. })).count(),
+            };
+            eprintln!(
+                "[loader] initial scan '{}': {}ms, +{} ~{} -{}",
+                m.entry_path, m.duration_ms, m.events_added, m.events_modified, m.events_removed,
+            );
+            {
+                let mut store = self.metrics.lock().unwrap();
+                if store.len() >= 200 { store.pop_front(); }
+                store.push_back(m);
+            }
             for event in events {
                 if let Err(e) = self.emit_change_event(event) {
                     log::error!("emit_change_event failed during initial scan: {}", e);
@@ -133,9 +165,11 @@ impl LocalFsLoader {
                 continue;
             }
             let loader = self.clone();
+            let metrics_store = Arc::clone(&self.metrics);
             spawn_entry_watcher(
                 Arc::clone(entry_arc),
                 Arc::clone(&self.extensions),
+                metrics_store,
                 move |event| {
                     if let Err(e) = loader.emit_change_event(event) {
                         log::error!("emit_change_event failed in watcher: {}", e);
@@ -181,6 +215,7 @@ impl Clone for LocalFsLoader {
             entries:    self.entries.iter().map(Arc::clone).collect(),
             extensions: Arc::clone(&self.extensions),
             host_ptr:   self.host_ptr,  // Copy — HostRef is Copy
+            metrics:    Arc::clone(&self.metrics),
         }
     }
 }

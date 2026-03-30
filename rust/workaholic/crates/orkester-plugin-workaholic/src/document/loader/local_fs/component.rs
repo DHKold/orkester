@@ -12,7 +12,7 @@ use crate::document::loader::actions::*;
 use crate::document::parser::json::JsonDocumentParser;
 use crate::document::parser::yaml::YamlDocumentParser;
 
-use super::types::{LocalFsEntry, LocalFsLoaderConfig, LocalFsLoaderEntryConfig};
+use super::types::{LocalFsEntry, LocalFsLoaderConfig, LocalFsLoaderEntryConfig, LocalFsScanMetrics};
 use super::LocalFsLoader;
 
 // ─── Component struct ─────────────────────────────────────────────────────────
@@ -155,5 +155,11 @@ impl LocalFsLoaderComponent {
                 (entry.path.clone(), entry_to_config(&entry))
             })
             .collect())
+    }
+
+    /// Returns recent scan metrics (timing, event counts) for all watched entries.
+    #[handle(ACTION_LOADER_GET_METRICS)]
+    fn handle_get_metrics(&mut self, _: serde_json::Value) -> workaholic::Result<Vec<LocalFsScanMetrics>> {
+        Ok(self.loader.recent_metrics())
     }
 }

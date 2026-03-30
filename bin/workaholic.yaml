@@ -81,6 +81,11 @@ servers:
           method: GET
           action: workaholic/CatalogServer/ListTasks
 
+        # Loader : Metrics
+        - path:   /v1/loader/metrics
+          method: GET
+          action: workaholic/DocumentLoader/GetMetrics
+
         # Loader : Documents
         - path:   /v1/loader/documents
           method: GET
@@ -135,6 +140,14 @@ servers:
         - path:   /v1/workflow/work-runs/{name}/cancel
           method: POST
           action: workaholic/WorkflowServer/CancelWorkRun
+
+        # Workflow : TaskRun queries
+        - path:   /v1/workflow/task-runs
+          method: GET
+          action: workaholic/WorkflowServer/ListTaskRuns
+        - path:   /v1/workflow/task-runs/{name}
+          method: GET
+          action: workaholic/WorkflowServer/GetTaskRun
 
         # Workflow : Cron management
         - path:   /v1/workflow/crons

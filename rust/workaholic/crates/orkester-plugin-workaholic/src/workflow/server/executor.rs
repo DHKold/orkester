@@ -58,8 +58,19 @@ pub fn execute_work_run(
         );
         set_step_state(registry, run_name, &step.name, WorkRunState::Running);
 
-        let ok = run_step(req);
+        let task_doc = run_step(req);
+        let ok = task_doc.as_ref()
+            .and_then(|d| d.status.as_ref())
+            .map(|s| s.state == TaskRunState::Succeeded)
+            .unwrap_or(false);
         eprintln!("[executor] run='{}' step='{}' succeeded={ok}", run_name, step.name);
+
+        // Save the TaskRun doc (with captured logs/inputs) to the registry.
+        if let Some(doc) = task_doc {
+            let task_run_name = doc.name.clone();
+            registry.insert_task_run(doc);
+            set_step_task_run_ref(registry, run_name, &step.name, &task_run_name);
+        }
 
         set_step_state(
             registry, run_name, &step.name,
@@ -81,10 +92,10 @@ pub fn execute_work_run(
 
 // ─── Step dispatch ────────────────────────────────────────────────────────────
 
-fn run_step(req: TaskRunRequestDoc) -> bool {
+fn run_step(req: TaskRunRequestDoc) -> Option<TaskRunDoc> {
     let kind = req.spec.execution.kind.clone();
     let spec = TaskRunnerSpec { kind: kind.clone(), config: serde_json::Value::Null };
-    let doc  = if kind.contains("ShellTaskRunner") {
+    if kind.contains("ShellTaskRunner") {
         run_with(ShellTaskRunner::new("exec", "exec", spec), req)
     } else if kind.contains("ContainerTaskRunner") {
         run_with(ContainerTaskRunner::new("exec", "exec", spec), req)
@@ -94,12 +105,8 @@ fn run_step(req: TaskRunRequestDoc) -> bool {
         run_with(KubernetesTaskRunner::new("exec", "exec", spec), req)
     } else {
         eprintln!("[executor] unknown runner kind: {kind}");
-        return false;
-    };
-
-    doc.and_then(|d| d.status)
-       .map(|s| s.state == TaskRunState::Succeeded)
-       .unwrap_or(false)
+        None
+    }
 }
 
 /// Spawn and start a task, then poll until it reaches a terminal state.
@@ -150,6 +157,17 @@ fn set_run_state(registry: &WorkflowRegistry, run: &str, state: WorkRunState) {
                 failed_steps:    steps.iter().filter(|s| s.state == WorkRunState::Failed).count(),
                 cancelled_steps: steps.iter().filter(|s| s.state == WorkRunState::Cancelled).count(),
             };
+        }
+        registry.update_work_run(doc);
+    }
+}
+
+fn set_step_task_run_ref(registry: &WorkflowRegistry, run: &str, step: &str, task_run: &str) {
+    if let Some(mut doc) = registry.get_work_run(run) {
+        if let Some(status) = doc.status.as_mut() {
+            if let Some(s) = status.steps.iter_mut().find(|s| s.name == step) {
+                s.active_task_run_ref = Some(task_run.to_string());
+            }
         }
         registry.update_work_run(doc);
     }

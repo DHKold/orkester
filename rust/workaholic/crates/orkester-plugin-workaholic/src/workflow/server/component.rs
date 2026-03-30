@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 use orkester_plugin::prelude::*;
 use serde_json::Value;
-use workaholic::{CronDoc, Trigger, WorkaholicError, WorkRunDoc};
+use workaholic::{CronDoc, TaskRunDoc, Trigger, WorkaholicError, WorkRunDoc};
 
 use crate::workflow::{
     actions::*,
     cron::CronScheduler,
-    request::{CronRefRequest, ListCronsResponse, ListWorkRunsResponse, TriggerWorkRequest, WorkRunRefRequest},
+    request::{CronRefRequest, ListCronsResponse, ListTaskRunsResponse, ListWorkRunsResponse, TaskRunRefRequest, TriggerWorkRequest, WorkRunRefRequest},
 };
 
 use super::{
@@ -79,7 +79,7 @@ impl WorkflowServerComponent {
 
     #[handle(ACTION_WORKFLOW_LIST_CRONS)]
     fn list_crons(&mut self, _: Value) -> Result<ListCronsResponse, WorkaholicError> {
-        Ok(ListCronsResponse { crons: vec![] })
+        Ok(ListCronsResponse { crons: self.scheduler.list_crons() })
     }
 
     // -- Trigger ------------------------------------------------------------
@@ -121,5 +121,18 @@ impl WorkflowServerComponent {
     fn cancel_work_run(&mut self, req: WorkRunRefRequest) -> Result<(), WorkaholicError> {
         eprintln!("[workflow-server] cancel requested for '{}'", req.name);
         Ok(())
+    }
+
+    // -- TaskRun queries ----------------------------------------------------
+
+    #[handle(ACTION_WORKFLOW_LIST_TASK_RUNS)]
+    fn list_task_runs(&mut self, _: Value) -> Result<ListTaskRunsResponse, WorkaholicError> {
+        Ok(ListTaskRunsResponse { task_runs: self.registry.list_task_runs() })
+    }
+
+    #[handle(ACTION_WORKFLOW_GET_TASK_RUN)]
+    fn get_task_run(&mut self, req: TaskRunRefRequest) -> Result<TaskRunDoc, WorkaholicError> {
+        self.registry.get_task_run(&req.name)
+            .ok_or_else(|| WorkaholicError::NotFound { kind: "TaskRun".into(), name: req.name })
     }
 }

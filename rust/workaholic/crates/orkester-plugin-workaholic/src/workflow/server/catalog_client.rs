@@ -26,8 +26,8 @@ impl CatalogClient {
     }
 
     /// Load a WorkDoc from the catalog by its work ref (namespace/name).
-    pub fn get_work(&mut self, work_ref: &str) -> Result<WorkDoc, WorkaholicError> {
-        let id = normalize_id(WORK_KIND, work_ref);
+    pub fn get_work(&mut self, namespace: &str, work_ref: &str) -> Result<WorkDoc, WorkaholicError> {
+        let id = normalize_id(WORK_KIND, namespace, work_ref);
         eprintln!("[catalog-client] get_work id='{id}'");
 
         let payload = serde_json::to_vec(&serde_json::json!({ "id": id })).unwrap_or_default();
@@ -94,7 +94,7 @@ fn index_tasks(tasks: Vec<TaskDoc>) -> HashMap<String, TaskDoc> {
 }
 
 /// Convert "namespace/name[:version]" to "kind/namespace/name/version".
-fn normalize_id(kind: &str, work_ref: &str) -> String {
+fn normalize_id(kind: &str, default_ns: &str, work_ref: &str) -> String {
     let (ns_name, version) = work_ref
         .split_once(':')
         .map(|(l, r)| (l, r.to_string()))
@@ -102,6 +102,6 @@ fn normalize_id(kind: &str, work_ref: &str) -> String {
     let (ns, name) = ns_name
         .split_once('/')
         .map(|(l, r)| (l, r))
-        .unwrap_or(("global", ns_name));
+        .unwrap_or((default_ns, ns_name));
     format!("{}/{}/{}/{}", kind, ns, name, version)
 }

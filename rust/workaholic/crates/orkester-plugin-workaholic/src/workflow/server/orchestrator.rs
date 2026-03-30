@@ -64,7 +64,7 @@ fn do_trigger(
     registry:  &WorkflowRegistry,
 ) -> Result<(), WorkaholicError> {
     eprintln!("[orchestrator] loading work '{}'...", pending.work_ref);
-    let work  = client.get_work(&pending.work_ref)?;
+    let work  = client.get_work(namespace, &pending.work_ref)?;
     let tasks = client.get_tasks_by_ref(namespace)?;
     eprintln!("[orchestrator] loaded {} task(s) in namespace '{namespace}'", tasks.len());
 
