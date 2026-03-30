@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 use workaholic::{
-    TaskRunDoc, TaskRunRequestDoc, TaskRunSpec, TaskRunState, TaskRunStatus, TaskRunnerDoc,
-    TaskRunnerSpec, TaskRunnerState, TaskRunnerStatus,
+    TaskRunDoc, TaskRunLogsRef, TaskRunRequestDoc, TaskRunSpec, TaskRunState, TaskRunStatus,
+    TaskRunnerDoc, TaskRunnerSpec, TaskRunnerState, TaskRunnerStatus,
 };
 
 use super::traits::{TaskRun, TaskRunError, TaskRunEvent, TaskRunEventStream, TaskRunner, TaskRunnerError};
@@ -93,6 +93,8 @@ struct ShellTaskRunState {
     /// Set to `true` by `cancel()`; the execution thread honours it before
     /// and after the process completes.
     cancel_requested: bool,
+    stdout: String,
+    stderr: String,
 }
 
 impl ShellTaskRun {
@@ -111,6 +113,8 @@ impl ShellTaskRun {
             state: Arc::new(Mutex::new(ShellTaskRunState {
                 run_state: TaskRunState::Pending,
                 cancel_requested: false,
+                stdout: String::new(),
+                stderr: String::new(),
             })),
             sender: tx,
             receiver: rx,
@@ -148,8 +152,22 @@ impl TaskRun for ShellTaskRun {
                 started_at: None,
                 finished_at: None,
                 outputs: Default::default(),
+                inputs: self.request.spec.inputs.iter().map(|i| {
+                    let val = match &i.from {
+                        workaholic::TaskInputSource::Literal { value } => value.clone(),
+                        workaholic::TaskInputSource::ArtifactRef { uri } => serde_json::Value::String(uri.clone()),
+                    };
+                    (i.name.clone(), val)
+                }).collect(),
                 state_history: vec![],
-                logs_ref: None,
+                logs_ref: if !state.stdout.is_empty() || !state.stderr.is_empty() {
+                    Some(TaskRunLogsRef {
+                        stdout: state.stdout.clone(),
+                        stderr: state.stderr.clone(),
+                    })
+                } else {
+                    None
+                },
             }),
         }
     }
@@ -211,7 +229,13 @@ impl TaskRun for ShellTaskRun {
 
             let final_state = match cmd.output() {
                 Ok(output) => {
+                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                    if !stdout.is_empty() { eprintln!("[shell] stdout:\n{stdout}"); }
+                    if !stderr.is_empty() { eprintln!("[shell] stderr:\n{stderr}"); }
                     let mut g = shared_state.lock().unwrap();
+                    g.stdout = stdout;
+                    g.stderr = stderr;
                     if g.cancel_requested {
                         g.run_state = TaskRunState::Cancelled;
                         TaskRunState::Cancelled

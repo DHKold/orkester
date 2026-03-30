@@ -40,19 +40,25 @@ impl WorkflowServerComponent {
         let (scheduler, fire_rx) = CronScheduler::start();
         let host_raw = host_ptr as usize;
 
-        // Background cron event consumer (no-op -- log only for now).
-        std::thread::spawn(move || {
-            for (cron, _trigger) in fire_rx {
-                eprintln!("[cron] fired: {}", cron.name);
-            }
-        });
-
         let work_tx = start_orchestrator(
             host_raw,
             config.catalog_ref.clone(),
             config.namespace.clone(),
             Arc::clone(&registry),
         );
+
+        // Forward cron fires to the orchestrator as regular work triggers.
+        let work_tx_cron = work_tx.clone();
+        std::thread::spawn(move || {
+            for (cron, trigger) in fire_rx {
+                eprintln!("[cron] fired: {} -> triggering '{}'", cron.name, cron.spec.work_ref);
+                work_tx_cron.send(PendingTrigger {
+                    work_ref: cron.spec.work_ref.clone(),
+                    trigger,
+                    inputs: Default::default(),
+                }).ok();
+            }
+        });
 
         Self { registry, scheduler, work_tx, config }
     }

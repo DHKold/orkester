@@ -167,6 +167,7 @@ impl TaskRun for HttpTaskRun {
                 state:         state.run_state.clone(),
                 created_at:    None, started_at: None, finished_at: None,
                 outputs:       Default::default(),
+                inputs:        Default::default(),
                 state_history: vec![], logs_ref: None,
             }),
         }

@@ -48,6 +48,9 @@ pub struct TaskRunStatus {
     /// Output values produced by the task (artifact URIs or scalar values).
     #[serde(default)]
     pub outputs: HashMap<String, Value>,
+    /// Resolved input values used by this task run.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub inputs: HashMap<String, Value>,
     #[serde(rename = "stateHistory", default)]
     pub state_history: Vec<StateEvent>,
     /// References to the captured stdout/stderr logs.

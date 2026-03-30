@@ -16,6 +16,7 @@ export async function renderWorkflow({ ns, id }) {
   let cy = null
   let intervalId = null
   let wr
+  let workDef = null
 
   try {
     wr = await getWorkRun(id)
@@ -25,11 +26,19 @@ export async function renderWorkflow({ ns, id }) {
     return
   }
 
-  renderDetail(ns, wr)
+  // Try to load the Work definition for accurate dependency graph rendering.
+  const workRef = wr.spec?.workRef ?? ''
+  const [wns, wname] = workRef.includes('/') ? workRef.split('/') : [ns, workRef]
+  try {
+    const { works } = await listWorks(wns)
+    workDef = (works ?? []).find(w => w.name === wname) ?? null
+  } catch (_) {}
+
+  renderDetail(ns, wr, workDef)
   const dagContainer = document.getElementById('dag-container')
   if (dagContainer) {
     const stepStates = buildStepStateMap(wr)
-    cy = renderDag(dagContainer, buildWorkFromRun(wr), stepStates, (stepId) => scrollToStep(stepId))
+    cy = renderDag(dagContainer, workDef ?? buildWorkFromRun(wr), stepStates, (stepId) => scrollToStep(stepId))
   }
 
   const state = wr.status?.state ?? 'pending'
@@ -60,16 +69,16 @@ function buildStepStateMap(wr) {
 }
 
 function buildWorkFromRun(wr) {
-  // Reconstruct a minimal Work-like shape from the WorkRunRequest steps for DAG rendering.
+  // Reconstruct a minimal Work-like shape from WorkRun steps (no dependency info).
   const steps = (wr.status?.steps ?? []).map(s => ({
-    id: s.name, name: s.name, depends_on: []
+    name: s.name, depends_on: []
   }))
   return { spec: { steps } }
 }
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
-function renderDetail(ns, wr) {
+function renderDetail(ns, wr, workDef) {
   const nsEnc  = encodeURIComponent(ns)
   const status = wr.status?.state ?? 'pending'
   const steps  = wr.status?.steps ?? []
@@ -113,21 +122,21 @@ function renderDetail(ns, wr) {
 
 function headerCardInner(wr) {
   const st  = wr.status ?? {}
-  const dur = fmtDuration(st.started_at, st.finished_at)
+  const dur = fmtDuration(st.startedAt, st.finishedAt)
   return `
     <header>
       <div class="row-between">
-        <strong>${esc(wr.spec?.work_ref ?? '—')}</strong>
+        <strong>${esc(wr.spec?.workRef ?? '—')}</strong>
         ${badge(st.state ?? 'pending')}
       </div>
     </header>
     <div class="row" style="font-size:0.88rem;flex-wrap:wrap;gap:1rem">
       <span><span class="muted">Run ID:</span> <code>${esc(wr.name)}</code></span>
       <span><span class="muted">Trigger:</span> ${esc(wr.spec?.trigger?.type ?? '—')}</span>
-      ${st.created_at  ? `<span><span class="muted">Created:</span> ${fmtDate(st.created_at)}</span>` : ''}
-      ${st.started_at  ? `<span><span class="muted">Started:</span> ${fmtDate(st.started_at)}</span>` : ''}
-      ${st.finished_at ? `<span><span class="muted">Finished:</span> ${fmtDate(st.finished_at)}</span>` : ''}
-      ${st.started_at  ? `<span><span class="muted">Duration:</span> ${dur}</span>` : ''}
+      ${st.createdAt  ? `<span><span class="muted">Created:</span> ${fmtDate(st.createdAt)}</span>` : ''}
+      ${st.startedAt  ? `<span><span class="muted">Started:</span> ${fmtDate(st.startedAt)}</span>` : ''}
+      ${st.finishedAt ? `<span><span class="muted">Finished:</span> ${fmtDate(st.finishedAt)}</span>` : ''}
+      ${st.startedAt  ? `<span><span class="muted">Duration:</span> ${dur}</span>` : ''}
     </div>
   `
 }
@@ -135,10 +144,10 @@ function headerCardInner(wr) {
 function metricsInner(wr) {
   const s = wr.status?.summary ?? {}
   return `
-    <div class="metric-card"><div class="metric-value" style="color:var(--status-succeeded)">${s.succeeded_steps ?? 0}</div><div class="metric-label">Succeeded</div></div>
-    <div class="metric-card"><div class="metric-value" style="color:var(--status-running)">${s.running_steps ?? 0}</div><div class="metric-label">Running</div></div>
-    <div class="metric-card"><div class="metric-value" style="color:var(--status-failed)">${s.failed_steps ?? 0}</div><div class="metric-label">Failed</div></div>
-    <div class="metric-card"><div class="metric-value">${s.total_steps ?? 0}</div><div class="metric-label">Total</div></div>
+    <div class="metric-card"><div class="metric-value" style="color:var(--status-succeeded)">${s.succeededSteps ?? 0}</div><div class="metric-label">Succeeded</div></div>
+    <div class="metric-card"><div class="metric-value" style="color:var(--status-running)">${s.runningSteps ?? 0}</div><div class="metric-label">Running</div></div>
+    <div class="metric-card"><div class="metric-value" style="color:var(--status-failed)">${s.failedSteps ?? 0}</div><div class="metric-label">Failed</div></div>
+    <div class="metric-card"><div class="metric-value">${s.totalSteps ?? 0}</div><div class="metric-label">Total</div></div>
   `
 }
 
@@ -149,7 +158,12 @@ function stepsInner(steps) {
 
 function stepCard(s) {
   const status = s.state ?? 'pending'
-  const trRef  = s.active_task_run_ref ?? ''
+  const trRef  = s.activeTaskRunRef ?? ''
+  const logs   = s.logsRef ?? null
+  const inputs = s.inputs ?? {}
+  const outputs = s.outputs ?? {}
+  const inputKeys = Object.keys(inputs)
+  const outputKeys = Object.keys(outputs)
   return `
     <div class="step-card" id="step-${esc(s.name)}">
       <div class="step-header" data-step="${esc(s.name)}">
@@ -160,7 +174,29 @@ function stepCard(s) {
         <span class="step-meta muted" style="font-size:0.8rem">attempts: ${s.attempts ?? 0}</span>
       </div>
       <div class="step-body">
-        <p class="muted">Task run request: <code>${esc(s.task_run_request_ref ?? '—')}</code></p>
+        <p class="muted" style="font-size:0.85rem">Task run request: <code>${esc(s.taskRunRequestRef ?? '—')}</code></p>
+        ${inputKeys.length > 0 ? `
+          <details style="margin:0.5rem 0">
+            <summary style="font-size:0.85rem"><strong>Inputs</strong> (${inputKeys.length})</summary>
+            <table style="font-size:0.82rem;margin-top:0.25rem">
+              <thead><tr><th>Name</th><th>Value</th></tr></thead>
+              <tbody>${inputKeys.map(k => `<tr><td><code>${esc(k)}</code></td><td>${esc(JSON.stringify(inputs[k]))}</td></tr>`).join('')}</tbody>
+            </table>
+          </details>` : ''}
+        ${outputKeys.length > 0 ? `
+          <details style="margin:0.5rem 0">
+            <summary style="font-size:0.85rem"><strong>Outputs</strong> (${outputKeys.length})</summary>
+            <table style="font-size:0.82rem;margin-top:0.25rem">
+              <thead><tr><th>Name</th><th>Value</th></tr></thead>
+              <tbody>${outputKeys.map(k => `<tr><td><code>${esc(k)}</code></td><td>${esc(JSON.stringify(outputs[k]))}</td></tr>`).join('')}</tbody>
+            </table>
+          </details>` : ''}
+        ${logs ? `
+          <details style="margin:0.5rem 0">
+            <summary style="font-size:0.85rem"><strong>Logs</strong></summary>
+            ${logs.stdout ? `<pre style="font-size:0.78rem;max-height:200px;overflow-y:auto;background:#f0f4f8;padding:0.5rem;border-radius:4px;margin:0.25rem 0"><strong>stdout</strong>\n${esc(logs.stdout)}</pre>` : ''}
+            ${logs.stderr ? `<pre style="font-size:0.78rem;max-height:200px;overflow-y:auto;background:#fff5f5;padding:0.5rem;border-radius:4px;margin:0.25rem 0"><strong>stderr</strong>\n${esc(logs.stderr)}</pre>` : ''}
+          </details>` : ''}
       </div>
     </div>
   `

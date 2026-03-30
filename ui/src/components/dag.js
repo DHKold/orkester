@@ -30,13 +30,14 @@ export function renderDag(container, work, stepStates, onNodeClick) {
 
   // Build nodes
   const nodes = steps.map(step => {
-    const state  = stepStates[step.id]
+    const stepId = step.name ?? step.id
+    const state  = stepStates[stepId]
     const status = state?.status ?? 'pending'
     const colors = STATUS_COLORS[status] ?? STATUS_COLORS.pending
     return {
       data: {
-        id:     step.id,
-        label:  step.id,
+        id:     stepId,
+        label:  stepId,
         task:   step.task ?? '',
         status,
         bg:     colors.bg,
@@ -48,8 +49,9 @@ export function renderDag(container, work, stepStates, onNodeClick) {
   // Build edges — WorkStep.dependsOn (camelCase from Rust rename_all = "camelCase")
   const edges = []
   for (const step of steps) {
+    const stepId = step.name ?? step.id
     for (const dep of step.dependsOn ?? step.depends_on ?? []) {
-      edges.push({ data: { id: `${dep}->${step.id}`, source: dep, target: step.id } })
+      edges.push({ data: { id: `${dep}->${stepId}`, source: dep, target: stepId } })
     }
   }
 

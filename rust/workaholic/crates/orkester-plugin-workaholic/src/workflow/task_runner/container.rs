@@ -18,8 +18,8 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 use workaholic::{
-    DocumentMetadata, TaskRunDoc, TaskRunRequestDoc, TaskRunSpec, TaskRunState, TaskRunStatus,
-    TaskRunnerDoc, TaskRunnerSpec, TaskRunnerState, TaskRunnerStatus, TASK_RUN_KIND,
+    DocumentMetadata, TaskRunDoc, TaskRunLogsRef, TaskRunRequestDoc, TaskRunSpec, TaskRunState,
+    TaskRunStatus, TaskRunnerDoc, TaskRunnerSpec, TaskRunnerState, TaskRunnerStatus, TASK_RUN_KIND,
     TASK_RUNNER_KIND,
 };
 
@@ -127,6 +127,8 @@ struct ContainerTaskRunState {
     run_state:        TaskRunState,
     cancel_requested: bool,
     container_id:     Option<String>,
+    stdout:           String,
+    stderr:           String,
 }
 
 impl ContainerTaskRun {
@@ -142,6 +144,7 @@ impl ContainerTaskRun {
             image, runtime, command, args, rm,
             state: Arc::new(Mutex::new(ContainerTaskRunState {
                 run_state: TaskRunState::Pending, cancel_requested: false, container_id: None,
+                stdout: String::new(), stderr: String::new(),
             })),
             sender: tx, receiver: rx,
         }
@@ -168,7 +171,23 @@ impl TaskRun for ContainerTaskRun {
             status: Some(TaskRunStatus {
                 state: state.run_state.clone(),
                 created_at: None, started_at: None, finished_at: None,
-                outputs: Default::default(), state_history: vec![], logs_ref: None,
+                outputs: Default::default(),
+                inputs: self.request.spec.inputs.iter().map(|i| {
+                    let val = match &i.from {
+                        workaholic::TaskInputSource::Literal { value } => value.clone(),
+                        workaholic::TaskInputSource::ArtifactRef { uri } => serde_json::Value::String(uri.clone()),
+                    };
+                    (i.name.clone(), val)
+                }).collect(),
+                state_history: vec![],
+                logs_ref: if !state.stdout.is_empty() || !state.stderr.is_empty() {
+                    Some(TaskRunLogsRef {
+                        stdout: state.stdout.clone(),
+                        stderr: state.stderr.clone(),
+                    })
+                } else {
+                    None
+                },
             }),
         }
     }
@@ -264,7 +283,13 @@ fn run_container(
 
     let final_state = match std::process::Command::new(&runtime).args(&cmd_args).output() {
         Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            if !stdout.is_empty() { eprintln!("[container] stdout:\n{stdout}"); }
+            if !stderr.is_empty() { eprintln!("[container] stderr:\n{stderr}"); }
             let mut g = state.lock().unwrap();
+            g.stdout = stdout;
+            g.stderr = stderr;
             if g.cancel_requested {
                 g.run_state = TaskRunState::Cancelled;
                 TaskRunState::Cancelled
