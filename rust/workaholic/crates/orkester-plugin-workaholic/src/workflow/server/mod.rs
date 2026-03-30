@@ -5,6 +5,7 @@ pub mod config;
 pub mod executor;
 pub mod orchestrator;
 pub mod registry;
+pub mod run_log;
 pub mod step_io;
 
 pub use component::WorkflowServerComponent;

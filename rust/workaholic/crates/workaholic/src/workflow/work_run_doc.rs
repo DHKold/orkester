@@ -43,6 +43,9 @@ pub struct WorkRunStatus {
     pub outputs: HashMap<String, Value>,
     #[serde(rename = "stateHistory", default)]
     pub state_history: Vec<StateEvent>,
+    /// Structured log entries produced during execution.
+    #[serde(default)]
+    pub logs: Vec<WorkRunLogEntry>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -71,6 +74,17 @@ pub struct WorkRunStepStatus {
     pub active_task_run_ref: Option<String>,
     #[serde(default)]
     pub attempts: u32,
+}
+
+/// A single structured log entry emitted during a WorkRun execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkRunLogEntry {
+    /// ISO-8601 timestamp.
+    pub ts:      String,
+    /// Severity: "info" | "warn" | "error".
+    pub level:   String,
+    /// Human-readable message.
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]

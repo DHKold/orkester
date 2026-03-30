@@ -1,27 +1,14 @@
 TODO:
 
-Workflow:
-- [ ] Fix the inputs/ouputs management of TaskRuns. Curenlty, it seems they are not well handled, as sho the log from the test-shell second task:
+WorkRuns:
+- [ ] Logs related to the WorkRun should be put in the WorkRun state, allowing to trace what exactly happened when running the WorkRun (including failures, warnings, traces, etc.)
 
-```log
-stdout
-Starting loop with count=work://steps/generate/outputs?count
-Loop complete after work://steps/generate/outputs?count iterations.
-
-stderr
-seq: invalid floating point argument: 'work://steps/generate/outputs?count'
-Try 'seq --help' for more information.
-```
-
-The inputs should have been resolved. This also means the ouputs must corectly handled to be accessible by other steps as in this example (the step2 expects the output 'count' from step1 as a work scoped StructuredData artifact)
+Runners:
+- [ ] Check why the task `container-validate-count` is failing. This can be investigated more easily once WorkRuns hold lods (and more logs are produced by the WorRunner / TaskRunner)
 
 UI:
-- [ ] Fix the Cron page to correctly display the info of crons (it seems to be using the old model)
-- [ ] Add a modal when clicking on a Task in the Catalog to show details of that task
-- [ ] The Catalog should used a future-proof (there will be more kinds of resources in the future) kind of 'tabs' display instead of listing all types of resources on a single page.
-
-Loaders:
-- [ ] Implement an S3DocumentLoader
+- [ ] Find a better way to display the steps in the WorkRun page (there could be tens of steps, having a long list is not user friendly).
+- [ ] Add a way to reset the Graph display (when manipulating it, it can become hard to handle)
 
 IMPORTANT:
 

@@ -137,6 +137,7 @@ fn make_run_doc(req: &WorkRunRequestDoc) -> WorkRunDoc {
             }).collect(),
             outputs:       Default::default(),
             state_history: vec![],
+            logs:          vec![],
         }),
     }
 }

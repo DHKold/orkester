@@ -212,6 +212,7 @@ impl WorkRun for ThreadWorkRun {
                 steps,
                 outputs: Default::default(),
                 state_history: vec![],
+                logs: vec![],
             }),
         }
     }

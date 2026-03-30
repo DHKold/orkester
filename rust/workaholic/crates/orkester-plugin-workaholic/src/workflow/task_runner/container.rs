@@ -304,7 +304,9 @@ fn run_container(
         }
         Err(e) => {
             log::error!("[container runner] failed to spawn '{}': {}", runtime, e);
-            state.lock().unwrap().run_state = TaskRunState::Failed;
+            let mut g = state.lock().unwrap();
+            g.stderr    = format!("Failed to spawn container runtime '{}': {}", runtime, e);
+            g.run_state = TaskRunState::Failed;
             TaskRunState::Failed
         }
     };

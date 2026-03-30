@@ -12,6 +12,7 @@ use workaholic::{
 };
 
 use super::registry::WorkflowRegistry;
+use super::run_log::append_run_log;
 use super::step_io::{collect_step_outputs, resolve_step_inputs};
 use crate::workflow::task_runner::{
     ContainerTaskRunner, HttpTaskRunner, KubernetesTaskRunner, ShellTaskRunner,
@@ -41,6 +42,7 @@ pub fn execute_work_run(
             Some(i) => remaining.remove(i),
             None => {
                 eprintln!("[executor] {run_name}: no ready step — possible cycle");
+                append_run_log(registry, run_name, "error", "No ready step — possible dependency cycle".into());
                 all_ok = false;
                 break;
             }
@@ -50,6 +52,7 @@ pub fn execute_work_run(
             Some(r) => r.clone(),
             None => {
                 eprintln!("[executor] {run_name}: missing task_run_request for step '{}'", step.name);
+                append_run_log(registry, run_name, "error", format!("Missing task_run_request for step '{}'", step.name));
                 all_ok = false;
                 break;
             }
@@ -62,6 +65,7 @@ pub fn execute_work_run(
             "[executor] run='{}' step='{}' runner='{}'",
             run_name, step.name, req.spec.execution.kind
         );
+        append_run_log(registry, run_name, "info", format!("Step '{}' starting (runner: {})", step.name, req.spec.execution.kind));
         set_step_state(registry, run_name, &step.name, WorkRunState::Running);
 
         let task_doc = run_step(req);
@@ -70,6 +74,11 @@ pub fn execute_work_run(
             .map(|s| s.state == TaskRunState::Succeeded)
             .unwrap_or(false);
         eprintln!("[executor] run='{}' step='{}' succeeded={ok}", run_name, step.name);
+        append_run_log(
+            registry, run_name,
+            if ok { "info" } else { "error" },
+            format!("Step '{}' {}", step.name, if ok { "succeeded" } else { "failed" }),
+        );
 
         // Collect the step's outputs before saving so later steps can use them.
         if let Some(doc) = task_doc {
@@ -94,6 +103,7 @@ pub fn execute_work_run(
 
     let final_state = if all_ok { WorkRunState::Succeeded } else { WorkRunState::Failed };
     eprintln!("[executor] run='{run_name}' final={final_state:?}");
+    append_run_log(registry, run_name, "info", format!("Run finished: {:?}", final_state));
     set_run_state(registry, run_name, final_state);
 }
 
