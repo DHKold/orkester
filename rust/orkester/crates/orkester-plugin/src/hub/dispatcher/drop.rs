@@ -1,5 +1,6 @@
 use super::Dispatcher;
 use crate::hub::{envelope::Envelope, error::DispatchError};
+use crate::{log_trace};
 
 /// Silently discards every envelope it receives.
 ///
@@ -11,7 +12,7 @@ impl Dispatcher for DropDispatcher {
     fn name(&self) -> &str { "drop" }
 
     fn dispatch(&self, envelope: Envelope) -> Result<Vec<Envelope>, DispatchError> {
-        log::debug!("[hub/drop] id={} kind='{}' dropped",envelope.id, envelope.kind);
+        log_trace!("[hub/drop] id={} kind='{}' dropped", envelope.id, envelope.kind);
         Ok(Vec::new())
     }
 }

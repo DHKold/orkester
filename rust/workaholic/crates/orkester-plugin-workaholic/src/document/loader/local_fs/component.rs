@@ -12,8 +12,7 @@ use crate::document::loader::actions::*;
 use crate::document::parser::json::JsonDocumentParser;
 use crate::document::parser::yaml::YamlDocumentParser;
 
-use super::types::{LocalFsEntry, LocalFsLoaderConfig, LocalFsLoaderEntryConfig, LocalFsScanMetrics};
-use super::LocalFsLoader;
+use super::{LocalFsLoader, LocalFsEntry, LocalFsLoaderConfig, LocalFsLoaderEntryConfig, LocalFsScanMetrics};
 
 // ─── Component struct ─────────────────────────────────────────────────────────
 
@@ -36,7 +35,7 @@ fn build_parsers(config: &LocalFsLoaderConfig) -> HashMap<String, Box<dyn Docume
                 parsers.insert(ext.clone(), Box::new(JsonDocumentParser));
             }
             other => {
-                log::warn!("Unknown parser kind '{}' for extension '{}' — skipped", other, ext);
+                log_warn!("Unknown parser kind '{}' for extension '{}' — skipped", other, ext);
             }
         }
     }

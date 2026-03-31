@@ -42,6 +42,8 @@ use workaholic::{Document, DocumentLoader, DocumentParser, Result};
 
 use crate::document::loader::actions::*;
 
+use orkester_plugin::{log_error, log_info, log_trace};
+
 use scanner::scan_entry;
 use watcher::spawn_entry_watcher;
 
@@ -141,8 +143,8 @@ impl LocalFsLoader {
                 events_modified: events.iter().filter(|e| matches!(e, LocalFsChangeEvent::DocumentModified { .. })).count(),
                 events_removed:  events.iter().filter(|e| matches!(e, LocalFsChangeEvent::DocumentRemoved { .. })).count(),
             };
-            eprintln!(
-                "[loader] initial scan '{}': {}ms, +{} ~{} -{}",
+            log_info!(
+                "[loader/local_fs] initial scan '{}': {}ms +{} ~{} -{}",
                 m.entry_path, m.duration_ms, m.events_added, m.events_modified, m.events_removed,
             );
             {
@@ -151,8 +153,9 @@ impl LocalFsLoader {
                 store.push_back(m.clone());
             }
             for event in events {
+                log_trace!("[loader/local_fs] emitting event path='{}'", m.entry_path);
                 if let Err(e) = self.emit_change_event(event) {
-                    log::error!("emit_change_event failed during initial scan: {}", e);
+                    log_error!("emit_change_event failed during initial scan: {}", e);
                 }
             }
             emit_scan_metrics(self.host_ptr, &m);
@@ -173,8 +176,9 @@ impl LocalFsLoader {
                 Arc::clone(&self.extensions),
                 metrics_store,
                 move |event| {
+                    log_trace!("[loader/local_fs] watcher event for entry");
                     if let Err(e) = loader.emit_change_event(event) {
-                        log::error!("emit_change_event failed in watcher: {}", e);
+                        log_error!("emit_change_event failed in watcher: {}", e);
                     }
                 },
                 move |m| emit_scan_metrics(host_opt, m),

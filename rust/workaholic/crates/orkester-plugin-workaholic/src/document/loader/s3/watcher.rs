@@ -4,6 +4,8 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use orkester_plugin::{log_error, log_info, log_trace};
+
 use chrono::Utc;
 use workaholic::DocumentParser;
 
@@ -44,11 +46,13 @@ fn watcher_loop(
         let entry_id = entry_arc.lock().map(|e| format!("s3://{}/{}", e.config.bucket, e.config.prefix)).unwrap_or_default();
         let events = match entry_arc.lock() {
             Ok(mut e) => scan_entry(&mut e, &extensions),
-            Err(err)  => { log::error!("S3 watcher mutex poisoned: {err}"); return; }
+            Err(err)  => { log_error!("S3 watcher mutex poisoned: {err}"); return; }
         };
         let m = build_metrics_pub(entry_id, false, started, &events);
         if m.events_added + m.events_modified + m.events_removed > 0 {
-            eprintln!("[s3] poll '{}': {}ms +{} ~{} -{}", m.entry_id, m.duration_ms, m.events_added, m.events_modified, m.events_removed);
+            log_info!("[loader/s3] poll '{}': {}ms +{} ~{} -{}", m.entry_id, m.duration_ms, m.events_added, m.events_modified, m.events_removed);
+        } else {
+            log_trace!("[loader/s3] poll '{}': {}ms no changes", m.entry_id, m.duration_ms);
         }
         push_metrics(&metrics_store, m.clone());
         on_metrics(&m);

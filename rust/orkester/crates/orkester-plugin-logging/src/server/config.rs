@@ -1,7 +1,11 @@
+use orkester_plugin::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::formatter::{build_formatter, ConsoleLogFormatter};
-use crate::sink::{BoxedSink, console::ConsoleLogSink, local_fs::LocalFsLogSink, s3::S3LogSink};
+use crate::sink::{BoxedSink, LogSink};
+use crate::sink::console::ConsoleLogSink;
+use crate::sink::local_fs::LocalFsLogSink;
+use crate::sink::s3::S3LogSink;
+use crate::formatter::{ConsoleLogFormatter, build_formatter};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AntiSpamConfig {
@@ -48,16 +52,16 @@ pub fn build_sinks(cfgs: Vec<SinkConfig>) -> Vec<SinkEntry> {
             "logging/LocalFsLogSink:1.0" => {
                 let c = cfg.config.unwrap_or_default();
                 LocalFsLogSink::from_config(&c).map(|s| Box::new(s) as BoxedSink)
-                    .map_err(|e| log::warn!("[logging] failed to build LocalFsLogSink: {e}"))
+                    .map_err(|e| log_warn!("[logging] failed to build LocalFsLogSink: {e}"))
                     .ok()
             }
             "logging/S3LogSink:1.0" => {
                 let c = cfg.config.unwrap_or_default();
                 S3LogSink::from_config(&c).map(|s| Box::new(s) as BoxedSink)
-                    .map_err(|e| log::warn!("[logging] failed to build S3LogSink: {e}"))
+                    .map_err(|e| log_warn!("[logging] failed to build S3LogSink: {e}"))
                     .ok()
             }
-            other => { log::warn!("[logging] unknown sink kind '{other}'"); None }
+            other => { log_warn!("[logging] unknown sink kind '{other}'"); None }
         };
         if let Some(s) = sink {
             entries.push(SinkEntry { sink: s, formatter });

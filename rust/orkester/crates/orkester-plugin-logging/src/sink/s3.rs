@@ -1,5 +1,7 @@
 use std::sync::Mutex;
 
+use orkester_plugin::prelude::*;
+
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -34,7 +36,7 @@ impl S3LogSink {
     pub fn from_config(value: &Value) -> Result<Self, String> {
         let cfg: S3SinkConfig = serde_json::from_value(value.clone())
             .map_err(|e| e.to_string())?;
-        log::warn!("[logging/S3LogSink] S3 upload is not yet implemented; records are buffered in memory only.");
+        log_warn!("[logging/S3LogSink] S3 upload is not yet implemented; records are buffered in memory only.");
         Ok(Self { config: cfg, buffer: Mutex::new(Vec::new()) })
     }
 }

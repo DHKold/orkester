@@ -22,6 +22,7 @@ use workaholic::{
     TaskRunnerDoc, TaskRunnerSpec, TaskRunnerState, TaskRunnerStatus, TASK_RUN_KIND,
     TASK_RUNNER_KIND,
 };
+use orkester_plugin::{log_error, log_warn};
 
 use super::traits::{TaskRun, TaskRunError, TaskRunEvent, TaskRunEventStream, TaskRunner, TaskRunnerError};
 use super::stream_adapter::CrossbeamStream;
@@ -247,7 +248,7 @@ fn run_http_task(
     let job_id = match http_post_json(&url, &payload) {
         Ok(id) => id,
         Err(e) => {
-            log::error!("[http runner] POST failed: {}", e);
+            log_error!("[http runner] POST failed: {}", e);
             state.lock().unwrap().run_state = TaskRunState::Failed;
             let _ = sender.send(TaskRunEvent::StateChanged(TaskRunState::Failed));
             let _ = sender.send(TaskRunEvent::Finished);
@@ -264,7 +265,7 @@ fn run_http_task(
             return;
         }
         if std::time::Instant::now() >= deadline {
-            log::warn!("[http runner] job '{}' timed out", job_id);
+            log_warn!("[http runner] job '{}' timed out", job_id);
             state.lock().unwrap().run_state = TaskRunState::Failed;
             let _ = sender.send(TaskRunEvent::StateChanged(TaskRunState::Failed));
             let _ = sender.send(TaskRunEvent::Finished);
@@ -282,7 +283,7 @@ fn run_http_task(
                 }
             }
             Err(e) => {
-                log::warn!("[http runner] poll error for job '{}': {}", job_id, e);
+                log_warn!("[http runner] poll error for job '{}': {}", job_id, e);
             }
         }
 

@@ -26,6 +26,7 @@ use workaholic::{
     TaskRunnerDoc, TaskRunnerSpec, TaskRunnerState, TaskRunnerStatus, TASK_RUN_KIND,
     TASK_RUNNER_KIND,
 };
+use orkester_plugin::{log_error, log_warn};
 
 use super::traits::{TaskRun, TaskRunError, TaskRunEvent, TaskRunEventStream, TaskRunner, TaskRunnerError};
 use super::stream_adapter::CrossbeamStream;
@@ -275,7 +276,7 @@ fn run_kubernetes_job(
     let manifest = build_job_manifest(&job_name, &cfg);
 
     if let Err(e) = apply_kubectl_manifest(&manifest, &cfg.context) {
-        log::error!("[k8s runner] failed to create Job '{}': {}", job_name, e);
+        log_error!("[k8s runner] failed to create Job '{}': {}", job_name, e);
         state.lock().unwrap().run_state = TaskRunState::Failed;
         let _ = sender.send(TaskRunEvent::StateChanged(TaskRunState::Failed));
         let _ = sender.send(TaskRunEvent::Finished);
@@ -366,13 +367,13 @@ fn poll_job_until_done(
             return TaskRunState::Cancelled;
         }
         if std::time::Instant::now() >= deadline {
-            log::warn!("[k8s runner] job '{}' timed out", job_name);
+            log_warn!("[k8s runner] job '{}' timed out", job_name);
             return TaskRunState::Failed;
         }
         match query_job_status(job_name, kube_ns, context) {
             Ok(Some(final_state)) => return final_state,
             Ok(None)              => {}
-            Err(e) => log::warn!("[k8s runner] status query error: {}", e),
+            Err(e) => log_warn!("[k8s runner] status query error: {}", e),
         }
         std::thread::sleep(poll_dur);
     }

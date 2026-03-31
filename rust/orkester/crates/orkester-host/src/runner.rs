@@ -11,6 +11,7 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 use orkester_plugin::{
+    log_error, log_warn, log_info, log_debug,    
     abi::AbiComponent,
     sdk::PluginComponent,
     hub::{Envelope, builder::HubBuilder, config::HubConfig, ComponentRegistry, ComponentEntry},
@@ -92,12 +93,12 @@ fn make_routing_host(
             // Parse the inbound envelope.
             let envelope: Option<Envelope> = decode_request(&req);
             if envelope.is_none() {
-                log::error!("[host/worker] failed to parse request {} as Envelope", id);
+                log_error!("[host/worker] failed to parse request {} as Envelope", id);
                 return Some(error_response(id, "failed to parse request payload as Envelope"));
             }
 
             let envelope = envelope.unwrap();
-            log::debug!("[host/worker] routing request {} kind='{}'", id, envelope.kind);
+            log_debug!("[host/worker] routing request {} kind='{}'", id, envelope.kind);
 
             // Match and dispatch through hub rules.
             let mut dispatched = 0usize;
@@ -108,7 +109,7 @@ fn make_routing_host(
                     continue;
                 }
                 for dispatcher in &rule.dispatchers {
-                    log::debug!(
+                    log_debug!(
                         "[host/worker] dispatching req {} to '{}' (rule '{}')",
                         id, dispatcher.name(), rule.name
                     );
@@ -121,7 +122,7 @@ fn make_routing_host(
                             }));
                         }
                         Err(e) => {
-                            log::warn!("[host/worker] rule '{}' dispatcher '{}': {}", rule.name, dispatcher.name(), e);
+                            log_warn!("[host/worker] rule '{}' dispatcher '{}': {}", rule.name, dispatcher.name(), e);
                         }
                     }
                 }
@@ -149,7 +150,7 @@ pub fn run(cfg: HostConfig) -> Result<()> {
     // 2. Load plugins
     let mut catalog = Catalog::load(&mut host, &cfg.plugins).context("loading plugins")?;
     if catalog.components.is_empty() {
-        log::warn!("[runner] no plugins loaded — running in demo mode");
+        log_warn!("[runner] no plugins loaded — running in demo mode");
     }
 
     // 3. Instantiate servers
@@ -161,12 +162,12 @@ pub fn run(cfg: HostConfig) -> Result<()> {
                 if server.kind.starts_with(LOGGING_SERVER_KIND_PREFIX) {
                     let entry = ComponentEntry::new(server.name.clone(), server.kind.clone(), component);
                     log_bridge.connect(entry);
-                    log::info!("[runner] Logging bridge connected to '{}'", server.name);
+                    log_info!("[runner] Logging bridge connected to '{}'", server.name);
                 }
                 register_component(&registry, &info_registry, &server.name, component, server.kind.clone());
-                log::info!("[runner] Server '{}' of kind '{}' instantiated and registered", server.name, server.kind);
+                log_info!("[runner] Server '{}' of kind '{}' instantiated and registered", server.name, server.kind);
             }
-            Err(e) => { log::error!("[runner] Failed to instantiate '{}': {e}", server.name); }
+            Err(e) => { log_error!("[runner] Failed to instantiate '{}': {e}", server.name); }
         }
     }
 
@@ -183,13 +184,13 @@ pub fn run(cfg: HostConfig) -> Result<()> {
         let component_entry = match lock_registry.iter().find(|entry| entry.name == server.name) {
             Some(entry) => entry,
             None => {
-                log::error!("[runner] Cannot start '{}': component not found in registry", server.name);
+                log_error!("[runner] Cannot start '{}': component not found in registry", server.name);
                 continue;
             }
         };
         for action in &server.start {
             let _ = component_entry.call_json(&action.kind, action.config.clone());
-            log::info!("[runner] Server '{}' start action '{}' dispatched", server.name, action.kind);
+            log_info!("[runner] Server '{}' start action '{}' dispatched", server.name, action.kind);
         }
     }
 
@@ -197,18 +198,18 @@ pub fn run(cfg: HostConfig) -> Result<()> {
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
     ctrlc::set_handler(move || {
-        log::info!("[runner] Shutting down…");
+        log_info!("[runner] Shutting down…");
         r.store(false, Ordering::SeqCst);
     }).context("setting Ctrl+C handler")?;
 
     // 6. Main loop — REST polling
-    log::info!("[runner] Entering main loop (Ctrl+C to stop)");
+    log_info!("[runner] Entering main loop (Ctrl+C to stop)");
     while running.load(Ordering::SeqCst) {
         std::thread::sleep(Duration::from_millis(100));
     }
 
     // 7. Shutdown
-    log::info!("[runner] stopped");
+    log_info!("[runner] stopped");
     Ok(())
 }
 

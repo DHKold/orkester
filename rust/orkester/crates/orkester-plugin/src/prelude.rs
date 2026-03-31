@@ -8,3 +8,4 @@ pub use crate::sdk::{
     AbiComponentBuilder, ComponentMetadata, Host, HostRef, PluginComponent,
 };
 pub use crate::{component, export_plugin_root};
+pub use crate::{log_trace, log_debug, log_info, log_warn, log_error};

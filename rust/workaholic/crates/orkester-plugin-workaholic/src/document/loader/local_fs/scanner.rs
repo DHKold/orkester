@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::time::SystemTime;
 
 use workaholic::{Document, DocumentParser};
+use orkester_plugin::{log_error, log_trace};
 
 use super::diff::{diff_modified_file, events_for_deleted_file, events_for_new_file};
 use super::fs::{collect_files, parse_file};
@@ -68,10 +69,11 @@ fn process_single_file(
 
     match parse_file(file_path, extensions) {
         Err(e) => {
-            log::error!("Skipping '{}': {}", file_path, e);
+            log_error!("Skipping '{}': {}", file_path, e);
             Vec::new()
         }
         Ok(new_docs) => {
+            log_trace!("[scanner] parsed '{}': {} doc(s)", file_path, new_docs.len());
             let events = if is_new {
                 events_for_new_file(&new_docs, &entry.path, file_path)
             } else {

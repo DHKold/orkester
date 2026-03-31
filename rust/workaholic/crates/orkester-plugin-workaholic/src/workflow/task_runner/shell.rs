@@ -5,6 +5,7 @@ use workaholic::{
     TaskRunDoc, TaskRunLogsRef, TaskRunRequestDoc, TaskRunSpec, TaskRunState, TaskRunStatus,
     TaskRunnerDoc, TaskRunnerSpec, TaskRunnerState, TaskRunnerStatus,
 };
+use orkester_plugin::{log_debug, log_error, log_warn};
 
 use super::traits::{TaskRun, TaskRunError, TaskRunEvent, TaskRunEventStream, TaskRunner, TaskRunnerError};
 
@@ -239,8 +240,8 @@ impl TaskRun for ShellTaskRun {
                 Ok(output) => {
                     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
                     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                    if !stdout.is_empty() { eprintln!("[shell] stdout:\n{stdout}"); }
-                    if !stderr.is_empty() { eprintln!("[shell] stderr:\n{stderr}"); }
+                    if !stdout.is_empty() { log_debug!("[shell] stdout:\n{stdout}"); }
+                    if !stderr.is_empty() { log_debug!("[shell] stderr:\n{stderr}"); }
                     let mut g = shared_state.lock().unwrap();
                     g.stdout = stdout;
                     g.stderr = stderr;
@@ -252,7 +253,7 @@ impl TaskRun for ShellTaskRun {
                         TaskRunState::Succeeded
                     } else {
                         let code = output.status.code().unwrap_or(-1);
-                        log::warn!(
+                        log_warn!(
                             "Shell task '{}' exited with non-zero code {}",
                             script.lines().next().unwrap_or("<empty>"),
                             code
@@ -262,7 +263,7 @@ impl TaskRun for ShellTaskRun {
                     }
                 }
                 Err(e) => {
-                    log::error!("Failed to spawn shell process: {}", e);
+                    log_error!("Failed to spawn shell process: {}", e);
                     let mut g = shared_state.lock().unwrap();
                     g.run_state = TaskRunState::Failed;
                     TaskRunState::Failed

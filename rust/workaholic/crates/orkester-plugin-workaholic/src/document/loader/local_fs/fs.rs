@@ -8,6 +8,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use workaholic::{Document, DocumentParser, Result, WorkaholicError};
+use orkester_plugin::{log_trace, log_warn};
 
 // ─── Extension helpers ─────────────────────────────────────────────────────────
 
@@ -22,7 +23,7 @@ pub fn get_extension(path: &str) -> Option<String> {
 /// Returns the `mtime` from `metadata`, logging a warning and returning `None` on failure.
 pub fn get_mtime(path: &str, meta: &std::fs::Metadata) -> Option<SystemTime> {
     meta.modified()
-        .map_err(|e| log::warn!("Cannot read mtime for '{}': {}", path, e))
+        .map_err(|e| log_warn!("Cannot read mtime for '{}': {}", path, e))
         .ok()
 }
 
@@ -53,24 +54,25 @@ fn collect_dir_entries(
 ) {
     let read_dir = match std::fs::read_dir(dir_path) {
         Ok(it) => it,
-        Err(e) => { log::warn!("Cannot list '{}': {}", dir_path, e); return; }
+        Err(e) => { log_warn!("Cannot list '{}': {}", dir_path, e); return; }
     };
     for entry in read_dir {
         let entry = match entry {
             Ok(e)  => e,
-            Err(e) => { log::warn!("Error reading dir entry: {}", e); continue; }
+            Err(e) => { log_warn!("Error reading dir entry: {}", e); continue; }
         };
         let child = match entry.path().to_str().map(str::to_string) {
             Some(s) => s,
-            None    => { log::warn!("Non-UTF-8 path skipped"); continue; }
+            None    => { log_warn!("Non-UTF-8 path skipped"); continue; }
         };
         let child_meta = match std::fs::metadata(&child) {
             Ok(m)  => m,
-            Err(e) => { log::warn!("Cannot stat '{}': {}", child, e); continue; }
+            Err(e) => { log_warn!("Cannot stat '{}': {}", child, e); continue; }
         };
         if child_meta.is_file() {
             try_insert_file(&child, &child_meta, extensions, files);
         } else if child_meta.is_dir() && recursive {
+            log_trace!("[local_fs/fs] recursing into '{}'", child);
             collect_files_inner(&child, recursive, extensions, files);
         }
     }
@@ -85,7 +87,7 @@ fn collect_files_inner(
 ) {
     let meta = match std::fs::metadata(path) {
         Ok(m)  => m,
-        Err(e) => { log::warn!("Cannot stat '{}': {}", path, e); return; }
+        Err(e) => { log_warn!("Cannot stat '{}': {}", path, e); return; }
     };
     if meta.is_file() {
         try_insert_file(path, &meta, extensions, files);

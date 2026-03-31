@@ -5,6 +5,8 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use orkester_plugin::{log_error, log_info, log_trace};
+
 use chrono::Utc;
 use workaholic::DocumentParser;
 
@@ -38,7 +40,7 @@ fn watcher_loop(
 
         let events = match entry_arc.lock() {
             Ok(mut entry) => scan_entry(&mut entry, &extensions),
-            Err(e)        => { log::error!("Watcher mutex poisoned: {}", e); return; }
+            Err(e)        => { log_error!("Watcher mutex poisoned: {}", e); return; }
         };
 
         let duration_ms = started.elapsed().as_millis() as u64;
@@ -52,10 +54,12 @@ fn watcher_loop(
             events_removed:  events.iter().filter(|e| matches!(e, LocalFsChangeEvent::DocumentRemoved { .. })).count(),
         };
         if m.events_added + m.events_modified + m.events_removed > 0 {
-            eprintln!(
-                "[loader] watch '{}': {}ms, +{} ~{} -{}",
+            log_info!(
+                "[loader/local_fs] watch '{}': {}ms +{} ~{} -{}",
                 m.entry_path, m.duration_ms, m.events_added, m.events_modified, m.events_removed,
             );
+        } else {
+            log_trace!("[loader/local_fs] watch '{}': {}ms no changes", m.entry_path, m.duration_ms);
         }
         {
             let mut store = metrics_store.lock().unwrap();

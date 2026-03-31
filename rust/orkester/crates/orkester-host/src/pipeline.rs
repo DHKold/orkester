@@ -36,6 +36,7 @@ use std::sync::{
     mpsc, Arc, Condvar, Mutex,
 };
 
+use orkester_plugin::{log_debug};
 use orkester_plugin::abi::{AbiRequest, AbiResponse};
 use orkester_plugin::sdk::Host;
 
@@ -225,7 +226,7 @@ fn spawn_worker<H>(
                 let resp = handler(req);
                 route_response(mode, id, resp, &sync_store, &output_tx);
             }
-            log::debug!("[pipeline/worker] input channel closed — thread exiting");
+            log_debug!("[pipeline/worker] input channel closed — thread exiting");
         })
         .expect("failed to spawn host-pipeline-worker");
 }
@@ -278,7 +279,7 @@ fn spawn_dispatcher(
                     cb(resp.clone());
                 }
             }
-            log::debug!("[pipeline/dispatcher] output channel closed — thread exiting");
+            log_debug!("[pipeline/dispatcher] output channel closed — thread exiting");
         })
         .expect("failed to spawn host-pipeline-dispatcher");
 }

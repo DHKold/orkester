@@ -134,20 +134,20 @@ impl CatalogServer {
                 let ns  = document.metadata.namespace.as_deref().unwrap_or("global");
                 let id  = format!("{}/{}/{}/{}", document.kind, ns, document.name, document.version);
                 let res = serde_json::to_value(&document).unwrap_or(Value::Null);
-                log::debug!("[catalog] indexed '{}'", id);
+                log_debug!("[catalog] indexed '{}'", id);
                 self.create_resource(ResourceCreationRequest { id, resource: res }).ok();
             }
             LocalFsChangeEvent::DocumentRemoved { document, .. } => {
                 let ns = document.metadata.namespace.as_deref().unwrap_or("global");
                 let id = format!("{}/{}/{}/{}", document.kind, ns, document.name, document.version);
-                log::debug!("[catalog] removed '{}'", id);
+                log_debug!("[catalog] removed '{}'", id);
                 self.delete_resource(ResourceDeletionRequest { id }).ok();
             }
             LocalFsChangeEvent::DocumentModified { new, .. } => {
                 let ns  = new.metadata.namespace.as_deref().unwrap_or("global");
                 let id  = format!("{}/{}/{}/{}", new.kind, ns, new.name, new.version);
                 let res = serde_json::to_value(&new).unwrap_or(Value::Null);
-                log::debug!("[catalog] updated '{}'", id);
+                log_debug!("[catalog] updated '{}'", id);
                 // create_resource is an upsert — it overwrites existing entries.
                 self.create_resource(ResourceCreationRequest { id, resource: res }).ok();
             }

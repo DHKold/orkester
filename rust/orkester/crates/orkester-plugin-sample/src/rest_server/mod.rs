@@ -105,16 +105,17 @@ impl RestServer {
             .name("rest-http".to_owned())
             .spawn(move || {
                 let server = match tiny_http::Server::http(&bind_addr) {
-                    Ok(s)  => { log::info!("[rest] listening on http://{bind_addr}"); s }
-                    Err(e) => { log::error!("[rest] failed to bind {bind_addr}: {e}"); return; }
+                    Ok(s)  => { log_info!("[rest] listening on http://{bind_addr}"); s }
+                    Err(e) => { log_error!("[rest] failed to bind {bind_addr}: {e}"); return; }
                 };
+                log_debug!("[rest] server ready, entering request loop");
 
                 for mut request in server.incoming_requests() {
                     let method  = request.method().to_string().to_uppercase();
                     let raw_url = request.url().to_string();
                     let (path, query_str) = split_url(&raw_url);
 
-                    log::debug!("[rest] {method} {path}");
+                    log_trace!("[rest] {method} {path} query={}", if query_str.is_empty() { "(none)" } else { &query_str });
 
                     // ── 1. Static folder serving ─────────────────────────────
                     // Compute the response outside the borrow of `request` so
@@ -143,7 +144,7 @@ impl RestServer {
                             let (status, body) = match std::fs::read(&serve) {
                                 Ok(b) => (200u16, b),
                                 Err(e) => {
-                                    log::warn!("[rest/static] {}: {e}", serve.display());
+                                    log_warn!("[rest/static] {}: {e}", serve.display());
                                     (404u16, b"not found".to_vec())
                                 }
                             };
@@ -179,7 +180,7 @@ impl RestServer {
                     let (action, path_params) = match match_result {
                         Some(r) => r,
                         None => {
-                            log::warn!("[rest] 404 {method} {path}");
+                            log_warn!("[rest] 404 {method} {path}");
                             let body = br#"{"error":"not found"}"#.to_vec();
                             let len  = body.len();
                             let _ = request.respond(tiny_http::Response::new(
@@ -210,9 +211,10 @@ impl RestServer {
                         format:  "std/json".to_string(),
                         payload,
                     };
+                    log_debug!("[rest] dispatch req={id} action='{}'", envelope.kind);
                     let mut host = unsafe { Host::from_abi(host_box.as_raw()) };
                     let result: Value = host.handle(&envelope).unwrap_or_else(|e| {
-                        log::error!("[rest] dispatch failed: {e}");
+                        log_error!("[rest] dispatch failed req={id}: {e}");
                         serde_json::json!({ "error": e.to_string() })
                     });
 

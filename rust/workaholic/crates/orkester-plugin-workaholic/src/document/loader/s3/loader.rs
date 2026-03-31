@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use orkester_plugin::hub::Envelope;
+use orkester_plugin::{log_error, log_info};
 use workaholic::{Document, DocumentParser, Result};
 
 use crate::document::loader::actions::*;
@@ -56,10 +57,10 @@ impl S3Loader {
             let entry_id = arc.lock().map(|e| format!("s3://{}/{}", e.config.bucket, e.config.prefix)).unwrap_or_default();
             let events = { let mut e = arc.lock().unwrap(); scan_entry(&mut e, &self.extensions) };
             let m = build_metrics_pub(entry_id, true, started, &events);
-            eprintln!("[s3] initial scan '{}': {}ms +{} ~{} -{}", m.entry_id, m.duration_ms, m.events_added, m.events_modified, m.events_removed);
+            log_info!("[loader/s3] initial scan '{}': {}ms +{} ~{} -{}", m.entry_id, m.duration_ms, m.events_added, m.events_modified, m.events_removed);
             { let mut s = self.metrics.lock().unwrap(); if s.len() >= 200 { s.pop_front(); } s.push_back(m.clone()); }
             emit_scan_metrics(self.host_ptr, &m);
-            for ev in events { if let Err(e) = self.emit(ev) { log::error!("emit: {e}"); } }
+            for ev in events { if let Err(e) = self.emit(ev) { log_error!("[loader/s3] emit error during initial scan: {e}"); } }
         }
     }
 
@@ -74,7 +75,7 @@ impl S3Loader {
                 Arc::clone(&self.extensions),
                 Arc::clone(&self.metrics),
                 poll_secs,
-                move |ev| { if let Err(e) = loader.emit(ev) { log::error!("emit: {e}"); } },
+                move |ev| { if let Err(e) = loader.emit(ev) { log_error!("[loader/s3] emit error in watcher: {e}"); } },
                 move |m|  { emit_scan_metrics(host_opt, m); },
             );
         }

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crossbeam_channel::Receiver;
 
 use crate::hub::{envelope::Envelope, filter::Filter, stats::HubStats};
+use crate::{log_debug, log_warn};
 
 use super::dispatcher::Dispatcher;
 
@@ -50,7 +51,7 @@ impl Router {
                     matched_any = true;
                     for dispatcher in &rule.dispatchers {
                         if let Err(e) = dispatcher.dispatch(envelope.clone()) {
-                            log::warn!("[hub/router] rule '{}' dispatcher '{}': {e}",
+                            log_warn!("[hub/router] rule '{}' dispatcher '{}': {e}",
                                 rule.name, dispatcher.name());
                             self.stats.inc_dispatch_failures();
                         }
@@ -62,12 +63,12 @@ impl Router {
                 self.stats.inc_routed();
             } else {
                 self.stats.inc_unrouted();
-                log::debug!(
+                log_debug!(
                     "[hub/router] id={} kind='{}' matched no rule — unrouted",
                     envelope.id, envelope.kind
                 );
             }
         }
-        log::debug!("[hub/router] channel closed — router thread exiting");
+        log_debug!("[hub/router] channel closed — router thread exiting");
     }
 }

@@ -21,7 +21,7 @@ fn build_parsers(config: &S3LoaderConfig) -> HashMap<String, Box<dyn DocumentPar
         match kind.as_str() {
             "workaholic/YamlDocumentParser:1.0" | "yaml" | "yml" => { p.insert(ext.clone(), Box::new(YamlDocumentParser)); }
             "workaholic/JsonDocumentParser:1.0" | "json"         => { p.insert(ext.clone(), Box::new(JsonDocumentParser)); }
-            other => { log::warn!("Unknown parser kind '{other}' for extension '{ext}' — skipped"); }
+            other => { log_warn!("Unknown parser kind '{other}' for extension '{ext}' — skipped"); }
         }
     }
     p

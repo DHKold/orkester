@@ -22,6 +22,7 @@ use workaholic::{
     TaskRunStatus, TaskRunnerDoc, TaskRunnerSpec, TaskRunnerState, TaskRunnerStatus, TASK_RUN_KIND,
     TASK_RUNNER_KIND,
 };
+use orkester_plugin::{log_debug, log_error, log_warn};
 
 use super::traits::{TaskRun, TaskRunError, TaskRunEvent, TaskRunEventStream, TaskRunner, TaskRunnerError};
 use super::stream_adapter::CrossbeamStream;
@@ -285,8 +286,8 @@ fn run_container(
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            if !stdout.is_empty() { eprintln!("[container] stdout:\n{stdout}"); }
-            if !stderr.is_empty() { eprintln!("[container] stderr:\n{stderr}"); }
+            if !stdout.is_empty() { log_debug!("[container] stdout:\n{stdout}"); }
+            if !stderr.is_empty() { log_debug!("[container] stderr:\n{stderr}"); }
             let mut g = state.lock().unwrap();
             g.stdout = stdout;
             g.stderr = stderr;
@@ -297,13 +298,13 @@ fn run_container(
                 g.run_state = TaskRunState::Succeeded;
                 TaskRunState::Succeeded
             } else {
-                log::warn!("[container runner] exited with code {:?}", output.status.code());
+                log_warn!("[container runner] exited with code {:?}", output.status.code());
                 g.run_state = TaskRunState::Failed;
                 TaskRunState::Failed
             }
         }
         Err(e) => {
-            log::error!("[container runner] failed to spawn '{}': {}", runtime, e);
+            log_error!("[container runner] failed to spawn '{}': {}", runtime, e);
             let mut g = state.lock().unwrap();
             g.stderr    = format!("Failed to spawn container runtime '{}': {}", runtime, e);
             g.run_state = TaskRunState::Failed;

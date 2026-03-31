@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use orkester_plugin::{log_error, log_warn};
 use workaholic::DocumentParser;
 
 use super::client::{get_object, list_objects};
@@ -44,7 +45,7 @@ fn events_for_deleted(entry: &S3Entry, loaded: &S3LoadedObject) -> Vec<S3ChangeE
 pub fn scan_entry(entry: &mut S3Entry, ext_parsers: &HashMap<String, Box<dyn DocumentParser>>) -> Vec<S3ChangeEvent> {
     let objects = match list_objects(&entry.config) {
         Ok(v)  => v,
-        Err(e) => { log::error!("[s3] list_objects failed: {e}"); return vec![]; }
+        Err(e) => { log_error!("[s3] list_objects failed: {e}"); return vec![]; }
     };
 
     let mut events        = Vec::new();
@@ -58,7 +59,7 @@ pub fn scan_entry(entry: &mut S3Entry, ext_parsers: &HashMap<String, Box<dyn Doc
 
         let bytes = match get_object(&entry.config, &key) {
             Ok(b)  => b,
-            Err(e) => { log::warn!("[s3] get_object({key}) failed: {e}"); continue; }
+            Err(e) => { log_warn!("[s3] get_object({key}) failed: {e}"); continue; }
         };
         let docs = parse_bytes(&bytes, &key, ext_parsers);
         if let Some(old) = entry.loaded_objects.get(&key) {

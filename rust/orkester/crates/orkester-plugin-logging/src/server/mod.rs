@@ -25,10 +25,13 @@ pub struct LoggingServer {
 )]
 impl LoggingServer {
     pub fn new(cfg: LoggingServerConfig, host_ptr: *mut AbiHost) -> Self {
-        let (queue, receiver) = LogQueue::new(cfg.queue_capacity.unwrap_or(1024));
+        let queue_cap = cfg.queue_capacity.unwrap_or(1024);
+        log_info!("[log-server] initialising with queue_capacity={queue_cap}");
+        let (queue, receiver) = LogQueue::new(queue_cap);
         let metrics  = LogMetrics::new(host_ptr);
         let antispam = AntiSpam::new(cfg.antispam.clone());
         let sinks    = config::build_sinks(cfg.sinks);
+        log_info!("[log-server] built {} sink(s)", sinks.len());
         let worker_metrics = metrics.clone();
         let handle = worker::spawn(receiver, sinks, antispam, worker_metrics);
         Self { queue, metrics, _worker: handle }
@@ -40,6 +43,7 @@ impl LoggingServer {
         self.metrics.inc_received();
         if self.queue.try_send(record).is_err() {
             self.metrics.inc_dropped();
+            log_warn!("[log-server] queue full — record dropped");
         }
         Ok(())
     }

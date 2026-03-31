@@ -1,4 +1,5 @@
 use crossbeam_channel::Receiver;
+use orkester_plugin::prelude::*;
 use orkester_plugin::logging::LogRecord;
 
 use super::{antispam::AntiSpam, config::SinkEntry, metrics::LogMetrics};
@@ -22,9 +23,11 @@ fn run(
     mut antispam: AntiSpam,
     metrics:  LogMetrics,
 ) {
+    log_debug!("[log-server/worker] started with {} sink(s)", sinks.len());
     for record in &receiver {
         if !antispam.allow(&record) {
             metrics.inc_suppressed();
+            log_trace!("[log-server/worker] suppressed record from '{}/{}'", record.plugin_id, record.target);
             continue;
         }
         deliver(&record, &sinks);
@@ -36,13 +39,14 @@ fn run(
             deliver(&summary, &sinks);
         }
     }
+    log_debug!("[log-server/worker] channel closed — exiting");
 }
 
 fn deliver(record: &LogRecord, sinks: &[SinkEntry]) {
     for entry in sinks {
         let text = entry.formatter.format(record);
         if let Err(e) = entry.sink.write(record, &text) {
-            log::warn!("[log-server] sink write error: {e}");
+            log_warn!("[log-server] sink write error: {e}");
         }
     }
 }

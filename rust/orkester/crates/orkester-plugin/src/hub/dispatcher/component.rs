@@ -7,6 +7,7 @@ use super::Dispatcher;
 use crate::{
     abi::{AbiComponent, AbiRequest},
     hub::{envelope::Envelope, error::DispatchError},
+    log_debug, log_warn,
 };
 
 // ── ComponentEntry — the host-side registry entry ─────────────────────────────
@@ -183,13 +184,13 @@ impl Dispatcher for ComponentsDispatcher {
             if self.targets.iter().any(|t| t.matches(entry)) {
                 match entry.deliver(&envelope) {
                     Ok(response) => responses.push(response),
-                    Err(e) => log::warn!("[hub/components] delivery to '{}' failed: {e}", entry.name),
+                    Err(e) => log_warn!("[hub/components] delivery to '{}' failed: {e}", entry.name),
                 }
                 delivered += 1;
             }
         }
 
-        log::debug!("[hub/components] id={} kind='{}' → {delivered} component(s)", envelope.id, envelope.kind);
+        log_debug!("[hub/components] id={} kind='{}' → {delivered} component(s)", envelope.id, envelope.kind);
         Ok(responses)
     }
 }

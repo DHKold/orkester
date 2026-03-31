@@ -58,6 +58,13 @@ servers:
         - kind: logging/ConsoleLogSink:1.0
           formatter:
             kind: logging/ConsoleLogFormatter:1.0
+        - kind: logging/LocalFsLogSink:1.0
+          formatter:
+            kind: logging/JsonLogFormatter:1.0
+          config:
+            path: /orkester/logs/orkester.log
+            max_size_mb: 50
+            max_files: 5
 
   # ── HTTP gateway ─────────────────────────────────────────────────────────────
   - name: rest-server

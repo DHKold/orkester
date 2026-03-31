@@ -41,7 +41,7 @@ impl MetricsServer {
     #[handle("metrics/Record")]
     fn record(&mut self, req: RecordRequest) -> Result<RecordAck> {
         let current = self.store.lock().unwrap().apply(&req.key, &req.operation, req.value);
-        log::debug!("[metrics] record key='{}' op={:?} -> {}", req.key, req.operation, current);
+        log_trace!("[metrics] record key='{}' op={:?} -> {}", req.key, req.operation, current);
         Ok(RecordAck { ok: true, current })
     }
 
@@ -49,6 +49,7 @@ impl MetricsServer {
     #[handle("metrics/GetSnapshot")]
     fn get_snapshot(&mut self, req: SnapshotRequest) -> Result<SnapshotResponse> {
         let metrics = self.store.lock().unwrap().snapshot(req.key.as_deref());
+        log_trace!("[metrics] snapshot: {} key(s)", metrics.len());
         Ok(SnapshotResponse { metrics })
     }
 
@@ -56,6 +57,7 @@ impl MetricsServer {
     #[handle("metrics/GetHistory")]
     fn get_history(&mut self, req: HistoryRequest) -> Result<HistoryResponse> {
         let history = self.store.lock().unwrap().history(req.key.as_deref(), req.limit);
+        log_trace!("[metrics] history: {} series", history.len());
         Ok(HistoryResponse { history })
     }
 }
