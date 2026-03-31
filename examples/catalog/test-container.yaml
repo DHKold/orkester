@@ -1,0 +1,118 @@
+# ── test-container.yaml ────────────────────────────────────────────────────────
+#
+# Two-step container workflow using podman:
+#   step1 — prints and validates a loop count inside an alpine container
+#   step2 — runs a Python loop inside a python:3-slim container
+#
+# Prerequisites: the container images must be accessible from the host running
+# orkester (pulled via podman).  Both images are available on Docker Hub.
+#
+# Run it with:
+#   curl -X POST http://localhost:8080/v1/workflow/trigger \
+#        -H 'Content-Type: application/json' \
+#        -d '{"workRef":"testing/test-container","inputs":{"loop_count":"4"}}'
+
+# ── Task: container-validate-count ────────────────────────────────────────────
+kind: workaholic/Task:1.0
+name: container-validate-count
+version: "1.0"
+metadata:
+  namespace: testing
+  description: "Validates and echoes the loop count inside an alpine container."
+  tags: ["test", "container"]
+spec:
+  inputs:
+    - name: loop_count
+      description: "How many iterations the next step should perform."
+      type: integer
+      required: true
+      default:
+        value: "3"
+  outputs: []
+  execution:
+    kind: workaholic/ContainerTaskRunner:1.0
+    profile: ""
+    config:
+      image: alpine:3.19
+      runtime: docker
+      command: sh
+      args:
+        - "-c"
+        - |
+          echo "=== container-validate-count ==="
+          echo "Received loop_count=${loop_count}"
+          if [ "${loop_count}" -lt 1 ] || [ "${loop_count}" -gt 100 ]; then
+            echo "ERROR: loop_count must be between 1 and 100" >&2
+            exit 1
+          fi
+          echo "Validation OK: will loop ${loop_count} time(s)"
+---
+# ── Task: container-run-loop ──────────────────────────────────────────────────
+kind: workaholic/Task:1.0
+name: container-run-loop
+version: "1.0"
+metadata:
+  namespace: testing
+  description: "Loops N times inside a python:3-slim container."
+  tags: ["test", "container"]
+spec:
+  inputs:
+    - name: loop_count
+      description: "Number of iterations to perform."
+      type: integer
+      required: true
+      default:
+        value: "3"
+  outputs: []
+  execution:
+    kind: workaholic/ContainerTaskRunner:1.0
+    profile: ""
+    config:
+      image: python:3-slim
+      runtime: docker
+      command: python3
+      args:
+        - "-c"
+        - |
+          import os, time
+          n = int(os.environ.get('loop_count', '3'))
+          print(f'=== container-run-loop ===')
+          print(f'Starting Python loop: {n} iteration(s)')
+          for i in range(1, n + 1):
+              print(f'  Iteration {i}/{n}')
+              time.sleep(0.1)
+          print(f'Loop complete after {n} iteration(s).')
+---
+# ── Work: test-container ──────────────────────────────────────────────────────
+kind: workaholic/Work:1.0
+name: test-container
+version: "1.0"
+metadata:
+  namespace: testing
+  description: "Two-step container workflow validating ContainerTaskRunner with podman."
+  tags: ["test", "container"]
+spec:
+  inputs:
+    - name: loop_count
+      description: "How many times the loop step should iterate."
+      type: integer
+      required: false
+      default:
+        value: "3"
+  steps:
+    - name: validate
+      description: "Validate the loop count inside an alpine container."
+      taskRef: container-validate-count:1.0
+      inputMapping:
+        - name: loop_count
+          from:
+            uri: work://inputs?loop_count
+
+    - name: run-loop
+      description: "Execute the Python loop inside a python:3-slim container."
+      taskRef: container-run-loop:1.0
+      dependsOn: ["validate"]
+      inputMapping:
+        - name: loop_count
+          from:
+            uri: work://inputs?loop_count

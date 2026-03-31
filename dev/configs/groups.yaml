@@ -1,0 +1,8 @@
+kind: workaholic/Group:1.0
+name: data-platform
+version: 1.0.0
+metadata:
+  description: Group for all data platform related resources
+  namespace: testing
+  tags: [data, platform]
+spec: {}

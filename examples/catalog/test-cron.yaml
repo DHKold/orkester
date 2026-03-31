@@ -1,0 +1,20 @@
+kind: workaholic/Cron:1.0
+name: test-cron
+version: 1.0.0
+metadata:
+  namespace: testing
+  description: "Test cron that runs test-shell every minute"
+  tags: [test]
+spec:
+  enabled: true
+  work_ref: "test-shell"
+  schedules:
+    - "* * * * *"
+  timezone: UTC
+  concurrency:
+    same_cron: skip
+    different_cron: allow
+    manual: allow
+  failure_policy:
+    max_consecutive_failures: 3
+    action: disable

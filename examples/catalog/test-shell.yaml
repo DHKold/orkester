@@ -1,0 +1,110 @@
+# ── test-shell.yaml ────────────────────────────────────────────────────────────
+#
+# Two-step shell workflow:
+#   step1 — generates a loop count (bash) and passes it to step2
+#   step2 — loops that many times with a bash script
+#
+# Run it with:
+#   curl -X POST http://localhost:8080/v1/workflow/trigger \
+#        -H 'Content-Type: application/json' \
+#        -d '{"workRef":"testing/test-shell","inputs":{"loop_count":"5"}}'
+
+# ── Task: shell-generate-count ─────────────────────────────────────────────────
+kind: workaholic/Task:1.0
+name: shell-generate-count
+version: "1.0"
+metadata:
+  namespace: testing
+  description: "Prints a loop count value and stores it for downstream steps."
+  tags: ["test", "shell"]
+spec:
+  inputs:
+    - name: loop_count
+      description: "How many times the downstream step should loop."
+      type: integer
+      required: true
+      default:
+        value: "3"
+  outputs:
+    - name: count
+      description: "The loop count forwarded to the next step."
+      type: string
+  execution:
+    kind: workaholic/ShellTaskRunner:1.0
+    profile: ""
+    config:
+      script: |
+        echo "Generating loop count: ${loop_count}"
+        echo "${loop_count}"
+---
+# ── Task: shell-loop ───────────────────────────────────────────────────────────
+kind: workaholic/Task:1.0
+name: shell-loop
+version: "1.0"
+metadata:
+  namespace: testing
+  description: "Loops a configurable number of times using bash."
+  tags: ["test", "shell"]
+spec:
+  inputs:
+    - name: count
+      description: "Number of iterations."
+      type: integer
+      required: true
+  outputs:
+    - name: message
+      description: "Completion message."
+      type: string
+  execution:
+    kind: workaholic/ShellTaskRunner:1.0
+    profile: ""
+    config:
+      script: |
+        echo "Starting loop with count=${count}"
+        for i in $(seq 1 "${count}"); do
+          echo "  Iteration ${i} of ${count}"
+          sleep 0.1
+        done
+        echo "Loop complete after ${count} iterations."
+---
+# ── Work: test-shell ───────────────────────────────────────────────────────────
+kind: workaholic/Work:1.0
+name: test-shell
+version: "1.0"
+metadata:
+  namespace: testing
+  description: "Two-step shell workflow validating ShellTaskRunner and DAG execution."
+  tags: ["test", "shell"]
+spec:
+  inputs:
+    - name: loop_count
+      description: "How many times the loop step should iterate."
+      type: integer
+      required: false
+      default:
+        value: "3"
+  steps:
+    - name: generate
+      description: "Generate the loop count value."
+      taskRef: shell-generate-count:1.0
+      inputMapping:
+        - name: loop_count
+          from:
+            uri: work://inputs?loop_count
+      outputMapping:
+        - name: count
+          to:
+            variable: generated_count
+
+    - name: loop
+      description: "Run the bash loop using the generated count."
+      taskRef: shell-loop:1.0
+      dependsOn: ["generate"]
+      inputMapping:
+        - name: count
+          from:
+            uri: work://steps/generate/outputs?count
+      outputMapping:
+        - name: message
+          to:
+            variable: loop_message

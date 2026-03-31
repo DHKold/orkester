@@ -13,7 +13,8 @@ set -euo pipefail
 # ── Config ────────────────────────────────────────────────────────────────────
 
 ORKESTER_ROOT="/orkester"
-BIN_DIR="${ORKESTER_ROOT}/bin"
+DEV_DIR="${ORKESTER_ROOT}/dev"
+BIN_DIR="${ORKESTER_ROOT}/dev/bin"
 RELEASE=0
 
 # Parse flags
@@ -92,7 +93,7 @@ ls -lh "${BIN_DIR}/"*.so "${BIN_DIR}/orkester" 2>/dev/null || true
 
 # ── 4. Run orkester ───────────────────────────────────────────────────────────
 
-CONFIG="${BIN_DIR}/workaholic.yaml"
+CONFIG="${DEV_DIR}/workaholic.yaml"
 
 if [[ ! -f "${CONFIG}" ]]; then
     echo "ERROR: config not found at ${CONFIG}" >&2

@@ -1,54 +1,113 @@
-IMPORTANT:
+# Orkester + Workaholic - TODO
 
-- To test: use podman `podman exec -w /orkester/run/workaholic orkester-dev cargo build` (you can adapt the workdir and the command)
-- You can build an launch the orkester app with the workaholic.yaml config (in the bin folder) with `podman exec orkester-dev ./dev/build-and-run.sh`
-- Ensure you handled all ToDos
-- When writing code, use reusable, composable, unit elements (small objects and functions, less than 30lines of code per function, less than 200 lines per file, only imports/exports in mod.rs)
+## Next iteration
 
-# TODO:
+- [ ] Implement and test the S3DocumentLoader
+- [ ] Implement auto-imports of crons
+- [ ] Test a real DBT Work
+- [ ] (EXTERNAL) Provide a tool to DP to produce Workaholic YAML for products
+- [ ] Fix the UI issues:
+    - [ ] Metrics page keep poping up once loaded
+    - [ ] List of WorkRuns is not using the new fields
 
-## Logging ✅
+## In Queue
 
-~~Implement the logging system in 3 parts~~
-
-All 3 parts implemented and building.
-
-Part 1: add minimalist logging to the SDK using the existing ABI interface.
-- Expose LogLevel, LogRecord, init_logging, send_log, and macros log_trace/log_debug/log_info/log_warn/log_error.
-- Macros must auto-fill file/module/line.
-- The SDK logger must have 3 modes: Buffering, Connected, Fallback.
-- Before the Logging Server is ready, logs go to a bounded startup ring buffer.
-- On overflow, drop oldest and count dropped logs.
-- When the Logging Server becomes available, flush buffered logs in order.
-- On delivery failure, fallback to stderr/stdout.
-- Components must never build envelopes manually to log.
-
-Part 2: create crate orkester-plugin-logging implementing a full LoggingServer component.
-- LoggingServer is a normal Orkester component.
-- It receives structured log records from a dedicated host logging ingress, not from HUB envelopes.
-- It supports dynamic/configurable sinks and formatters.
-- Text sinks must use a formatter component.
-- Provide standard sink components: ConsoleLogSink, LocalFsLogSink, S3LogSink.
-- Provide standard formatter components: JsonLogFormatter, YamlLogFormatter, ConsoleLogFormatter.
-- LocalFsLogSink and S3LogSink must support rotation.
-- Implement bounded queues, per-source anti-spam policy, and metrics/counters.
-- Keep sink and formatter modules isolated and small.
-
-Part 3: adapt the host to bridge SDK logging, Logging Server and plugins.
-- The host owns a global logging bridge.
-- The Logging Server is loaded and started like any other plugin/component.
-- The host stores a global reference/handle to the active Logging Server consumer.
-- When plugins/components are loaded, initialize SDK logging automatically with plugin/component identity and ABI logging function/context.
-- The host must buffer startup logs before the Logging Server is ready, then flush them when connected.
-- Keep the logging path dedicated and separate from the HUB.
-
-Do not move advanced logic into the SDK.
-Do not make the Logging Server a special lifecycle component.
-Preserve the existing plugin/component architecture.
-
-## UI
-
-- [x] UI -> Metrics (Snapshot + History Graphs)
-    - [x] Display a nice Metrics Dashboard with Data 'Cards'
-    - [x] Must not assume the metrics contain any specific key, it should by dynamic/flexible to handle the future keys
-    - [x] Can use a library if needed (but keep it simple, no dependency management, just a single not-too-big JS lib)
+- [ ] Global Documents/Resources
+    - [ ] Clearly define what `kind` and `name` + `version` mean (`<domain>/<type>:<version>`)
+    - [ ] Clearly document how versioning is handled (SEMVER, matching, etc)
+    - [ ] Identify standard kinds
+    - [ ] Refactor to use the correct kind/name/version (eg. `orkester/Component:1.0` + name)
+    - [ ] Produce schema and documentation
+- [ ] Add persistors
+    - [ ] Define the `DocumentPersistor` traits in `workaholic` crate
+    - [ ] Create `MemoryDocumentPersistor`
+    - [ ] Create `LocalFsDocumentPersistor`
+- [ ] Refactor Catalog
+    - [ ] Groups : Ability to group Tasks and Works
+    - [ ] Historization : Ability to keep track of changes to Resources
+    - [ ] Versioning : Ability to handle different versions of Resources
+    - [ ] Better handling of dependencies between Resources (e.g. if a Task depends on a Document, etc)
+    - [ ] Add support for Resource states (e.g. active, deprecated, etc)
+    - [ ] Add support for Resource metadata (e.g. description, tags, etc)
+    - [ ] Add support for Resource validation (e.g. schema validation, etc)
+    - [ ] Add support for Resource lifecycle management (e.g. deprecation, deletion, etc)
+    - [ ] Add support for Resource access control (e.g. who can read/write which Resources, etc)
+    - [ ] Add support for Resource querying (e.g. by kind, name, version, metadata, etc)
+    - [ ] Add support for Resource import/export (e.g. from/to YAML, JSON, etc)
+    - [ ] Add support for Resource diffing (e.g. to see changes between versions, etc)
+    - [ ] Add support for Resource templating (e.g. to create new Resources based on existing ones, etc)
+    - [ ] Add support for Resource testing (e.g. to validate that a Resource works as expected, etc)
+    - [ ] Add support for Resource documentation (e.g. to generate docs from Resource metadata, etc)
+    - [ ] Add support for Resource notifications (e.g. to notify users of changes to Resources, etc)
+    - [ ] Add support for Resource auditing (e.g. to keep track of who changed what and when, etc)
+    - [ ] Add support for Resource rollback (e.g. to revert to a previous version of a Resource, etc)
+- [ ] Refactor Logging SDK + Server
+    - [ ] Handle fallback queue in the SDK
+    - [ ] Add log filtering capabilities in the server (e.g. by level, component, etc)
+- [ ] Refactor Rest Server
+    - [ ] Define a clear API spec (e.g. OpenAPI) and implement it
+    - [ ] Modularize the server code (e.g. separate handlers, services, etc)
+    - [ ] Add more tests (unit, integration, etc)
+    - [ ] Make the Static server better (e.g. serve static files, handle SPA routing, etc)
+    - [ ] Add support for WebSockets (e.g. for real-time updates, logs streaming, etc)
+    - [ ] Better/More flexible routing to components (multi-targets, fallbacks, etc)
+    - [ ] Add support for SSL/TLS
+    - [ ] Add support for custom headers, CORS, etc
+- [ ] Refactor Workflow Server
+    - [ ] Better handling of inputs/outputs
+    - [ ] Handle retry logic
+    - [ ] Handle timeouts
+    - [ ] Better error handling and reporting
+    - [ ] Implement Automatic Triggering of Works (e.g. based on time, events, etc)
+- [ ] Orkester Framework: Create the Authentication SDK
+    - [ ] Add it in the `orkester-plugin` crate
+    - [ ] Check if there can be macros to ease the usage
+    - [ ] Implement NoAuthenticator
+    - [ ] Implement JwtAuthenticator
+    - [ ] Implement OidcAuthenticator
+- [ ] Orkester Framework: Create the Authorization SDK
+    - [ ] Add it in the `orkester-plugin` crate
+    - [ ] Check to add/update macros to ease usage
+    - [ ] Implement StaticAuthorizator
+    - [ ] Implement RbacAuthorizator
+    - [ ] Implement OpaAuthorizator
+- [ ] Plugin `w/CORE`
+    - [ ] Create the `HttpTaskRunner`
+    - [ ] Create the `HttpDocumentLoader`
+    - [ ] Create the `LocalFsArtifactRegistry`
+    - [ ] Create the `ConfigMapDocumentLoader` ?
+- [ ] Plugin `w/AWS`
+    - [ ] Add S3 components:
+        - [ ] Create the `S3TaskRunner`
+        - [ ] Create the `S3DocumentLoader`
+        - [ ] Create the `S3DocumentPersistor`
+        - [ ] Create the `S3ArtifactRegistry`
+        - [ ] Create the `S3LogSink`
+    - [ ] Create the `Ec2TaskRunner` / `EcsTaskRunner`
+    - [ ] Create the `CloudwatchLogSink`
+    - [ ] Create the `LambdaTaskRunner`
+    - [ ] Create the `EcrArtifactRegistry`
+    - [ ] Create the `DynamoDbDocumentLoader` and `DynamoDbDocumentPersistor`
+    - [ ] Create the 
+- [ ] Plugin `w/SQL`
+    - [ ] Create the `SqlTaskRunner`
+    - [ ] Create the `SqlDocumentLoader`
+    - [ ] Create the `SqlDocumentPersistor`
+    - [ ] Create the `SqlAuthorizator`
+    - [ ] Create the `SqlAuthorizator`
+    - [ ] Create the `SqlArtifactRegistry`
+    - [ ] Create the `SqlLogSink`
+- [ ] Plugin `w/Kafka`
+    - [ ] Create the `KafkaTaskRunner`
+    - [ ] Create the `KafkaDocumentLoader`
+    - [ ] Create the `KafkaLogSink`
+- [ ] Plugin `data-platform`
+    - [ ] Add Products, Subscriptions, Maintenance and Tenants documents
+    - [ ] Add a `ProductBuilder` trait to create a product with its associated workflows, tasks, etc
+    - [ ] Create a `WorkaholicProductBuilder` that can build a product into Works + Tasks + Crons
+    - [ ] Create a `AirflowProductBuilder` that can build a product into Airflow DAGs + Operators + Schedules
+    - [ ] Create a `ArgoProductBuilder` that can build a product into Argo Workflows + Templates + CronWorkflows
+    - [ ] UI: Add a Product view that shows the list of products, their associated workflows, tasks, etc
+    - [ ] UI: Add a Product builder view that allows to create products using the `WorkaholicProductBuilder` and `AirflowProductBuilder`
+- [ ] Better UI
+    - [ ] TODO

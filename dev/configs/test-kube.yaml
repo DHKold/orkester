@@ -1,0 +1,131 @@
+# ── test-kube.yaml ─────────────────────────────────────────────────────────────
+#
+# Two-step Kubernetes workflow:
+#   step1 — Python script that prints and outputs a loop count
+#   step2 — Python script that loops that many times
+#
+# Prerequisites:
+#   * A running Kubernetes cluster accessible via kubectl
+#   * Python 3 available in the `python:3.11-slim` image
+#
+# Run it with:
+#   curl -X POST http://localhost:8080/v1/workflow/trigger \
+#        -H 'Content-Type: application/json' \
+#        -d '{"workRef":"testing/test-kube","inputs":{"loop_count":"5"}}'
+
+# ── Task: kube-generate-count ──────────────────────────────────────────────────
+kind: workaholic/Task:1.0
+name: kube-generate-count
+version: "1.0"
+metadata:
+  namespace: testing
+  description: "Kubernetes Job that prints and outputs a loop count value."
+  tags: ["test", "kubernetes", "python"]
+spec:
+  inputs:
+    - name: loop_count
+      description: "How many iterations the downstream step should perform."
+      type: integer
+      required: true
+      default:
+        value: "3"
+  outputs:
+    - name: count
+      description: "The count value forwarded to the next step."
+      type: string
+  execution:
+    kind: workaholic/KubernetesTaskRunner:1.0
+    profile: ""
+    config:
+      image: "python:3.11-slim"
+      namespace: "default"
+      poll_secs: 5
+      timeout_secs: 300
+      command: ["python", "-c"]
+      args:
+        - |
+          import os, sys
+          count = os.environ.get('loop_count', '3')
+          print(f'Generating loop count: {count}')
+          print(count)  # This will be captured as the task output 'count'
+          sys.stdout.flush()
+---
+# ── Task: kube-loop ────────────────────────────────────────────────────────────
+kind: workaholic/Task:1.0
+name: kube-loop
+version: "1.0"
+metadata:
+  namespace: testing
+  description: "Kubernetes Job that runs a Python loop a configurable number of times."
+  tags: ["test", "kubernetes", "python"]
+spec:
+  inputs:
+    - name: count
+      description: "Number of iterations."
+      type: integer
+      required: true
+  outputs:
+    - name: message
+      description: "Completion message."
+      type: string
+  execution:
+    kind: workaholic/KubernetesTaskRunner:1.0
+    profile: ""
+    config:
+      image: "python:3.11-slim"
+      namespace: "default"
+      poll_secs: 5
+      timeout_secs: 300
+      command: ["python", "-c"]
+      args:
+        - |
+          import os, time, sys
+          count = int(os.environ.get('count', '3'))
+          print(f'Starting loop with count={count}')
+          for i in range(1, count + 1):
+              print(f'  Iteration {i} of {count}')
+              sys.stdout.flush()
+              time.sleep(0.1)
+          print(f'Loop complete after {count} iterations.')
+---
+# ── Work: test-kube ────────────────────────────────────────────────────────────
+kind: workaholic/Work:1.0
+name: test-kube
+version: "1.0"
+metadata:
+  namespace: testing
+  description: "Two-step Kubernetes workflow validating KubernetesTaskRunner and DAG execution."
+  tags: ["test", "kubernetes", "python"]
+spec:
+  inputs:
+    - name: loop_count
+      description: "How many times the loop step should iterate."
+      type: integer
+      required: false
+      default:
+        value: "3"
+  steps:
+    - name: generate
+      description: "Run the Python count-generator job in Kubernetes."
+      taskRef: kube-generate-count:1.0
+      inputMapping:
+        - name: loop_count
+          from:
+            uri: work://inputs?loop_count
+      outputMapping:
+        - name: count
+          to:
+            variable: generated_count
+
+    - name: loop
+      description: "Run the Python loop job in Kubernetes using the generated count."
+      taskRef: kube-loop:1.0
+      dependsOn: ["generate"]
+      inputMapping:
+        - name: count
+          from:
+            uri: work://steps/generate/outputs?count
+      outputMapping:
+        - name: message
+          to:
+            variable: loop_message

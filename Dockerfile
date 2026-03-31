@@ -32,9 +32,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         -p orkester-host \
         -p orkester-plugin-sample \
         -p orkester-plugin-metrics \
+        -p orkester-plugin-logging \
  && cp target/release/orkester                        /usr/local/bin/orkester \
  && cp target/release/liborkester_plugin_sample.so    /tmp/ \
- && cp target/release/liborkester_plugin_metrics.so   /tmp/
+ && cp target/release/liborkester_plugin_metrics.so   /tmp/ \
+ && cp target/release/liborkester_plugin_logging.so   /tmp/
 
 # ── workaholic workspace: workaholic plugin ────────────────────────────────────
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -50,6 +52,7 @@ RUN echo 'orkester:x:10001:10001:Orkester:/orkester:/sbin/nologin' > /etc/orkest
  && mkdir -p /build/rootfs/orkester/plugins /build/rootfs/orkester/data \
  && cp /tmp/liborkester_plugin_sample.so     /build/rootfs/orkester/plugins/ \
  && cp /tmp/liborkester_plugin_metrics.so    /build/rootfs/orkester/plugins/ \
+ && cp /tmp/liborkester_plugin_logging.so    /build/rootfs/orkester/plugins/ \
  && cp /tmp/liborkester_plugin_workaholic.so /build/rootfs/orkester/plugins/ \
  && chmod 755 /build/rootfs/orkester/plugins /build/rootfs/orkester/data \
  && chmod 644 /build/rootfs/orkester/plugins/*.so
