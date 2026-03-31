@@ -24,7 +24,7 @@ WORKDIR /build
 
 COPY rust/ .
 
-# ── orkester workspace: host binary + sample + metrics plugins ─────────────────
+# ── orkester workspace: host binary + plugins ────────
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/orkester/target \
@@ -33,9 +33,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         -p orkester-host \
         -p orkester-plugin-sample \
         -p orkester-plugin-metrics \
- && cp target/release/orkester                        /usr/local/bin/orkester \
- && cp target/release/liborkester_plugin_sample.so    /tmp/ \
- && cp target/release/liborkester_plugin_metrics.so   /tmp/
+        -p orkester-plugin-logging \
+ && cp target/release/orkester                         /usr/local/bin/orkester \
+ && cp target/release/liborkester_plugin_sample.so     /tmp/ \
+ && cp target/release/liborkester_plugin_metrics.so    /tmp/ \
+ && cp target/release/liborkester_plugin_logging.so    /tmp/
 
 # ── workaholic workspace: workaholic plugin ────────────────────────────────────
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -68,18 +70,16 @@ RUN apt-get update \
 # Orkester binary
 COPY --from=builder /usr/local/bin/orkester /usr/local/bin/orkester
 
-# Plugins (dev config expects them at /orkester/bin/)
-RUN mkdir -p /orkester/bin
-COPY --from=builder /tmp/liborkester_plugin_sample.so     /orkester/bin/
-COPY --from=builder /tmp/liborkester_plugin_metrics.so    /orkester/bin/
-COPY --from=builder /tmp/liborkester_plugin_workaholic.so /orkester/bin/
+# Plugins directory (matches Helm chart config: /orkester/plugins/)
+RUN mkdir -p /orkester/plugins /orkester/samples /orkester/catalog /orkester/data
+COPY --from=builder /tmp/liborkester_plugin_sample.so     /orkester/plugins/
+COPY --from=builder /tmp/liborkester_plugin_metrics.so    /orkester/plugins/
+COPY --from=builder /tmp/liborkester_plugin_logging.so    /orkester/plugins/
+COPY --from=builder /tmp/liborkester_plugin_workaholic.so /orkester/plugins/
 
-# Embedded configs and default workaholic config
-COPY bin/configs/        /orkester/bin/configs/
-COPY bin/workaholic.yaml /orkester/bin/workaholic.yaml
-COPY bin/workaholic.yaml /orkester/config.yaml
-
-# UI — served at /ui/ by the rest-server static_folders config
+# Copy example configs and UI assets.
+COPY bin/configs/        /orkester/catalog/
+COPY bin/workaholic.yaml /orkester/samples/workaholic.yaml
 COPY ui/ /orkester/ui/
 
 # Writable data directory expected by the default config.
@@ -87,8 +87,8 @@ COPY ui/ /orkester/ui/
 # then chown all writable paths so the process can create subdirectories.
 RUN groupadd --gid 10001 orkester \
  && useradd  --uid 10001 --gid 10001 --no-create-home --shell /sbin/nologin orkester \
- && mkdir -p /orkester/bin/data \
- && chown -R 10001:10001 /orkester/bin/data
+ && mkdir -p /orkester/data /orkester/logs \
+ && chown -R 10001:10001 /orkester/data /orkester/logs
 
 USER orkester
 WORKDIR /orkester

@@ -30,20 +30,20 @@ impl HubBuilder {
     /// Returns detailed error messages that identify the problematic rule,
     /// filter kind, or target kind by name.
     pub fn validate(&self) -> Result<(), HubError> {
-        for (name, rule) in &self.config.routes {
+        for rule in &self.config.routes {
             for f in &rule.filters {
                 filter::build(f).map(drop).map_err(|e| {
                     HubError::InvalidConfig(format!(
-                        "route '{name}' has invalid filter kind '{}': {e}",
-                        f.kind
+                        "route '{}' has invalid filter kind '{}': {e}",
+                        rule.name, f.kind
                     ))
                 })?;
             }
             for t in &rule.targets {
                 dispatcher::validate(t).map_err(|e| {
                     HubError::InvalidConfig(format!(
-                        "route '{name}' has invalid target kind '{}': {e}",
-                        t.kind
+                        "route '{}' has invalid target kind '{}': {e}",
+                        rule.name, t.kind
                     ))
                 })?;
             }
@@ -52,7 +52,7 @@ impl HubBuilder {
     }
 
     pub fn build_rules(self) -> Vec<RouteRule> {
-        self.config.routes.into_iter().map(|(name, rule_cfg)| {
+        self.config.routes.into_iter().map(|rule_cfg| {
             let filters = rule_cfg
                 .filters
                 .into_iter()
@@ -65,7 +65,7 @@ impl HubBuilder {
                 .map(|t| dispatcher::build(&t, self.registry.clone()).expect("validated above"))
                 .collect();
 
-            RouteRule { name, filters, dispatchers }
+            RouteRule { name: rule_cfg.name, filters, dispatchers }
         }).collect()
     }
 

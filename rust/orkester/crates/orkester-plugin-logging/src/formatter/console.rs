@@ -7,7 +7,7 @@ pub struct ConsoleLogFormatter;
 
 impl ConsoleLogFormatter {
     fn format_timestamp(&self, timestamp_ms: u64) -> String {
-        let dt: DateTime<Utc> = DateTime::from_timestamp(timestamp_ms as i64, 0).expect("Invalid timestamp");
+        let dt: DateTime<Utc> = DateTime::from_timestamp((timestamp_ms / 1000) as i64, 0).expect("Invalid timestamp");
         dt.format("%Y-%m-%d %H:%M:%S%.3f").to_string()
     }
 }

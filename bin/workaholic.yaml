@@ -204,7 +204,7 @@ hub:
   # Route rules are a map keyed by name, evaluated in insertion order.
   routes:
     # Host requests (e.g. plugin/registry management, catalog queries) go to the workflow server.
-    host-route:
+    - name: host-route
       filters:
         - kind: match
           config:
@@ -218,7 +218,7 @@ hub:
               - name: host-server
 
     # Workflow server actions go to the workflow server.
-    workflow-route:
+    - name: workflow-route
       filters:
         - kind: match
           config:
@@ -232,7 +232,7 @@ hub:
               - name: workflow-server
 
     # Catalog-related actions go to the catalog server.
-    catalog-route:
+    - name: catalog-route
       filters:
         - kind: match
           config:
@@ -246,7 +246,7 @@ hub:
               - name: catalog-server
 
     # Document loader events go to the catalog server for processing.
-    document-loader-events-route:
+    - name: document-loader-events-route
       filters:
         - kind: match
           config:
@@ -260,7 +260,7 @@ hub:
               - name: catalog-server
 
     # Local filesystem loader actions go to the catalog loader.
-    local-fs-loader-route:
+    - name: local-fs-loader-route
       filters:
         - kind: match
           config:
@@ -273,7 +273,7 @@ hub:
             targets:
               - name: catalog-loader
 
-    metrics-route:
+    - name: metrics-route
       filters:
         - kind: match
           config: { field: kind, value: "^metrics/", mode: regex }
@@ -283,14 +283,14 @@ hub:
             targets:
               - name: metrics-server
 
-    route-logs:
+    - name: route-logs
       filters:
         - kind: match
           config: { field: kind, mode: regex, value: "^log/" }
       targets:
         - kind: drop
 
-    drop-unhandled:
+    - name: drop-unhandled
       filters:
         - kind: all
       targets:

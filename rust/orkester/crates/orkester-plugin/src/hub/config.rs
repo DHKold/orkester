@@ -64,6 +64,8 @@ pub struct TargetConfig {
 /// A single route rule (filters + targets).  The rule name is the map key.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RouteRuleConfig {
+    /// Unique name for this rule (used in logging, metrics, etc.).
+    pub name: String,
     /// A message matches if ANY filter returns true.
     pub filters: Vec<FilterConfig>,
     /// On match, the message is sent to ALL targets.
@@ -76,15 +78,15 @@ pub struct RouteRuleConfig {
 pub struct HubConfig {
     #[serde(default)]
     pub queue: QueueConfig,
-    /// Route rules keyed by name, evaluated in insertion order.
+    /// Route rules, evaluated in insertion order.
     ///
     /// YAML format:
     /// ```yaml
     /// routes:
-    ///   route-logs:
+    ///   - name: route-logs
     ///     filters: [ ... ]
     ///     targets: [ ... ]
     /// ```
     #[serde(default)]
-    pub routes: IndexMap<String, RouteRuleConfig>,
+    pub routes: Vec<RouteRuleConfig>,
 }
