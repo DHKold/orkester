@@ -20,6 +20,7 @@ pub fn build_formatter(cfg: Option<&FormatterConfig>) -> Box<dyn LogFormatter> {
     match kind {
         "logging/JsonLogFormatter:1.0"    => Box::new(JsonLogFormatter),
         "logging/YamlLogFormatter:1.0"    => Box::new(YamlLogFormatter),
+        "logging/ConsoleLogFormatter:1.0" => Box::new(ConsoleLogFormatter),
         _                                 => Box::new(ConsoleLogFormatter),
     }
 }
