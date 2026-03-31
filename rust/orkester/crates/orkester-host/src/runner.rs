@@ -172,8 +172,14 @@ pub fn run(cfg: HostConfig) -> Result<()> {
     }
 
     // 3.5. Register the internal host server for introspection and plugin management.
+    // IMPORTANT: `to_abi()` moves the value into an AbiComponent whose `context` is a
+    // heap-allocated dispatch table.  The AbiComponent struct itself must be kept alive
+    // for the entire duration of `run()` — binding it here ensures the raw pointer stored
+    // in the registry is never dangling.  Without this, dispatching any request to
+    // `host-server` (e.g. GET /v1/health) dereferences freed stack memory → segfault.
     let host_server = HostServer::new(catalog, info_registry.clone());
-    register_component(&registry, &info_registry, "host-server", &mut host_server.to_abi(), "orkester/HostServer:1.0".to_string());
+    let mut host_server_abi = host_server.to_abi();
+    register_component(&registry, &info_registry, "host-server", &mut host_server_abi, "orkester/HostServer:1.0".to_string());
 
     // 4. Start servers based on their `start` confign (list of actions)
     for server in &cfg.servers {
