@@ -1,6 +1,6 @@
 plugins:
   directories:
-    - path: /orkester/bin/
+    - path: /orkester/plugins/
 
 servers:
   # ── Workflow catalog ────────────────────────────────────────────────────────
@@ -18,7 +18,7 @@ servers:
     start:
       - kind: workaholic/DocumentLoader/CreateEntry
         config:
-          path: /orkester/bin/configs/
+          path: /orkester/catalog/
           recursive: true
           watch: true
       - kind: workaholic/DocumentLoader/Start
