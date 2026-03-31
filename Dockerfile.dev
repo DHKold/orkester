@@ -71,7 +71,8 @@ RUN apt-get update \
 COPY --from=builder /usr/local/bin/orkester /usr/local/bin/orkester
 
 # Plugins directory (matches Helm chart config: /orkester/plugins/)
-RUN mkdir -p /orkester/plugins /orkester/samples /orkester/catalog /orkester/data
+RUN mkdir -p /orkester/plugins /orkester/samples /orkester/catalog \
+ && chmod 755 /orkester/plugins /orkester/samples /orkester/catalog
 COPY --from=builder /tmp/liborkester_plugin_sample.so     /orkester/plugins/
 COPY --from=builder /tmp/liborkester_plugin_metrics.so    /orkester/plugins/
 COPY --from=builder /tmp/liborkester_plugin_logging.so    /orkester/plugins/
@@ -91,6 +92,10 @@ RUN groupadd --gid 10001 orkester \
  && chown -R 10001:10001 /orkester/data /orkester/logs
 
 USER orkester
+
+RUN mkdir -p /orkester/data /orkester/logs \
+ && chmod 700 /orkester/data /orkester/logs
+
 WORKDIR /orkester
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/orkester"]

@@ -32,14 +32,14 @@ image:
   repository: tests/infra/orkester
 
   # -- Image tag. Defaults to the chart's appVersion when left empty.
-  tag: ""
+  tag: "dev"
 
   # -- Image digest. When set, takes precedence over `tag` for immutable deployments.
   # Example: sha256:abc123...
   digest: ""
 
   # -- Image pull policy. Use `Always` in CI or when using a mutable tag like `latest`.
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 # -- List of image pull secrets for private registries.
 # Example:
@@ -393,7 +393,7 @@ networkPolicy:
 # Set `enabled: false` only when using an external persistence backend.
 
 persistence:
-  enabled: true
+  enabled: false
 
   # -- StorageClass for the PVC. Leave empty to use the cluster default.
   # Set to "-" to request a PVC with no storageClassName (i.e. a pre-provisioned PV).
@@ -420,39 +420,16 @@ persistence:
 # Refer to the Orkester documentation for the full configuration reference.
 
 config:
-
-  # ---------------------------------------------------------------------------
-  # Plugins
-  # ---------------------------------------------------------------------------
-  # The production image ships sample, metrics and workaholic plugins here.
   plugins:
     directories:
       - path: /orkester/plugins
 
-  # ---------------------------------------------------------------------------
-  # Servers
-  # ---------------------------------------------------------------------------
   servers:
-
-    # Must come first so other servers can emit logs during their startup.
-    - name: log-server
-      kind: sample/LoggingServer:1.0
-      config:
-        formatter: { kind: text }
-        consumers:
-          - kind: console
-          - kind: file
-            path: /orkester/data/orkester.log
-
-    # Catalog: loads workflow definitions from the data volume.
-    # Pre-populate /orkester/data/configs/ (via initContainer or PVC) with
-    # groups.yaml, namespaces.yaml, profiles.yaml, tasks.yaml, works.yaml.
+    # ── Workflow catalog ────────────────────────────────────────────────────────
     - name: catalog-server
       kind: workaholic/CatalogServer:1.0
-      config:
-        load_on_startup: true
-        loader:
-          path: /orkester/data/configs/
+      config: {}
+
     - name: catalog-loader
       kind: workaholic/LocalFsLoader:1.0
       config:
@@ -463,18 +440,18 @@ config:
       start:
         - kind: workaholic/DocumentLoader/CreateEntry
           config:
-            path: /orkester/data/configs/
+            path: /orkester/catalog/
             recursive: true
             watch: true
         - kind: workaholic/DocumentLoader/Start
           config: {}
 
-    # Workflow execution engine.
+    # ── Workflow execution engine ───────────────────────────────────────────────
     - name: workflow-server
       kind: workaholic/WorkflowServer:1.0
       config:
         name: workflow-server
-        namespace: default
+        namespace: testing
         catalog_ref: catalog-server
         task_permits_per_grant: 4
         work_runner:
@@ -484,11 +461,7 @@ config:
             max_work_runs: 4
             max_task_runs: 16
 
-    # Health check endpoint (GET /v1/health → ping/Ping).
-    - name: ping-server
-      kind: sample/PingServer:1.0
-
-    # In-process metrics store with full history for dashboard graphs.
+    # ── Metrics ─────────────────────────────────────────────────────────────────
     - name: metrics-server
       kind: metrics/MetricsServer:1.0
       config:
@@ -496,29 +469,53 @@ config:
         retention_secs: 86400          # 24 hours
         max_granularity_per_minute: 12 # one point per 5 seconds
 
-    # HTTP gateway — must come last so all components are registered first.
+    # ── Logging (structured log records) ──────────────────────────────────────
+    - name: log-server
+      kind: logging/LoggingServer:1.0
+      config:
+        queue_capacity: 1024
+        antispam:
+          max_per_minute: 1000
+        sinks:
+          - kind: logging/ConsoleLogSink:1.0
+            formatter:
+              kind: logging/ConsoleLogFormatter:1.0
+          - kind: logging/LocalFsLogSink:1.0
+            formatter:
+              kind: logging/JsonLogFormatter:1.0
+            config:
+              path: /orkester/logs/orkester.log
+              max_size_mb: 50
+              max_files: 5
+
+    # ── HTTP gateway ─────────────────────────────────────────────────────────────
     - name: rest-server
       kind: sample/RestServer:1.0
       config:
         bind: "0.0.0.0:8080"
+
+        # ── Static file serving ───────────────────────────────────────────────
+        # The Orkester UI is served at /ui/ from the container filesystem.
+        # Missing files fall back to index.html for client-side SPA routing.
         static_folders:
           - url_path: /ui
             dir: /orkester/ui
+
         routes:
-          # Health check
-          - path:   /v1/health
-            method: GET
-            action: orkester/HostServer/HealthCheck:1.0
-          # Host introspection
+          # Host Server
           - path:   /v1/host/plugins
             method: GET
             action: orkester/HostServer/Catalog/ListPlugins:1.0
           - path:   /v1/host/components
             method: GET
             action: orkester/HostServer/Catalog/ListComponents:1.0
-          - path:   /v1/host/registry
+          - path:   /v1/host/registry/components
             method: GET
             action: orkester/HostServer/Registry/List:1.0
+          - path:   /v1/health
+            method: GET
+            action: orkester/HostServer/HealthCheck:1.0
+
           # Metrics
           - path:   /v1/metrics/snapshot
             method: GET
@@ -529,7 +526,8 @@ config:
           - path:   /v1/metrics/record
             method: POST
             action: metrics/Record
-          # Catalog : Namespaces / Works / Tasks
+
+          # Catalog : Namespaces / Works / Tasks (used by the UI)
           - path:   /v1/namespaces
             method: GET
             action: workaholic/CatalogServer/ListNamespaces
@@ -539,6 +537,34 @@ config:
           - path:   /v1/namespaces/{ns}/tasks
             method: GET
             action: workaholic/CatalogServer/ListTasks
+
+          # Loader : Metrics
+          - path:   /v1/loader/metrics
+            method: GET
+            action: workaholic/DocumentLoader/GetMetrics
+
+          # Loader : Documents
+          - path:   /v1/loader/documents
+            method: GET
+            action: workaholic/DocumentLoader/SearchDocuments
+          
+          # Loader : Entries
+          - path:   /v1/loader/entries
+            method: POST
+            action: workaholic/DocumentLoader/CreateEntry
+          - path:   /v1/loader/entries/{id}
+            method: GET
+            action: workaholic/DocumentLoader/RetrieveEntry
+          - path:   /v1/loader/entries/{id}
+            method: PUT
+            action: workaholic/DocumentLoader/UpdateEntry
+          - path:   /v1/loader/entries/{id}
+            method: DELETE
+            action: workaholic/DocumentLoader/DeleteEntry
+          - path:   /v1/loader/entries
+            method: GET
+            action: workaholic/DocumentLoader/SearchEntries
+
           # Catalog : Resources
           - path:   /v1/catalog/resources
             method: POST
@@ -555,32 +581,13 @@ config:
           - path:   /v1/catalog/resources
             method: GET
             action: workaholic/CatalogServer/SearchResources
-          # Loader
-          - path:   /v1/loader/metrics
-            method: GET
-            action: workaholic/DocumentLoader/GetMetrics
-          - path:   /v1/loader/documents
-            method: GET
-            action: workaholic/DocumentLoader/SearchDocuments
-          - path:   /v1/loader/entries
-            method: POST
-            action: workaholic/DocumentLoader/CreateEntry
-          - path:   /v1/loader/entries/{id}
-            method: GET
-            action: workaholic/DocumentLoader/RetrieveEntry
-          - path:   /v1/loader/entries/{id}
-            method: PUT
-            action: workaholic/DocumentLoader/UpdateEntry
-          - path:   /v1/loader/entries/{id}
-            method: DELETE
-            action: workaholic/DocumentLoader/DeleteEntry
-          - path:   /v1/loader/entries
-            method: GET
-            action: workaholic/DocumentLoader/SearchEntries
-          # Workflow
+
+          # Workflow : Manual trigger
           - path:   /v1/workflow/trigger
             method: POST
             action: workaholic/WorkflowServer/Trigger
+
+          # Workflow : WorkRun queries
           - path:   /v1/workflow/work-runs
             method: GET
             action: workaholic/WorkflowServer/ListWorkRuns
@@ -590,12 +597,16 @@ config:
           - path:   /v1/workflow/work-runs/{name}/cancel
             method: POST
             action: workaholic/WorkflowServer/CancelWorkRun
+
+          # Workflow : TaskRun queries
           - path:   /v1/workflow/task-runs
             method: GET
             action: workaholic/WorkflowServer/ListTaskRuns
           - path:   /v1/workflow/task-runs/{name}
             method: GET
             action: workaholic/WorkflowServer/GetTaskRun
+
+          # Workflow : Cron management
           - path:   /v1/workflow/crons
             method: GET
             action: workaholic/WorkflowServer/ListCrons
@@ -606,16 +617,30 @@ config:
             method: DELETE
             action: workaholic/WorkflowServer/UnregisterCron
 
-  # ---------------------------------------------------------------------------
-  # Hub
-  # ---------------------------------------------------------------------------
   hub:
     queue:
       waiting_capacity: 4096
       dispatch_capacity: 256
       backpressure: reject
+
+    # Route rules are a map keyed by name, evaluated in insertion order.
     routes:
-      workflow-route:
+      # Host requests (e.g. plugin/registry management, catalog queries) go to the workflow server.
+      - name: host-route
+        filters:
+          - kind: match
+            config:
+              field: kind
+              value: "orkester/HostServer/"
+              mode: regex
+        targets:
+          - kind: components
+            config:
+              targets:
+                - name: host-server
+
+      # Workflow server actions go to the workflow server.
+      - name: workflow-route
         filters:
           - kind: match
             config:
@@ -627,7 +652,9 @@ config:
             config:
               targets:
                 - name: workflow-server
-      catalog-route:
+
+      # Catalog-related actions go to the catalog server.
+      - name: catalog-route
         filters:
           - kind: match
             config:
@@ -639,7 +666,9 @@ config:
             config:
               targets:
                 - name: catalog-server
-      document-loader-events-route:
+
+      # Document loader events go to the catalog server for processing.
+      - name: document-loader-events-route
         filters:
           - kind: match
             config:
@@ -651,7 +680,9 @@ config:
             config:
               targets:
                 - name: catalog-server
-      local-fs-loader-route:
+
+      # Local filesystem loader actions go to the catalog loader.
+      - name: local-fs-loader-route
         filters:
           - kind: match
             config:
@@ -663,7 +694,8 @@ config:
             config:
               targets:
                 - name: catalog-loader
-      metrics-route:
+
+      - name: metrics-route
         filters:
           - kind: match
             config: { field: kind, value: "^metrics/", mode: regex }
@@ -672,26 +704,17 @@ config:
             config:
               targets:
                 - name: metrics-server
-      host-route:
-        filters:
-          - kind: match
-            config: { field: kind, value: "^orkester/HostServer/", mode: regex }
-        targets:
-          - kind: components
-            config:
-              targets:
-                - name: host-server
-      route-logs:
+
+      - name: route-logs
         filters:
           - kind: match
             config: { field: kind, mode: regex, value: "^log/" }
         targets:
-          - kind: components
-            config:
-              targets:
-                - name: log-server
-      drop-unhandled:
+          - kind: drop
+
+      - name: drop-unhandled
         filters:
           - kind: all
         targets:
           - kind: drop
+

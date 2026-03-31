@@ -198,7 +198,7 @@
       "properties": {
         "logging": { "type": "object" },
         "plugins": { "type": "object" },
-        "servers": { "type": "object" }
+        "servers": { "type": "array" }
       }
     }
   }
