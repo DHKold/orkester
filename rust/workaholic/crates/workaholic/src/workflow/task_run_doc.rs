@@ -36,7 +36,7 @@ pub struct TaskRunSpec {
     pub task_runner_ref: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TaskRunStatus {
     pub state: TaskRunState,
     #[serde(rename = "createdAt", default, skip_serializing_if = "Option::is_none")]

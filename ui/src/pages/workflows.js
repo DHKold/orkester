@@ -17,10 +17,10 @@ export async function renderWorkflows({ ns, query = {} }) {
   wfItems = []
 
   setApp(`
-    ${breadcrumb([{label:'Namespaces',href:'#/namespaces'},{label:ns,href:`#/namespaces/${encodeURIComponent(ns)}`},{label:'Workflows'}])}
+    ${breadcrumb([{label:'Namespaces',href:'#/namespaces'},{label:ns,href:`#/namespaces/${encodeURIComponent(ns)}`},{label:'Work Runs'}])}
     <div class="row-between" style="margin-bottom:1rem">
       <div class="row" style="gap:0.75rem;align-items:center">
-        <h3 style="margin:0">Workflows <span class="muted" id="wf-count" style="font-size:0.85rem"></span></h3>
+        <h3 style="margin:0">Work Runs <span class="muted" id="wf-count" style="font-size:0.85rem"></span></h3>
         <input type="search" id="wf-filter" placeholder="Filter…" class="list-filter" />
       </div>
       <div class="row" style="gap:0.75rem;align-items:center">
@@ -86,8 +86,8 @@ async function loadList(ns, preWork = null, openPreModal = false) {
 }
 
 function workRunState(wr) { return wr.status?.state ?? 'pending' }
-function workRunRef(wr) { return wr.spec?.work_ref ?? '—' }
-function workRunCreatedAt(wr) { return wr.status?.created_at ?? '' }
+function workRunRef(wr)   { return wr.spec?.workRef ?? '—' }
+function workRunCreatedAt(wr) { return wr.status?.createdAt ?? '' }
 
 function renderWfList(ns) {
   const el = document.getElementById('wf-list')
@@ -108,11 +108,11 @@ function renderWfList(ns) {
   if (countEl) countEl.textContent = total < wfItems.length ? `(${total} of ${wfItems.length})` : `(${total})`
 
   if (wfItems.length === 0) {
-    el.innerHTML = '<div class="empty-state"><p>No workflows yet. Trigger one to get started.</p></div>'
+    el.innerHTML = '<div class="empty-state"><p>No work runs yet. Trigger one to get started.</p></div>'
     return
   }
   if (filtered.length === 0) {
-    el.innerHTML = '<div class="empty-state"><p>No workflows match the current filter.</p></div>'
+    el.innerHTML = '<div class="empty-state"><p>No work runs match the current filter.</p></div>'
     return
   }
 
@@ -125,18 +125,23 @@ function renderWfList(ns) {
     const enc    = encodeURIComponent(wr.name)
     const status = workRunState(wr)
     const st     = wr.status ?? {}
+    const trigger = wr.spec?.trigger
     const dur    = TERMINAL.has(status)
-      ? fmtDuration(st.started_at, st.finished_at)
-      : st.started_at ? fmtDuration(st.started_at) + ' ⏱' : '—'
-    const summary = st.summary ?? {}
-    const progress = summary.total_steps > 0
-      ? `${summary.succeeded_steps ?? 0}/${summary.total_steps}`
+      ? fmtDuration(st.startedAt, st.finishedAt)
+      : st.startedAt ? fmtDuration(st.startedAt) + ' ⏱' : '—'
+    const summary  = st.summary ?? {}
+    const progress = summary.totalSteps > 0
+      ? `${summary.succeededSteps ?? 0}/${summary.totalSteps}`
       : '—'
+    const triggerBadge   = trigger?.type ? `<span class="badge">${esc(trigger.type)}</span> ` : ''
+    const triggerTime    = trigger?.at ? `<span class="muted" style="font-size:0.82em">${fmtDateShort(trigger.at)}</span>` : ''
+    const triggerIdent   = trigger?.identity ? `<br><span class="muted" style="font-size:0.8em">${esc(trigger.identity)}</span>` : ''
     return `
       <tr data-status="${esc(status)}">
-        <td><a href="#/namespaces/${nsEnc}/workflows/${enc}"><code style="font-size:0.78em">${name.substring(0, 8)}…</code></a></td>
+        <td><a href="#/namespaces/${nsEnc}/workflows/${enc}"><code style="font-size:0.78em">${name}</code></a></td>
         <td><strong>${esc(workRunRef(wr))}</strong></td>
         <td>${badge(status)}</td>
+        <td>${triggerBadge}${triggerTime}${triggerIdent}</td>
         <td class="muted">${fmtDateShort(workRunCreatedAt(wr))}</td>
         <td class="muted">${dur}</td>
         <td class="muted">${progress}</td>
@@ -153,9 +158,10 @@ function renderWfList(ns) {
   el.innerHTML = `
     <figure><table>
       <thead><tr>
-        <th>ID</th>
+        <th>Name</th>
         <th class="sortable${activeCls('work')}" data-sort="work">Work Ref<span class="sort-ind">${sortInd('work')}</span></th>
         <th class="sortable${activeCls('status')}" data-sort="status">Status<span class="sort-ind">${sortInd('status')}</span></th>
+        <th>Trigger</th>
         <th class="sortable${activeCls('created_at')}" data-sort="created_at">Created<span class="sort-ind">${sortInd('created_at')}</span></th>
         <th>Duration</th><th>Steps</th><th></th>
       </tr></thead>

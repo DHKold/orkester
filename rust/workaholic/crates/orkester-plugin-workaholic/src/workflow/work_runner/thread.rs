@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use uuid::Uuid;
 use workaholic::{
@@ -287,6 +288,7 @@ impl WorkRun for ThreadWorkRun {
                 }
                 if matches!(new_state, WorkRunState::Running) {
                     state.active_task_run_refs.insert(step_name.to_string(), task_run.name.clone());
+                    *state.attempts.entry(step_name.to_string()).or_insert(0) += 1;
                 } else {
                     state.active_task_run_refs.remove(step_name);
                 }
@@ -303,6 +305,8 @@ impl WorkRun for ThreadWorkRun {
             // When a step succeeds, newly unblocked steps may become schedulable.
             if new_state == WorkRunState::Succeeded {
                 self.emit_ready_steps();
+            } else if new_state == WorkRunState::Failed && self.retry_step(step_name) {
+                return;
             }
             // Check whether the entire run has completed.
             self.check_completion();
@@ -341,6 +345,31 @@ impl ThreadWorkRun {
                 state: WorkRunState::Pending,
             });
         }
+    }
+
+    /// If the step has remaining attempts, reset it to Pending and schedule a delayed retry.
+    /// Returns `true` when a retry is scheduled (caller should skip `check_completion`).
+    fn retry_step(&self, step_name: &str) -> bool {
+        let step_cfg = self.request.spec.steps.iter().find(|s| s.name == step_name);
+        let (max_attempts, delay_secs) = match step_cfg {
+            Some(s) => (s.max_attempts, s.retry_delay_secs),
+            None    => return false,
+        };
+        let attempts = self.state.lock().unwrap().attempts.get(step_name).copied().unwrap_or(0);
+        if attempts >= max_attempts {
+            return false;
+        }
+        {
+            let mut state = self.state.lock().unwrap();
+            if let Some(ss) = state.steps.get_mut(step_name) { *ss = WorkRunState::Pending; }
+        }
+        let sender = self.sender.clone();
+        let step   = step_name.to_string();
+        std::thread::spawn(move || {
+            if delay_secs > 0 { std::thread::sleep(Duration::from_secs(delay_secs)); }
+            let _ = sender.send(WorkRunEvent::StepStateChanged { step_name: step, state: WorkRunState::Pending });
+        });
+        true
     }
 
     /// Check whether all steps have reached a terminal state and, if so,

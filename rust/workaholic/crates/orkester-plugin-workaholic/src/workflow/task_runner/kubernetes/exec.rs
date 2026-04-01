@@ -27,7 +27,14 @@ async fn execute(
     }
     state.lock().unwrap().job_name = Some(job_name.to_string());
     let outcome = wait_for_completion(&client, cfg, job_name, state).await;
-    let stdout  = fetch_logs(&client, &cfg.namespace, job_name).await;
+
+    // When the cancel path already initiated deletion via `spawn_cancel_deletion`,
+    // skip fetching logs and deleting again (the job may already be terminating).
+    if state.lock().unwrap().deletion_initiated {
+        return (outcome, String::new());
+    }
+
+    let stdout = fetch_logs(&client, &cfg.namespace, job_name).await;
     delete_job(&client, &cfg.namespace, job_name).await;
     (outcome, stdout)
 }

@@ -11,6 +11,12 @@ pub struct LocalFsPersistor {
     base_path: std::path::PathBuf,
 }
 
+impl LocalFsPersistor {
+    pub fn new(base_path: impl Into<std::path::PathBuf>) -> Self {
+        Self { base_path: base_path.into() }
+    }
+}
+
 impl DocumentPersistor for LocalFsPersistor {
     fn put(&self, key: &EntityKey, data: EntityValue) -> Result<(), PersistorError> {
         let path = self.base_path.join(key);
@@ -40,11 +46,13 @@ impl DocumentPersistor for LocalFsPersistor {
     fn list(&self, prefix: &str) -> Result<Vec<EntityKey>, PersistorError> {
         let dir_path = self.base_path.join(prefix);
         if !dir_path.exists() || !dir_path.is_dir() {
-            return Err(PersistorError::NotFound(prefix.to_string()));
+            return Ok(vec![]);
         }
         let entries = std::fs::read_dir(dir_path).map_err(|e| PersistorError::Internal(e.to_string()))?;
+        let prefix_clean = prefix.trim_end_matches('/');
         Ok(entries
             .filter_map(|e| e.ok().and_then(|e| e.file_name().into_string().ok()))
+            .map(|f| format!("{}/{}", prefix_clean, f))
             .collect())
     }
 }

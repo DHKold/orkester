@@ -5,5 +5,6 @@ mod outputs;
 mod run;
 mod runner;
 mod state;
+mod volumes;
 
 pub use runner::KubernetesTaskRunner;

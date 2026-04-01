@@ -55,7 +55,15 @@ pub struct WorkStep {
     /// Output mappings: what to do with each task output.
     #[serde(rename = "outputMapping", default)]
     pub output_mapping: Vec<StepOutputMapping>,
+    /// Maximum number of attempts before the step is permanently failed (default: 1 = no retry).
+    #[serde(rename = "maxAttempts", default = "default_max_attempts")]
+    pub max_attempts: u32,
+    /// Delay in seconds between retry attempts (default: 0).
+    #[serde(rename = "retryDelaySecs", default)]
+    pub retry_delay_secs: u64,
 }
+
+fn default_max_attempts() -> u32 { 1 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StepInputMapping {

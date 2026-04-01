@@ -7,15 +7,13 @@ target/
 # (remove the next line if you want to ignore it)
 # Cargo.lock
 
-# ── Plugins (compiled .so/.dll/.dylib files) ──────────────────────────────────
-/dev/plugins/
+# ── Development artifacts ───────────────────────────────────────────────────────
+/dev/bin/
+/dev/catalog/
+/dev/logs/
 /dev/data/
-/dev/workspace/
 
 # ── IDE / Editor ──────────────────────────────────────────────────────────────
 .vscode/settings.json
 .idea/
 *.iml
-
-# ── Miscellaneous ───────────────────────────────────────────────────────────
-bin/

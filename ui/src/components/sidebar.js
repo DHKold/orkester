@@ -129,7 +129,7 @@ function renderSubNav(ns, path) {
   const nsEnc = encodeURIComponent(ns)
   const tabs = [
     { label: 'Catalog',   p: `/namespaces/${nsEnc}` },
-    { label: 'Workflows', p: `/namespaces/${nsEnc}/workflows` },
+    { label: 'Work Runs', p: `/namespaces/${nsEnc}/workflows` },
     { label: 'Crons',     p: `/namespaces/${nsEnc}/crons` },
   ]
 

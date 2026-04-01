@@ -138,10 +138,12 @@ fn resolve_steps(
             step, task, work_inputs, work_request_ref, work_runner_ref, work,
         );
         steps.push(WorkRunRequestStep {
-            name:                step.name.clone(),
-            description:         step.description.clone(),
-            depends_on:          step.depends_on.clone(),
+            name:                 step.name.clone(),
+            description:          step.description.clone(),
+            depends_on:           step.depends_on.clone(),
             task_run_request_ref: req_ref,
+            max_attempts:         step.max_attempts,
+            retry_delay_secs:     step.retry_delay_secs,
         });
         task_requests.push(req_doc);
     }

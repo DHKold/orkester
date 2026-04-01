@@ -33,6 +33,7 @@ servers:
       namespace: testing
       catalog_ref: catalog-server
       task_permits_per_grant: 4
+      persist_path: /orkester/dev/data/workflow/
       work_runner:
         kind: workaholic/ThreadWorkRunner:1.0
         config: {}
@@ -69,7 +70,7 @@ servers:
 
   # ── HTTP gateway ─────────────────────────────────────────────────────────────
   - name: rest-server
-    kind: sample/RestServer:1.0
+    kind: core/RestServer:1.0
     config:
       bind: "0.0.0.0:8080"
 

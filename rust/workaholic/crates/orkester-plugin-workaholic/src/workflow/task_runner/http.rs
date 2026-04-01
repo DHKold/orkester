@@ -10,8 +10,14 @@
 //! | Key             | Type   | Description                                        |
 //! |-----------------|--------|----------------------------------------------------|
 //! | `url`           | string | Base URL for the task endpoint (required).        |
-//! | `timeout_secs`  | u64    | Hard deadline for the entire run (default: 3600). |
-//! | `poll_secs`     | u64    | Polling interval in seconds (default: 5).         |
+//! | `timeout_secs`       | u64    | Hard deadline for the entire run (default: 3600).       |
+//! | `poll_secs`          | u64    | Polling interval in seconds (default: 5).               |
+//! | `max_retries`        | u64    | Retry count on 429/5xx or network errors (default: 3).  |
+//! | `retry_delay_secs`   | u64    | Delay between retries in seconds (default: 2).          |
+//! | `auth_type`          | string | `bearer` or `basic` (optional).                         |
+//! | `auth_token`         | string | Bearer token (required for `auth_type = bearer`).       |
+//! | `auth_user`          | string | Username (required for `auth_type = basic`).            |
+//! | `auth_password`      | string | Password (required for `auth_type = basic`).            |
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -26,6 +32,40 @@ use orkester_plugin::{log_error, log_warn};
 
 use super::traits::{TaskRun, TaskRunError, TaskRunEvent, TaskRunEventStream, TaskRunner, TaskRunnerError};
 use super::stream_adapter::CrossbeamStream;
+
+// ─── HttpRunConfig ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+struct HttpRunConfig {
+    url:              String,
+    timeout_secs:     u64,
+    poll_secs:        u64,
+    max_retries:      u32,
+    retry_delay_secs: u64,
+    auth_type:        Option<String>,
+    auth_token:       Option<String>,
+    auth_user:        Option<String>,
+    auth_password:    Option<String>,
+}
+
+impl HttpRunConfig {
+    fn from_config(cfg: &serde_json::Value) -> Result<Self, String> {
+        let url = cfg.get("url").and_then(|v| v.as_str())
+            .ok_or("missing 'url' in http runner config")?
+            .to_string();
+        Ok(Self {
+            url,
+            timeout_secs:     cfg.get("timeout_secs").and_then(|v| v.as_u64()).unwrap_or(3600),
+            poll_secs:        cfg.get("poll_secs").and_then(|v| v.as_u64()).unwrap_or(5),
+            max_retries:      cfg.get("max_retries").and_then(|v| v.as_u64()).unwrap_or(3) as u32,
+            retry_delay_secs: cfg.get("retry_delay_secs").and_then(|v| v.as_u64()).unwrap_or(2),
+            auth_type:        cfg.get("auth_type").and_then(|v| v.as_str()).map(String::from),
+            auth_token:       cfg.get("auth_token").and_then(|v| v.as_str()).map(String::from),
+            auth_user:        cfg.get("auth_user").and_then(|v| v.as_str()).map(String::from),
+            auth_password:    cfg.get("auth_password").and_then(|v| v.as_str()).map(String::from),
+        })
+    }
+}
 
 // ─── HttpTaskRunner ────────────────────────────────────────────────────────────
 
@@ -78,23 +118,10 @@ impl TaskRunner for HttpTaskRunner {
     }
 
     fn spawn(&self, request: TaskRunRequestDoc) -> Result<Box<dyn TaskRun>, TaskRunnerError> {
-        let url = request
-            .spec
-            .execution
-            .config
-            .get("url")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| TaskRunnerError::Other("missing 'url' in http runner config".into()))?
-            .to_string();
-        let timeout_secs = request
-            .spec.execution.config.get("timeout_secs")
-            .and_then(|v| v.as_u64()).unwrap_or(3600);
-        let poll_secs = request
-            .spec.execution.config.get("poll_secs")
-            .and_then(|v| v.as_u64()).unwrap_or(5);
-
+        let cfg = HttpRunConfig::from_config(&request.spec.execution.config)
+            .map_err(TaskRunnerError::Other)?;
         let run = HttpTaskRun::new(Uuid::new_v4().to_string(), self.namespace.clone(),
-            self.self_ref(), request, url, timeout_secs, poll_secs);
+            self.self_ref(), request, cfg);
         Ok(Box::new(run))
     }
 }
@@ -107,9 +134,7 @@ struct HttpTaskRun {
     namespace:        String,
     task_runner_ref:  String,
     request:          TaskRunRequestDoc,
-    url:              String,
-    timeout_secs:     u64,
-    poll_secs:        u64,
+    cfg:              HttpRunConfig,
     state:            Arc<Mutex<HttpTaskRunState>>,
     sender:           crossbeam_channel::Sender<TaskRunEvent>,
     receiver:         crossbeam_channel::Receiver<TaskRunEvent>,
@@ -127,14 +152,11 @@ impl HttpTaskRun {
         namespace:       String,
         task_runner_ref: String,
         request:         TaskRunRequestDoc,
-        url:             String,
-        timeout_secs:    u64,
-        poll_secs:       u64,
+        cfg:             HttpRunConfig,
     ) -> Self {
         let (tx, rx) = crossbeam_channel::unbounded();
         Self {
-            name, namespace, task_runner_ref, request,
-            url, timeout_secs, poll_secs,
+            name, namespace, task_runner_ref, request, cfg,
             state: Arc::new(Mutex::new(HttpTaskRunState {
                 run_state: TaskRunState::Pending, cancel_requested: false,
             })),
@@ -184,15 +206,13 @@ impl TaskRun for HttpTaskRun {
         }
         let _ = self.sender.send(TaskRunEvent::StateChanged(TaskRunState::Running));
 
-        let payload = build_input_payload(&self.request);
+        let payload  = build_input_payload(&self.request);
         let shared   = Arc::clone(&self.state);
         let sender   = self.sender.clone();
-        let url      = self.url.clone();
-        let timeout  = Duration::from_secs(self.timeout_secs);
-        let poll     = Duration::from_secs(self.poll_secs);
+        let cfg      = self.cfg.clone();
 
         std::thread::spawn(move || {
-            run_http_task(url, payload, timeout, poll, shared, sender);
+            run_http_task(cfg, payload, shared, sender);
         });
         Ok(())
     }
@@ -232,12 +252,10 @@ fn build_input_payload(request: &TaskRunRequestDoc) -> serde_json::Value {
     serde_json::Value::Object(map)
 }
 
-/// Synchronous HTTP execution loop running on a background thread.
+/// Entry point for the background HTTP task thread.
 fn run_http_task(
-    url:     String,
+    cfg:     HttpRunConfig,
     payload: serde_json::Value,
-    timeout: Duration,
-    poll:    Duration,
     state:   Arc<Mutex<HttpTaskRunState>>,
     sender:  crossbeam_channel::Sender<TaskRunEvent>,
 ) {
@@ -245,83 +263,114 @@ fn run_http_task(
         let _ = sender.send(TaskRunEvent::Finished);
         return;
     }
-    let job_id = match http_post_json(&url, &payload) {
+    let retry    = Duration::from_secs(cfg.retry_delay_secs);
+    let auth_hdr = build_auth_header(&cfg);
+    let job_id = match with_retry(cfg.max_retries, retry, || {
+        http_post_json(&cfg.url, &payload, auth_hdr.as_deref())
+    }) {
         Ok(id) => id,
         Err(e) => {
             log_error!("[http runner] POST failed: {}", e);
-            state.lock().unwrap().run_state = TaskRunState::Failed;
-            let _ = sender.send(TaskRunEvent::StateChanged(TaskRunState::Failed));
-            let _ = sender.send(TaskRunEvent::Finished);
+            finish_run(&state, &sender, TaskRunState::Failed);
             return;
         }
     };
+    let poll_url = format!("{}/{}", cfg.url.trim_end_matches('/'), job_id);
+    poll_for_completion(cfg, auth_hdr, poll_url, state, sender);
+}
 
-    let deadline = std::time::Instant::now() + timeout;
-    let poll_url = format!("{}/{}", url.trim_end_matches('/'), job_id);
-
+/// Poll `poll_url` until a terminal status is received or the deadline is reached.
+fn poll_for_completion(
+    cfg:      HttpRunConfig,
+    auth_hdr: Option<String>,
+    poll_url: String,
+    state:    Arc<Mutex<HttpTaskRunState>>,
+    sender:   crossbeam_channel::Sender<TaskRunEvent>,
+) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(cfg.timeout_secs);
+    let poll     = Duration::from_secs(cfg.poll_secs);
+    let retry    = Duration::from_secs(cfg.retry_delay_secs);
     loop {
         if state.lock().unwrap().cancel_requested {
             let _ = sender.send(TaskRunEvent::Finished);
             return;
         }
         if std::time::Instant::now() >= deadline {
-            log_warn!("[http runner] job '{}' timed out", job_id);
-            state.lock().unwrap().run_state = TaskRunState::Failed;
-            let _ = sender.send(TaskRunEvent::StateChanged(TaskRunState::Failed));
-            let _ = sender.send(TaskRunEvent::Finished);
+            log_warn!("[http runner] timed out polling '{}'", poll_url);
+            finish_run(&state, &sender, TaskRunState::Failed);
             return;
         }
-
-        match http_get_status(&poll_url) {
+        match with_retry(cfg.max_retries, retry, || http_get_status(&poll_url, auth_hdr.as_deref())) {
             Ok(status) => {
-                let final_state = map_http_status(&status);
-                if let Some(fs) = final_state {
-                    state.lock().unwrap().run_state = fs.clone();
-                    let _ = sender.send(TaskRunEvent::StateChanged(fs));
-                    let _ = sender.send(TaskRunEvent::Finished);
+                if let Some(fs) = map_http_status(&status) {
+                    finish_run(&state, &sender, fs);
                     return;
                 }
             }
-            Err(e) => {
-                log_warn!("[http runner] poll error for job '{}': {}", job_id, e);
-            }
+            Err(e) => log_warn!("[http runner] poll error at '{}': {}", poll_url, e),
         }
-
         std::thread::sleep(poll);
     }
 }
 
-/// POST JSON using only the standard library (no external HTTP client).
-fn http_post_json(url: &str, payload: &serde_json::Value) -> Result<String, String> {
+/// Transition run to a terminal state and notify the event stream.
+fn finish_run(
+    state:  &Mutex<HttpTaskRunState>,
+    sender: &crossbeam_channel::Sender<TaskRunEvent>,
+    fs:     TaskRunState,
+) {
+    state.lock().unwrap().run_state = fs.clone();
+    let _ = sender.send(TaskRunEvent::StateChanged(fs));
+    let _ = sender.send(TaskRunEvent::Finished);
+}
+
+/// Retry `f` up to `max_retries` additional times on transient errors.
+fn with_retry<T>(
+    max_retries: u32,
+    delay:       Duration,
+    mut f:       impl FnMut() -> Result<T, String>,
+) -> Result<T, String> {
+    let mut last_err = String::new();
+    for attempt in 0..=max_retries {
+        match f() {
+            Ok(v)  => return Ok(v),
+            Err(e) => { last_err = e; if attempt < max_retries { std::thread::sleep(delay); } }
+        }
+    }
+    Err(last_err)
+}
+
+/// POST JSON and return the remote job `id` from the response.
+fn http_post_json(url: &str, payload: &serde_json::Value, auth: Option<&str>) -> Result<String, String> {
     let body = serde_json::to_string(payload).map_err(|e| e.to_string())?;
-    let (host, path) = split_url(url)?;
-    let request = format!(
-        "POST {} HTTP/1.0\r\nHost: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        path, host, body.len(), body
-    );
-    let response = tcp_exchange(&host, &request)?;
-    let json_body = extract_http_body(&response)?;
-    let v: serde_json::Value = serde_json::from_str(&json_body).map_err(|e| e.to_string())?;
-    v.get("id")
-        .and_then(|id| id.as_str())
-        .map(|s| s.to_string())
+    let mut req = ureq::post(url).set("Content-Type", "application/json");
+    if let Some(a) = auth { req = req.set("Authorization", a); }
+    let resp = match req.send_string(&body) {
+        Ok(r)                                                   => r,
+        Err(ureq::Error::Status(c, _)) if c == 429 || c >= 500 => return Err(format!("HTTP {}", c)),
+        Err(e)                                                  => return Err(e.to_string()),
+    };
+    let json: serde_json::Value = serde_json::from_reader(resp.into_reader())
+        .map_err(|e| e.to_string())?;
+    json.get("id").and_then(|v| v.as_str()).map(String::from)
         .ok_or_else(|| "response missing 'id' field".into())
 }
 
-/// GET the job status JSON.
-fn http_get_status(url: &str) -> Result<String, String> {
-    let (host, path) = split_url(url)?;
-    let request = format!(
-        "GET {} HTTP/1.0\r\nHost: {}\r\nConnection: close\r\n\r\n",
-        path, host
-    );
-    let response = tcp_exchange(&host, &request)?;
-    let json_body = extract_http_body(&response)?;
-    let v: serde_json::Value = serde_json::from_str(&json_body).map_err(|e| e.to_string())?;
-    Ok(v.get("status").and_then(|s| s.as_str()).unwrap_or("").to_string())
+/// GET the remote job status string.
+fn http_get_status(url: &str, auth: Option<&str>) -> Result<String, String> {
+    let mut req = ureq::get(url);
+    if let Some(a) = auth { req = req.set("Authorization", a); }
+    let resp = match req.call() {
+        Ok(r)                                                   => r,
+        Err(ureq::Error::Status(c, _)) if c == 429 || c >= 500 => return Err(format!("HTTP {}", c)),
+        Err(e)                                                  => return Err(e.to_string()),
+    };
+    let json: serde_json::Value = serde_json::from_reader(resp.into_reader())
+        .map_err(|e| e.to_string())?;
+    Ok(json.get("status").and_then(|s| s.as_str()).unwrap_or("").to_string())
 }
 
-/// Map HTTP status string → terminal TaskRunState (None = still running).
+/// Map HTTP status string to a terminal `TaskRunState` (returns `None` while still running).
 fn map_http_status(status: &str) -> Option<TaskRunState> {
     match status {
         "succeeded" => Some(TaskRunState::Succeeded),
@@ -331,35 +380,32 @@ fn map_http_status(status: &str) -> Option<TaskRunState> {
     }
 }
 
-/// Parse `http://host:port/path` into `("host:port", "/path")`.
-fn split_url(url: &str) -> Result<(String, String), String> {
-    let stripped = url.strip_prefix("http://")
-        .ok_or_else(|| format!("only http:// URLs are supported, got: {}", url))?;
-    let slash = stripped.find('/').unwrap_or(stripped.len());
-    let host = stripped[..slash].to_string();
-    let path = if slash < stripped.len() { stripped[slash..].to_string() } else { "/".to_string() };
-    Ok((host, path))
+/// Compute the `Authorization` header value from run config.
+fn build_auth_header(cfg: &HttpRunConfig) -> Option<String> {
+    match cfg.auth_type.as_deref() {
+        Some("bearer") => cfg.auth_token.as_deref().map(|t| format!("Bearer {}", t)),
+        Some("basic")  => {
+            let user = cfg.auth_user.as_deref().unwrap_or("");
+            let pass = cfg.auth_password.as_deref().unwrap_or("");
+            Some(format!("Basic {}", base64_encode(format!("{}:{}", user, pass).as_bytes())))
+        }
+        _              => None,
+    }
 }
 
-/// Open a TCP connection, write `request`, read full response.
-fn tcp_exchange(host: &str, request: &str) -> Result<String, String> {
-    use std::io::{Read, Write};
-    let addr = if host.contains(':') { host.to_string() } else { format!("{}:80", host) };
-    let mut stream = std::net::TcpStream::connect(&addr)
-        .map_err(|e| format!("connect to '{}': {}", addr, e))?;
-    stream.set_read_timeout(Some(Duration::from_secs(30)))
-        .map_err(|e| e.to_string())?;
-    stream.write_all(request.as_bytes()).map_err(|e| e.to_string())?;
-    let mut buf = String::new();
-    stream.read_to_string(&mut buf).map_err(|e| e.to_string())?;
-    Ok(buf)
-}
-
-/// Strip HTTP response headers; return only the body.
-fn extract_http_body(response: &str) -> Result<String, String> {
-    response
-        .split_once("\r\n\r\n")
-        .map(|(_, body)| body.to_string())
-        .ok_or_else(|| "malformed HTTP response (no header/body separator)".into())
+/// Minimal RFC 4648 base64 encoder (used for Basic auth headers).
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        out.push(CHARS[((b0 >> 2) & 0x3F) as usize] as char);
+        out.push(CHARS[(((b0 << 4) | (b1 >> 4)) & 0x3F) as usize] as char);
+        out.push(if chunk.len() > 1 { CHARS[(((b1 << 2) | (b2 >> 6)) & 0x3F) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 2 { CHARS[(b2 & 0x3F) as usize] as char } else { '=' });
+    }
+    out
 }
 

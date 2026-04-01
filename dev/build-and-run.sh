@@ -46,7 +46,7 @@ echo "=== Building orkester (host + sample plugin) ==="
     cd "${ORKESTER_WS}"
     cargo build ${CARGO_FLAGS} \
         -p orkester-host \
-        -p orkester-plugin-sample \
+        -p orkester-plugin-core-rest \
         -p orkester-plugin-logging \
         -p orkester-plugin-metrics 2>&1
 )
@@ -71,8 +71,8 @@ mkdir -p "${BIN_DIR}"
 cp -v "${ORKESTER_WS}/target/${CARGO_PROFILE}/orkester" \
       "${BIN_DIR}/orkester"
 
-# Sample plugin (provides LoggingServer, PingServer, RestServer)
-cp -v "${ORKESTER_WS}/target/${CARGO_PROFILE}/liborkester_plugin_sample.so" \
+# Core REST plugin (provides RestServer)
+cp -v "${ORKESTER_WS}/target/${CARGO_PROFILE}/liborkester_plugin_core_rest.so" \
       "${BIN_DIR}/"
 
 # Metrics plugin

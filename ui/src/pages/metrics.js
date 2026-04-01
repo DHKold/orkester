@@ -1,6 +1,7 @@
 import { getMetricsSnapshot, getMetricsHistory } from '../api.js'
 import { esc, setApp } from '../utils.js'
 import { toastError } from '../components/toast.js'
+import { setCleanup } from '../router.js'
 
 const REFRESH_MS = 30_000
 let _refreshTimer = null
@@ -13,6 +14,7 @@ export async function renderMetrics() {
   setApp('<p aria-busy="true">Loading metrics…</p>')
   await loadAndRender()
   startAutoRefresh()
+  setCleanup(() => { stopAutoRefresh(); destroyAllCharts() })
 }
 
 // ─── Data loading ─────────────────────────────────────────────────────────────

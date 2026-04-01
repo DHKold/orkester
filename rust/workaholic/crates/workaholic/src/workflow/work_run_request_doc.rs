@@ -36,4 +36,12 @@ pub struct WorkRunRequestStep {
     /// Reference to the corresponding TaskRunRequest document.
     #[serde(rename = "taskRunRequestRef")]
     pub task_run_request_ref: String,
+    /// Maximum number of attempts before the step is permanently failed (default: 1 = no retry).
+    #[serde(rename = "maxAttempts", default = "default_max_attempts")]
+    pub max_attempts: u32,
+    /// Delay in seconds between retry attempts (default: 0).
+    #[serde(rename = "retryDelaySecs", default)]
+    pub retry_delay_secs: u64,
 }
+
+fn default_max_attempts() -> u32 { 1 }

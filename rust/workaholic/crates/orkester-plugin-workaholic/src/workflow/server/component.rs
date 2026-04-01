@@ -1,4 +1,9 @@
-//! WorkflowServerComponent - the main Orkester component for workflow execution.
+//! WorkflowServerComponent — the main Orkester component for workflow execution.
+//!
+//! Responsibilities:
+//! - Cron scheduling (register/unregister/list) with persistence.
+//! - Manual work-run triggers forwarded to the background orchestrator.
+//! - Query endpoints for WorkRun and TaskRun state.
 
 use std::sync::Arc;
 
@@ -9,7 +14,10 @@ use workaholic::{CronDoc, TaskRunDoc, Trigger, WorkaholicError, WorkRunDoc};
 use crate::workflow::{
     actions::*,
     cron::CronScheduler,
-    request::{CronRefRequest, ListCronsResponse, ListTaskRunsResponse, ListWorkRunsResponse, TaskRunRefRequest, TriggerWorkRequest, WorkRunRefRequest},
+    request::{
+        CronRefRequest, ListCronsResponse, ListTaskRunsResponse, ListWorkRunsResponse,
+        TaskRunRefRequest, TriggerWorkRequest, WorkRunRefRequest,
+    },
 };
 
 use super::{
@@ -17,14 +25,16 @@ use super::{
     orchestrator::{start_orchestrator, PendingTrigger},
     registry::WorkflowRegistry,
 };
+use crate::document::persistor::{LocalFsPersistor, MemoryPersistor};
 
 // --- WorkflowServerComponent --------------------------------------------------
 
+/// Orkester component that orchestrates workflow executions, manages cron
+/// schedules, and exposes query endpoints for run state.
 pub struct WorkflowServerComponent {
     registry:  Arc<WorkflowRegistry>,
     scheduler: CronScheduler,
     work_tx:   crossbeam_channel::Sender<PendingTrigger>,
-    config:    WorkflowServerConfig,
 }
 
 unsafe impl Send for WorkflowServerComponent {}
@@ -36,44 +46,39 @@ unsafe impl Send for WorkflowServerComponent {}
 )]
 impl WorkflowServerComponent {
     pub fn new(host_ptr: *mut orkester_plugin::abi::AbiHost, config: WorkflowServerConfig) -> Self {
-        let registry = Arc::new(WorkflowRegistry::new());
+        let persistor = build_persistor(&config);
+        let registry  = Arc::new(WorkflowRegistry::new(persistor));
         let (scheduler, fire_rx) = CronScheduler::start();
-        let host_raw = host_ptr as usize;
+
+        scheduler.restore(registry.load_crons());
 
         let work_tx = start_orchestrator(
-            host_raw,
+            host_ptr as usize,
             config.catalog_ref.clone(),
             config.namespace.clone(),
             Arc::clone(&registry),
         );
 
-        // Forward cron fires to the orchestrator as regular work triggers.
-        let work_tx_cron = work_tx.clone();
-        std::thread::spawn(move || {
-            for (cron, trigger) in fire_rx {
-                eprintln!("[cron] fired: {} -> triggering '{}'", cron.name, cron.spec.work_ref);
-                work_tx_cron.send(PendingTrigger {
-                    work_ref: cron.spec.work_ref.clone(),
-                    trigger,
-                    inputs: Default::default(),
-                }).ok();
-            }
-        });
+        start_cron_forwarder(fire_rx, work_tx.clone());
 
-        Self { registry, scheduler, work_tx, config }
+        Self { registry, scheduler, work_tx }
     }
 
     // -- Cron management ----------------------------------------------------
 
     #[handle(ACTION_WORKFLOW_REGISTER_CRON)]
     fn register_cron(&mut self, cron: CronDoc) -> Result<(), WorkaholicError> {
+        log_info!("[workflow-server] registering cron '{}'", cron.name);
+        self.registry.upsert_cron(&cron);
         self.scheduler.register(cron);
         Ok(())
     }
 
     #[handle(ACTION_WORKFLOW_UNREGISTER_CRON)]
     fn unregister_cron(&mut self, req: CronRefRequest) -> Result<(), WorkaholicError> {
-        self.scheduler.unregister(req.name);
+        log_info!("[workflow-server] unregistering cron '{}'", req.name);
+        self.scheduler.unregister(req.name.clone());
+        self.registry.remove_cron(&req.name);
         Ok(())
     }
 
@@ -86,12 +91,11 @@ impl WorkflowServerComponent {
 
     /// Accept a trigger and hand it off to the background orchestrator thread.
     ///
-    /// IMPORTANT: must NOT call `host.handle()` here -- doing so would deadlock
-    /// the pipeline (the worker thread cannot process a new request while it
-    /// is already inside this handler).
+    /// Must NOT call `host.handle()` here — doing so would deadlock the HUB
+    /// pipeline worker.
     #[handle(ACTION_WORKFLOW_TRIGGER)]
     fn trigger_work(&mut self, req: TriggerWorkRequest) -> Result<Value, WorkaholicError> {
-        eprintln!("[workflow-server] trigger received: work_ref='{}'", req.work_ref);
+        log_info!("[workflow-server] trigger received: work_ref='{}'", req.work_ref);
         self.work_tx.send(PendingTrigger {
             work_ref: req.work_ref,
             trigger: Trigger {
@@ -119,7 +123,7 @@ impl WorkflowServerComponent {
 
     #[handle(ACTION_WORKFLOW_CANCEL_WORK_RUN)]
     fn cancel_work_run(&mut self, req: WorkRunRefRequest) -> Result<(), WorkaholicError> {
-        eprintln!("[workflow-server] cancel requested for '{}'", req.name);
+        log_warn!("[workflow-server] cancel requested for '{}' (not yet implemented)", req.name);
         Ok(())
     }
 
@@ -135,4 +139,40 @@ impl WorkflowServerComponent {
         self.registry.get_task_run(&req.name)
             .ok_or_else(|| WorkaholicError::NotFound { kind: "TaskRun".into(), name: req.name })
     }
+}
+
+// ── Private helpers ───────────────────────────────────────────────────────────
+
+/// Build the `DocumentPersistor` from server config.
+fn build_persistor(
+    config: &WorkflowServerConfig,
+) -> Arc<dyn workaholic::DocumentPersistor> {
+    match &config.persist_path {
+        Some(path) => {
+            let _ = std::fs::create_dir_all(path);
+            log_info!("[workflow-server] using local-fs persistor at '{path}'");
+            Arc::new(LocalFsPersistor::new(path.clone()))
+        }
+        None => {
+            log_info!("[workflow-server] using in-memory persistor (state will not survive restart)");
+            Arc::new(MemoryPersistor::new())
+        }
+    }
+}
+
+/// Spawn a thread that forwards cron-fire events to the orchestrator channel.
+fn start_cron_forwarder(
+    fire_rx: crossbeam_channel::Receiver<(CronDoc, workaholic::Trigger)>,
+    work_tx: crossbeam_channel::Sender<PendingTrigger>,
+) {
+    std::thread::spawn(move || {
+        for (cron, trigger) in fire_rx {
+            log_info!("[cron] fired '{}' → triggering work_ref='{}'", cron.name, cron.spec.work_ref);
+            work_tx.send(PendingTrigger {
+                work_ref: cron.spec.work_ref.clone(),
+                trigger,
+                inputs: Default::default(),
+            }).ok();
+        }
+    });
 }

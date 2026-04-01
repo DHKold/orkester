@@ -18,6 +18,10 @@ pub struct WorkflowServerConfig {
     /// Reference to the catalog server component (for resolving Work/Task docs).
     #[serde(default)]
     pub catalog_ref: String,
+    /// Optional filesystem path for persisting workflow state.
+    /// When set, uses `LocalFsPersistor`; otherwise uses an in-memory store.
+    #[serde(default)]
+    pub persist_path: Option<String>,
 }
 
 fn default_task_permits() -> usize { 4 }

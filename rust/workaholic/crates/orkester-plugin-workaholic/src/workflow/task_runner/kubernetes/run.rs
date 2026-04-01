@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use kube::Client;
+use orkester_plugin::log_warn;
 use serde_json::Value;
-use uuid::Uuid;
 use workaholic::{
     DocumentMetadata, TaskInputSource, TaskRunDoc, TaskRunLogsRef, TaskRunRequestDoc,
     TaskRunSpec, TaskRunState, TaskRunStatus, TASK_RUN_KIND,
@@ -12,6 +13,7 @@ use super::super::stream_adapter::CrossbeamStream;
 use super::super::traits::{TaskRun, TaskRunError, TaskRunEvent, TaskRunEventStream};
 use super::config::KubeJobConfig;
 use super::exec::run_kubernetes_job;
+use super::job::delete_job;
 use super::outputs::extract_output_value;
 use super::state::KubeTaskRunState;
 
@@ -102,24 +104,29 @@ impl TaskRun for KubernetesTaskRun {
             g.run_state = TaskRunState::Running;
         }
         let _ = self.sender.send(TaskRunEvent::StateChanged(TaskRunState::Running));
-        let uuid  = Uuid::new_v4().to_string();
-        let short = uuid.split('-').next().unwrap_or("job");
-        let job_name = format!("orkester-{short}");
-        let cfg    = self.cfg.clone();
-        let state  = Arc::clone(&self.state);
-        let sender = self.sender.clone();
+        let job_name = make_job_name(&self.cfg.job_name_prefix, &self.name);
+        let cfg      = self.cfg.clone();
+        let state    = Arc::clone(&self.state);
+        let sender   = self.sender.clone();
         std::thread::spawn(move || run_kubernetes_job(cfg, job_name, state, sender));
         Ok(())
     }
 
     fn cancel(&self) -> Result<(), TaskRunError> {
-        {
+        let job_to_delete = {
             let mut g = self.state.lock().unwrap();
             if matches!(g.run_state, TaskRunState::Succeeded | TaskRunState::Failed | TaskRunState::Cancelled) {
                 return Err(TaskRunError::AlreadyFinished);
             }
             g.cancel_requested = true;
-            g.run_state = TaskRunState::Cancelled;
+            g.run_state        = TaskRunState::Cancelled;
+            if g.job_name.is_some() {
+                g.deletion_initiated = true;
+            }
+            g.job_name.clone()
+        };
+        if let Some(job_name) = job_to_delete {
+            spawn_cancel_deletion(self.cfg.namespace.clone(), job_name);
         }
         let _ = self.sender.send(TaskRunEvent::StateChanged(TaskRunState::Cancelled));
         let _ = self.sender.send(TaskRunEvent::Finished);
@@ -129,4 +136,37 @@ impl TaskRun for KubernetesTaskRun {
     fn subscribe(&self) -> TaskRunEventStream {
         Box::pin(CrossbeamStream::new(self.receiver.clone()))
     }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/// Derive a valid Kubernetes resource name from a prefix and task run name.
+///
+/// The result is at most 63 characters (Kubernetes limit) with no trailing hyphens.
+fn make_job_name(prefix: &str, task_run_name: &str) -> String {
+    let raw = format!("{}{}", prefix, task_run_name);
+    let truncated = if raw.len() > 63 { &raw[..63] } else { &raw };
+    truncated.trim_end_matches('-').to_string()
+}
+
+/// Spawn a detached thread that deletes the Kubernetes Job immediately.
+///
+/// Used by the cancel path to start cluster-side cleanup without waiting for
+/// the exec thread's poll cycle to expire.
+fn spawn_cancel_deletion(namespace: String, job_name: String) {
+    std::thread::spawn(move || {
+        let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+            Ok(rt) => rt,
+            Err(e) => {
+                log_warn!("[k8s] cancel: failed to build runtime to delete job '{}': {}", job_name, e);
+                return;
+            }
+        };
+        rt.block_on(async {
+            match Client::try_default().await {
+                Ok(client) => delete_job(&client, &namespace, &job_name).await,
+                Err(e)     => log_warn!("[k8s] cancel: kube client error deleting job '{}': {}", job_name, e),
+            }
+        });
+    });
 }

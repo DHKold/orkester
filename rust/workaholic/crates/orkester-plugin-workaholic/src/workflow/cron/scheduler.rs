@@ -65,6 +65,12 @@ impl CronScheduler {
         self.control.unregister(name);
     }
 
+    pub fn restore(&self, crons: Vec<CronDoc>) {
+        for cron in crons {
+            self.register(cron);
+        }
+    }
+
     pub fn shutdown(&self) {
         self.control.shutdown();
     }
@@ -83,7 +89,7 @@ type HeapEntry = Reverse<(i64, String, u64)>;
 fn scheduler_loop(
     ctrl_rx:    crossbeam_channel::Receiver<CronControlEvent>,
     fire_tx:    Sender<(CronDoc, workaholic::Trigger)>,
-    _registered: Arc<Mutex<HashMap<String, CronDoc>>>,
+    registered: Arc<Mutex<HashMap<String, CronDoc>>>,
 ) {
     let mut state = CronSchedulerState::default();
     let mut heap: BinaryHeap<HeapEntry> = BinaryHeap::new();
@@ -92,7 +98,7 @@ fn scheduler_loop(
         // Drain control events without blocking.
         loop {
             match ctrl_rx.try_recv() {
-                Ok(CronControlEvent::Register(cron))      => handle_register(&mut state, &mut heap, cron),
+                Ok(CronControlEvent::Register(cron))      => handle_register(&mut state, &mut heap, &registered, cron),
                 Ok(CronControlEvent::Unregister { name }) => { state.remove(&name); }
                 Ok(CronControlEvent::Shutdown)            => return,
                 Err(_)                                    => break,
@@ -115,6 +121,7 @@ fn scheduler_loop(
                 // Advance to the next occurrence.
                 let next = next_occurrence_after(&entry.cron, next_ms + 1);
                 entry.advance(next);
+                update_next_time(&registered, &name, next);
                 if let Some(nxt) = next {
                     heap.push(Reverse((nxt, name.clone(), entry.generation)));
                 }
@@ -137,9 +144,10 @@ fn scheduler_loop(
 }
 
 fn handle_register(
-    state: &mut CronSchedulerState,
-    heap:  &mut BinaryHeap<HeapEntry>,
-    cron:  CronDoc,
+    state:      &mut CronSchedulerState,
+    heap:       &mut BinaryHeap<HeapEntry>,
+    registered: &Arc<Mutex<HashMap<String, CronDoc>>>,
+    cron:       CronDoc,
 ) {
     let now_ms = Utc::now().timestamp_millis();
     let next   = next_occurrence_after(&cron, now_ms);
@@ -153,7 +161,25 @@ fn handle_register(
     if let Some(nxt) = next {
         heap.push(Reverse((nxt, cron.name.clone(), entry.generation)));
     }
+    update_next_time(registered, &cron.name, next);
     state.insert(entry);
+}
+
+/// Update `next_scheduled_time` in the `registered` CronDoc snapshot.
+fn update_next_time(
+    registered: &Arc<Mutex<HashMap<String, CronDoc>>>,
+    cron_name:  &str,
+    next_at_ms: Option<i64>,
+) {
+    let next_iso = next_at_ms.and_then(|ms| {
+        DateTime::<Utc>::from_timestamp_millis(ms).map(|dt| dt.to_rfc3339())
+    });
+    if let Ok(mut map) = registered.lock() {
+        if let Some(doc) = map.get_mut(cron_name) {
+            let status = doc.status.get_or_insert_with(Default::default);
+            status.next_scheduled_time = next_iso;
+        }
+    }
 }
 
 // ─── Cron expression parser ───────────────────────────────────────────────────
