@@ -1,6 +1,7 @@
 plugins:
   directories:
     - path: /orkester/plugins/
+    - path: /orkester/dev/bin/
 
 servers:
   # ── Workflow catalog ────────────────────────────────────────────────────────
@@ -18,7 +19,7 @@ servers:
     start:
       - kind: workaholic/DocumentLoader/CreateEntry
         config:
-          path: /orkester/catalog/
+          path: /orkester/dev/catalog/
           recursive: true
           watch: true
       - kind: workaholic/DocumentLoader/Start
@@ -62,7 +63,7 @@ servers:
           formatter:
             kind: logging/JsonLogFormatter:1.0
           config:
-            path: /orkester/logs/orkester.log
+            path: /orkester/dev/logs/orkester.log
             max_size_mb: 50
             max_files: 5
 
