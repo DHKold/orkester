@@ -31,11 +31,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cd /build/orkester \
  && cargo build --release \
         -p orkester-host \
-        -p orkester-plugin-sample \
+        -p orkester-plugin-core-rest \
         -p orkester-plugin-metrics \
         -p orkester-plugin-logging \
  && cp target/release/orkester                         /usr/local/bin/orkester \
- && cp target/release/liborkester_plugin_sample.so     /tmp/ \
+ && cp target/release/liborkester_plugin_core_rest.so  /tmp/ \
  && cp target/release/liborkester_plugin_metrics.so    /tmp/ \
  && cp target/release/liborkester_plugin_logging.so    /tmp/
 
@@ -71,17 +71,16 @@ RUN apt-get update \
 COPY --from=builder /usr/local/bin/orkester /usr/local/bin/orkester
 
 # Plugins directory (matches Helm chart config: /orkester/plugins/)
-RUN mkdir -p /orkester/plugins /orkester/samples /orkester/catalog \
- && chmod 755 /orkester/plugins /orkester/samples /orkester/catalog
-COPY --from=builder /tmp/liborkester_plugin_sample.so     /orkester/plugins/
+RUN mkdir -p /orkester/plugins && chmod 755 /orkester/plugins
+COPY --from=builder /tmp/liborkester_plugin_core_rest.so  /orkester/plugins/
 COPY --from=builder /tmp/liborkester_plugin_metrics.so    /orkester/plugins/
 COPY --from=builder /tmp/liborkester_plugin_logging.so    /orkester/plugins/
 COPY --from=builder /tmp/liborkester_plugin_workaholic.so /orkester/plugins/
 
 # Copy example configs and UI assets.
-COPY bin/configs/        /orkester/catalog/
-COPY bin/workaholic.yaml /orkester/samples/workaholic.yaml
-COPY ui/ /orkester/ui/
+COPY examples/catalog/        /orkester/catalog/
+COPY dev/workaholic.yaml      /orkester/workaholic.yaml
+COPY ui/                      /orkester/ui/
 
 # Writable data directory expected by the default config.
 # Create the orkester user (UID 10001) that matches the pod security context,
@@ -89,12 +88,13 @@ COPY ui/ /orkester/ui/
 RUN groupadd --gid 10001 orkester \
  && useradd  --uid 10001 --gid 10001 --no-create-home --shell /sbin/nologin orkester \
  && mkdir -p /orkester/data /orkester/logs \
+ && chmod 700 /orkester/data /orkester/logs \
  && chown -R 10001:10001 /orkester/data /orkester/logs
 
 USER orkester
 
 RUN mkdir -p /orkester/data /orkester/logs \
- && chmod 700 /orkester/data /orkester/logs
+    && chmod 700 /orkester/data /orkester/logs
 
 WORKDIR /orkester
 EXPOSE 8080

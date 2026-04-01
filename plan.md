@@ -55,11 +55,11 @@ Note: The DBT project itself is out of scope for Orkester — it should be devel
 
 ### 1.4 UI Bug Fixes `[P2]` `[Todo]`
 
-- [ ] Metrics page: stop polling once loaded (currently re-subscribes on every render)
-- [ ] WorkRun list: update to use the new schema:
-      - [ ] In spec: workRef, trigger.type & trigger.at
-      - [ ] In status: state
-- [ ] Cron list: show next fire time (currently missing)
+- [x] Metrics page: stop polling once loaded (currently re-subscribes on every render)
+- [x] WorkRun list: update to use the new schema:
+      - [x] In spec: workRef, trigger.type & trigger.at
+      - [x] In status: state
+- [x] Cron list: show next fire time (currently missing)
 
 ### 1.5 External: Workaholic YAML Tooling for DP `[P1]` `[Todo]`
 
@@ -89,8 +89,10 @@ This makes it hard to add new document types and leads to confusion about how to
 `MemoryPersistor` and `LocalFsPersistor` exist. `DocumentPersistor` trait is
 in the `workaholic` crate. Missing:
 
-- [ ] Ensure `LocalFsDocumentPersistor` component is wired + tested end-to-end
-- [ ] Use dynamic persistor in the catalog/workflow/metrics (currently hardcoded to memory)
+- [x] Ensure `LocalFsDocumentPersistor` component is wired + tested end-to-end
+- [ ] Use dynamic persistor in the catalog
+- [x] Use dynamic persistor in Workflow Server
+- [ ] Use dynamic persistor in metrics server (for historical metrics)
 
 ### 2.3 Catalog Refactor `[P3]` `[Todo]`
 
@@ -138,8 +140,8 @@ The current catalog is a flat in-memory map. Long-horizon improvements:
 
 Already implemented (`http.rs`). Missing:
 
-- [ ] Authentication header support (Bearer, Basic)
-- [ ] Retry on transient HTTP errors
+- [x] Authentication header support (Bearer, Basic)
+- [x] Retry on transient HTTP errors
 - [ ] `[UNCLEAR]` Should the runner support non-JSON response bodies? Yes
 
 ### 3.2 LocalFsArtifactRegistry `[Todo]`
@@ -263,10 +265,11 @@ No crate exists yet.
 
 ## 8. REST Server Improvements `[P2]`
 
-- [ ] Use proper libraries for HTTP serving (e.g. `axum`) instead of ad-hoc hyper server
-- [ ] Allow exposing the OpenAPI spec via an endpoint (e.g. `/openapi.json`)
-- [ ] Modularize handlers (separate handler module per resource group)
-- [ ] Serve the UI as a proper SPA (handle client-side routing, correct `Content-Type`, cache headers)
+- [x] Use proper libraries for HTTP serving (e.g. `axum`) instead of ad-hoc hyper server
+- [x] Allow exposing the OpenAPI spec via an endpoint (e.g. `/openapi.json`)
+- [ ] Allow routes to provide metadata for documentation generation (e.g. description, parameters, request/response schema) to enable automatic API docs
+- [x] Modularize handlers (separate handler module per resource group)
+- [x] Serve the UI as a proper SPA (handle client-side routing, correct `Content-Type`, cache headers)
 - [ ] Flexible routing: multi-target dispatch, per-route fallback
 - [ ] SSL/TLS termination (or document that it should be delegated to the ingress)
 - [ ] CORS + custom header support
@@ -286,11 +289,11 @@ No crate exists yet.
 
 ### 9.2 Retry Logic `[Todo]`
 
-- [ ] Defined at the step level (not task level) since it is a workflow-level concern
-- [ ] Configurable retry policy (e.g. max attempts, backoff strategy, etc)
-- [ ] The WorkRunner should handle the retry logic. Each try creates a new TaskRun from the same TaskRunRequest (with the `attempt` number incremented).
-- [ ] The TaskRunner should be idempotent or able to handle duplicate TaskRunRequests for the same step (e.g. by using the `attempt` number to distinguish retries).
-- [ ] The WorkRun status should reflect the retry attempts (e.g. `state: retrying`, `attempts: N`, etc) and surface the failure reason of the last attempt.
+- [x] Defined at the step level (not task level) since it is a workflow-level concern
+- [x] Configurable retry policy (e.g. max attempts, backoff strategy, etc)
+- [x] The WorkRunner should handle the retry logic. Each try creates a new TaskRun from the same TaskRunRequest (with the `attempt` number incremented).
+- [x] The TaskRunner should be idempotent or able to handle duplicate TaskRunRequests for the same step (e.g. by using the `attempt` number to distinguish retries).
+- [x] The WorkRun status should reflect the retry attempts (e.g. `state: retrying`, `attempts: N`, etc) and surface the failure reason of the last attempt.
 - [ ] For the future:
       - [ ] Support for failing paths (e.g. if max attempts exceeded, mark the step as failed and optionally trigger a compensating workflow or alert)
       - [ ] Support for conditional retries based on error type (e.g. only retry on transient errors, not on validation errors) — would require error classification in the TaskRunner and propagation of error types to the WorkRunner
@@ -325,11 +328,11 @@ No crate exists yet.
 
 The embedded kube client rewrite is done. Known gaps:
 
-- [ ] Cancel: currently marks state cancelled and sends event, but does not actually delete the Job in the cluster (the delete happens only after normal completion). Fix by running `delete_job` on cancel path.
-- [ ] Job naming: currently uses only the first UUID segment (`orkester-{x}`) — verify uniqueness is sufficient or use full UUID with prefix truncation to stay under 63 chars.
-- [ ] Labels: add `orkester.io/work-run`, `orkester.io/task-ref` labels to the Job manifest for observability.
-- [ ] Resource limits: expose `resources.requests/limits` as config keys (CPU, memory).
-- [ ] Image pull secrets: expose `imagePullSecrets` as a config key.
+- [x] Cancel: currently marks state cancelled and sends event, but does not actually delete the Job in the cluster (the delete happens only after normal completion). Fix by running `delete_job` on cancel path.
+- [x] Job naming: currently uses only the first UUID segment (`orkester-{x}`) — verify uniqueness is sufficient or use full UUID with prefix truncation to stay under 63 chars.
+- [x] Labels: add `orkester.io/work-run`, `orkester.io/task-ref` labels to the Job manifest for observability.
+- [x] Resource limits: expose `resources.requests/limits` as config keys (CPU, memory).
+- [x] Image pull secrets: expose `imagePullSecrets` as a config key.
 - [ ] `[UNCLEAR]` TTL-after-finished: should the Job set `ttlSecondsAfterFinished` instead of explicit deletion in the runner? (Configurable: if TTL is set, rely on Kubernetes to clean up finished Jobs; if not set, the runner will delete the Job after completion.)
 
 ---
@@ -340,9 +343,9 @@ Beyond the immediate bug fixes in §1.4:
 
 - [ ] WorkRun detail page: show per-step timeline, inputs, outputs, logs
 - [ ] Task catalog browser: searchable, filterable by kind/namespace/tags
-- [ ] Cron list: show next fire time, last fire result
-- [ ] Trigger a Work manually from the UI with input overrides
-- [ ] MUST USE Vanilla CSS + JS (no frameworks) for performance and simplicity, but we can use libraries for specific components (e.g. a date picker, a code editor, etc) as long as they don't require a full framework
+- [x] Cron list: show next fire time, last fire result
+- [x] Trigger a Work manually from the UI with input overrides
+- [x] MUST USE Vanilla CSS + JS (no frameworks) for performance and simplicity, but we can use libraries for specific components (e.g. a date picker, a code editor, etc) as long as they don't require a full framework
 - [ ] Globaly: consistent styling, responsive layout, clear error states, loading states, etc
 
 ---

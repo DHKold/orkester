@@ -1,6 +1,5 @@
 plugins:
   directories:
-    - path: /orkester/plugins/
     - path: /orkester/dev/bin/
 
 servers:

@@ -422,7 +422,7 @@ persistence:
 config:
   plugins:
     directories:
-      - path: /orkester/plugins
+      - path: /orkester/plugins/
 
   servers:
     # ── Workflow catalog ────────────────────────────────────────────────────────
@@ -454,6 +454,7 @@ config:
         namespace: testing
         catalog_ref: catalog-server
         task_permits_per_grant: 4
+        # persist_path: /orkester/data/workflow/
         work_runner:
           kind: workaholic/ThreadWorkRunner:1.0
           config: {}
@@ -477,9 +478,9 @@ config:
         antispam:
           max_per_minute: 1000
         sinks:
-          - kind: logging/ConsoleLogSink:1.0
-            formatter:
-              kind: logging/ConsoleLogFormatter:1.0
+          # - kind: logging/ConsoleLogSink:1.0
+          #   formatter:
+          #     kind: logging/ConsoleLogFormatter:1.0
           - kind: logging/LocalFsLogSink:1.0
             formatter:
               kind: logging/JsonLogFormatter:1.0
@@ -490,7 +491,7 @@ config:
 
     # ── HTTP gateway ─────────────────────────────────────────────────────────────
     - name: rest-server
-      kind: sample/RestServer:1.0
+      kind: core/RestServer:1.0
       config:
         bind: "0.0.0.0:8080"
 
@@ -717,4 +718,3 @@ config:
           - kind: all
         targets:
           - kind: drop
-

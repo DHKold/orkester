@@ -1,3 +1,13 @@
 target/
 rust/**/target/
 .git/
+
+# Ignore IDE/editor config files
+.idea/
+.vscode/
+
+# Ignore local development files
+dev/bin/
+dev/data/
+dev/logs/
+dev/catalog/
