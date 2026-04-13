@@ -1,0 +1,61 @@
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+:root {
+  /* Brand */
+  --color-brand:        #3b82f6;
+  --color-brand-hover:  #2563eb;
+  --color-brand-light:  #dbeafe;
+
+  /* Sidebar */
+  --sidebar-width:           220px;
+  --sidebar-width-collapsed: 52px;
+  --sidebar-bg:              #0f172a;
+  --sidebar-fg:              #94a3b8;
+  --sidebar-fg-bright:       #e2e8f0;
+  --sidebar-fg-active:       #60a5fa;
+  --sidebar-hover-bg:        #1e293b;
+  --sidebar-active-bg:       #1e3a5f;
+  --sidebar-divider:         #1e293b;
+
+  /* Status colours (used by badges and DAG nodes) */
+  --status-pending:    #94a3b8;
+  --status-running:    #3b82f6;
+  --status-succeeded:  #22c55e;
+  --status-failed:     #ef4444;
+  --status-cancelled:  #6b7280;
+  --status-waiting:    #8b5cf6;
+  --status-paused:     #f59e0b;
+  --status-skipped:    #f59e0b;
+  --status-creating:   #94a3b8;
+  --status-active:     #22c55e;
+  --status-inactive:   #6b7280;
+  --status-dropped:    #ef4444;
+  --status-ready:      #22c55e;
+
+  /* Surfaces */
+  --surface-1: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #f1f5f9;
+  --border-1:  #e2e8f0;
+  --border-2:  #cbd5e1;
+
+  /* Text */
+  --text-1: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+
+  /* Log viewer */
+  --log-bg: #0f172a;
+  --log-fg: #cbd5e1;
+
+  /* Border radii */
+  --radius-sm:   0.25rem;
+  --radius-md:   0.375rem;
+  --radius-lg:   0.5rem;
+  --radius-xl:   0.75rem;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.15);
+}

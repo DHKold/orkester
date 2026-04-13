@@ -1,45 +1,95 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Orkester</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.fluid.classless.min.css" />
-  <link rel="stylesheet" href="styles/app.css" />
-  <!-- DAG libraries -->
+  <link rel="stylesheet" href="styles/variables.css" />
+  <link rel="stylesheet" href="styles/reset.css" />
+  <link rel="stylesheet" href="styles/layout.css" />
+  <link rel="stylesheet" href="styles/components.css" />
+  <!-- DAG visualization -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
-  <!-- Chart.js for metrics sparklines -->
+  <!-- Metrics charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <!--
-    To point to a different Orkester instance add before the module script:
+    To target a different Orkester instance, add before the module script:
     <script>window.ORKESTER_API_BASE = 'http://your-host:8080'</script>
   -->
+
+  <!-- ── Sidebar ──────────────────────────────────────────────── -->
   <aside id="sidebar">
-    <a href="#/" class="sidebar-brand">⚙ Orkester</a>
-    <nav id="sidebar-nav" aria-label="Main navigation">
-      <p class="sidebar-loading" aria-busy="true"></p>
-    </nav>
+    <div id="sidebar-header">
+      <a href="#/" class="sidebar-brand">
+        <svg class="sidebar-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+        </svg>
+        <span class="sidebar-brand-label">Orkester</span>
+      </a>
+      <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" aria-label="Toggle sidebar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    </div>
+
+    <!-- Authenticated user -->
+    <div class="sidebar-user" id="sidebar-user">
+      <div class="sidebar-avatar" id="sidebar-avatar"></div>
+      <div class="sidebar-user-info" id="sidebar-user-info">
+        <div class="sidebar-user-name" id="sidebar-user-name"></div>
+        <div class="sidebar-user-team" id="sidebar-user-team"></div>
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- Active namespace selector -->
+    <div class="sidebar-ns-section" id="sidebar-ns-section">
+      <div class="sidebar-section-label">Namespace</div>
+      <button id="sidebar-ns-btn" class="sidebar-ns-btn" aria-haspopup="listbox" aria-expanded="false">
+        <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>
+        </svg>
+        <span class="sidebar-ns-label" id="sidebar-ns-label">— select —</span>
+        <svg class="sidebar-chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+      <div id="sidebar-ns-dropdown" class="sidebar-ns-dropdown hidden" role="listbox"></div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- Main navigation -->
+    <nav id="sidebar-nav" aria-label="Main navigation"></nav>
+
+    <!-- Drag-to-resize handle (hidden when collapsed) -->
     <div id="sidebar-resizer" aria-hidden="true"></div>
   </aside>
 
+  <!-- ── Content area ─────────────────────────────────────────── -->
   <div id="page-wrap">
-    <main id="app">
-      <p aria-busy="true">Loading…</p>
+    <header id="page-header">
+      <nav id="breadcrumb" aria-label="Breadcrumb"></nav>
+    </header>
+    <main id="app" aria-live="polite">
+      <p class="loading-state" aria-busy="true">Loading…</p>
     </main>
   </div>
 
+  <!-- ── Toast notifications ──────────────────────────────────── -->
   <div id="toast-container" aria-live="assertive" aria-atomic="true"></div>
 
-  <!-- Modal -->
+  <!-- ── Modal dialog ─────────────────────────────────────────── -->
   <dialog id="modal">
     <article>
       <header>
-        <button id="modal-close-btn" aria-label="Close" class="close-btn">✕</button>
         <strong id="modal-title"></strong>
+        <button id="modal-close-btn" class="modal-close-btn" aria-label="Close">✕</button>
       </header>
       <div id="modal-body"></div>
     </article>

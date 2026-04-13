@@ -1,10 +1,8 @@
-// ── Toast notifications ────────────────────────────────────────────────────
-
 const container = () => document.getElementById('toast-container')
 
 function show(msg, type, duration = 4000) {
   const el = document.createElement('div')
-  el.className  = `toast toast--${type}`
+  el.className = `toast toast--${type}`
   el.textContent = msg
   container().appendChild(el)
   setTimeout(() => el.remove(), duration)

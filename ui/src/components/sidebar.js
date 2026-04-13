@@ -1,38 +1,287 @@
-import { listNamespaces } from '../api.js'
+// ── Navigation sidebar ─────────────────────────────────────────────────────
+//
+// Responsibilities:
+//   - Display mock user (avatar, name, team)
+//   - Namespace selector dropdown (loaded from API)
+//   - Collapsible sidebar (icon-only or full)
+//   - Resizable when expanded (drag edge, persisted to localStorage)
+//   - Main nav links with active state and Workspace group expansion
 
-const STORAGE_KEY = 'orkester-sidebar-width'
-const MIN_WIDTH   = 140
-const MAX_WIDTH   = 480
+import { listNamespaces }                          from '../api.js'
+import { MOCK_USER, getActiveNamespace, setActiveNamespace,
+         isSidebarCollapsed, setSidebarCollapsed } from '../state.js'
+
+const SIDEBAR_WIDTH_KEY = 'orkester-sidebar-width'
+const MIN_WIDTH         = 160
+const MAX_WIDTH         = 480
 
 let cachedNamespaces = []
 
-/** Load namespaces and render sidebar. Call once at startup. */
+// ── Nav structure ──────────────────────────────────────────────────────────
+// id is used to detect active group; href is the hash path; children = sub-items.
+const NAV = [
+  {
+    id: 'dashboard', label: 'Dashboard', href: '#/',
+    icon: `<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+      <rect x="3" y="14" width="7" height="9"/><rect x="14" y="14" width="7" height="9"/>
+    </svg>`,
+  },
+  {
+    id: 'catalog', label: 'Catalog', href: '#/catalog',
+    icon: `<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+    </svg>`,
+  },
+  {
+    id: 'workspace', label: 'Workspace', group: true,
+    icon: `<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+    </svg>`,
+    children: [
+      {
+        id: 'runners', label: 'Runners', href: '#/workspace/runners',
+        icon: `<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/>
+        </svg>`,
+      },
+      {
+        id: 'work-runs', label: 'Work Runs', href: '#/workspace/work-runs',
+        icon: `<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>`,
+      },
+      {
+        id: 'crons', label: 'Crons', href: '#/workspace/crons',
+        icon: `<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>`,
+      },
+    ],
+  },
+  {
+    id: 'metrics', label: 'Metrics', href: '#/metrics',
+    icon: `<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6" y1="20" x2="6" y2="14"/>
+    </svg>`,
+  },
+  {
+    id: 'settings', label: 'Settings', href: '#/settings',
+    icon: `<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+    </svg>`,
+  },
+  {
+    id: 'help', label: 'Help', href: '#/help',
+    icon: `<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>`,
+  },
+]
+
+// ── Public init ────────────────────────────────────────────────────────────
+
 export async function initSidebar() {
+  applyCollapsedState()
+  renderUser()
+  renderNav()
+  initCollapseButton()
+  initResizer()
+  initNamespaceSelector()
+
+  // Re-highlight active nav item on every navigation
+  window.addEventListener('hashchange', updateActiveNav)
+
+  // Refresh namespace list when namespace changes externally
+  window.addEventListener('orkester:namespace-changed', () => {
+    renderNamespaceLabel()
+  })
+
+  // Load namespaces from API (non-blocking)
   try {
     const data = await listNamespaces()
-    cachedNamespaces = data.namespaces ?? []
+    cachedNamespaces = data?.namespaces ?? []
   } catch (_) {
     cachedNamespaces = []
   }
-  initResizer()
-  renderSidebar()
-  window.addEventListener('hashchange', updateSidebarActive)
+  renderNamespaceDropdown()
+  renderNamespaceLabel()
 }
 
+// ── User section ───────────────────────────────────────────────────────────
+
+function renderUser() {
+  const avatar = document.getElementById('sidebar-avatar')
+  const name   = document.getElementById('sidebar-user-name')
+  const team   = document.getElementById('sidebar-user-team')
+  if (!avatar) return
+  avatar.textContent = MOCK_USER.initials
+  name.textContent   = MOCK_USER.name
+  team.innerHTML = MOCK_USER.team
+    ? `<span class="sidebar-team-dot" style="background:${MOCK_USER.team.color}"></span>
+       <span>${MOCK_USER.team.name}</span>`
+    : ''
+}
+
+// ── Namespace selector ─────────────────────────────────────────────────────
+
+function initNamespaceSelector() {
+  const btn      = document.getElementById('sidebar-ns-btn')
+  const dropdown = document.getElementById('sidebar-ns-dropdown')
+  if (!btn) return
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation()
+    const open = !dropdown.classList.contains('hidden')
+    dropdown.classList.toggle('hidden', open)
+    btn.setAttribute('aria-expanded', String(!open))
+  })
+
+  // Close on outside click
+  document.addEventListener('click', () => {
+    dropdown.classList.add('hidden')
+    btn.setAttribute('aria-expanded', 'false')
+  })
+}
+
+function renderNamespaceDropdown() {
+  const dropdown = document.getElementById('sidebar-ns-dropdown')
+  if (!dropdown) return
+  const active = getActiveNamespace()
+  dropdown.innerHTML = cachedNamespaces.map(ns => `
+    <div class="sidebar-ns-option${ns.name === active ? ' selected' : ''}"
+         role="option" data-ns="${ns.name}" aria-selected="${ns.name === active}">
+      <span class="sidebar-ns-option-dot"></span>
+      ${ns.name}
+    </div>
+  `).join('') || '<div class="sidebar-ns-option" style="opacity:0.5">No namespaces found</div>'
+
+  dropdown.querySelectorAll('.sidebar-ns-option[data-ns]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation()
+      setActiveNamespace(el.dataset.ns)
+      renderNamespaceDropdown()
+      renderNamespaceLabel()
+      dropdown.classList.add('hidden')
+      document.getElementById('sidebar-ns-btn')?.setAttribute('aria-expanded', 'false')
+      // Reload the current page so it reflects the new namespace
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+  })
+}
+
+function renderNamespaceLabel() {
+  const label = document.getElementById('sidebar-ns-label')
+  if (label) label.textContent = getActiveNamespace() || '— select —'
+}
+
+// ── Nav rendering ──────────────────────────────────────────────────────────
+
+function currentPath() {
+  const hash = window.location.hash.slice(1) || '/'
+  return hash.split('?')[0]
+}
+
+function isGroupActive(group) {
+  const path = currentPath()
+  return group.children.some(c => path === c.href.slice(1) || path.startsWith(c.href.slice(1) + '/'))
+}
+
+function renderNav() {
+  const nav = document.getElementById('sidebar-nav')
+  if (!nav) return
+  const path = currentPath()
+
+  nav.innerHTML = NAV.map(item => {
+    if (item.group) {
+      const active  = isGroupActive(item)
+      const isOpen  = active  // auto-open when a child is active
+      return `
+        <button class="nav-item group-header ${isOpen ? 'group-open' : ''}"
+                data-group="${item.id}" aria-expanded="${isOpen}">
+          ${item.icon}
+          <span class="nav-label">${item.label}</span>
+          <svg class="nav-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </button>
+        <div class="nav-group-children${isOpen ? ' open' : ''}" data-children="${item.id}">
+          ${item.children.map(child => `
+            <a class="nav-item sub ${path === child.href.slice(1) ? 'active' : ''}"
+               href="${child.href}">
+              ${child.icon}
+              <span class="nav-label">${child.label}</span>
+            </a>
+          `).join('')}
+        </div>
+      `
+    }
+    const active = item.href === '#/'
+      ? path === '/'
+      : path === item.href.slice(1) || path.startsWith(item.href.slice(1) + '/')
+    return `
+      <a class="nav-item${active ? ' active' : ''}" href="${item.href}">
+        ${item.icon}
+        <span class="nav-label">${item.label}</span>
+      </a>
+    `
+  }).join('')
+
+  // Wire up group toggles
+  nav.querySelectorAll('.nav-item.group-header').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id       = btn.dataset.group
+      const children = nav.querySelector(`[data-children="${id}"]`)
+      const isOpen   = children.classList.toggle('open')
+      btn.classList.toggle('group-open', isOpen)
+      btn.setAttribute('aria-expanded', String(isOpen))
+    })
+  })
+}
+
+function updateActiveNav() {
+  renderNav()
+}
+
+// ── Collapse toggle ────────────────────────────────────────────────────────
+
+function applyCollapsedState() {
+  document.body.classList.toggle('sidebar-collapsed', isSidebarCollapsed())
+}
+
+function initCollapseButton() {
+  const btn = document.getElementById('sidebar-collapse-btn')
+  if (!btn) return
+  btn.addEventListener('click', () => {
+    const collapsed = !document.body.classList.contains('sidebar-collapsed')
+    document.body.classList.toggle('sidebar-collapsed', collapsed)
+    setSidebarCollapsed(collapsed)
+  })
+}
+
+// ── Drag-to-resize ─────────────────────────────────────────────────────────
+
 function initResizer() {
-  const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10)
+  const sidebar = document.getElementById('sidebar')
+  const resizer = document.getElementById('sidebar-resizer')
+  if (!resizer || !sidebar) return
+
+  // Restore saved width
+  const saved = parseInt(localStorage.getItem(SIDEBAR_WIDTH_KEY), 10)
   if (saved >= MIN_WIDTH && saved <= MAX_WIDTH) {
     document.body.style.setProperty('--sidebar-width', `${saved}px`)
   }
 
-  const resizer = document.getElementById('sidebar-resizer')
-  if (!resizer) return
-
   resizer.addEventListener('mousedown', (e) => {
+    if (document.body.classList.contains('sidebar-collapsed')) return
     e.preventDefault()
     resizer.classList.add('dragging')
     document.body.style.userSelect = 'none'
-    document.body.style.cursor = 'col-resize'
+    document.body.style.cursor     = 'col-resize'
 
     const onMove = (ev) => {
       const w = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, ev.clientX))
@@ -42,11 +291,11 @@ function initResizer() {
     const onUp = () => {
       resizer.classList.remove('dragging')
       document.body.style.userSelect = ''
-      document.body.style.cursor = ''
+      document.body.style.cursor     = ''
       const current = parseInt(
         getComputedStyle(document.body).getPropertyValue('--sidebar-width'), 10
       )
-      if (current) localStorage.setItem(STORAGE_KEY, current)
+      if (current) localStorage.setItem(SIDEBAR_WIDTH_KEY, current)
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup',   onUp)
     }
@@ -54,96 +303,4 @@ function initResizer() {
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup',   onUp)
   })
-}
-
-function renderSidebar() {
-  const nav = document.getElementById('sidebar-nav')
-  if (!nav) return
-
-  const sorted  = [...cachedNamespaces].sort((a, b) => a.name.localeCompare(b.name))
-  const nsLinks = sorted.map(ns => {
-    const nsEnc = encodeURIComponent(ns.name)
-    return `<a href="#/namespaces/${nsEnc}" class="sidebar-ns-link" data-ns="${ns.name}">
-      <span class="sidebar-ns-dot"></span>${ns.name}
-    </a>`
-  }).join('')
-
-  nav.innerHTML = `
-    <div class="sidebar-section">
-      <a href="#/namespaces" class="sidebar-link" data-path="/namespaces">
-        <span>🗂</span> Namespaces
-      </a>
-      <a href="#/health" class="sidebar-link" data-path="/health">
-        <span>💚</span> Health
-      </a>
-      <a href="#/metrics" class="sidebar-link" data-path="/metrics">
-        <span>📊</span> Metrics
-      </a>
-    </div>
-    ${cachedNamespaces.length > 0 ? `
-      <div class="sidebar-divider"></div>
-      <div class="sidebar-section-title">Namespaces</div>
-      <div class="sidebar-section sidebar-ns-section">
-        ${nsLinks}
-      </div>
-    ` : ''}
-    <div id="sidebar-subnav"></div>
-  `
-  updateSidebarActive()
-}
-
-/** Update active highlights and contextual sub-nav based on current hash. */
-export function updateSidebarActive() {
-  const raw  = window.location.hash.slice(1) || '/'
-  const qIdx = raw.indexOf('?')
-  const path = qIdx === -1 ? raw : raw.slice(0, qIdx)
-
-  // Highlight top-level links
-  document.querySelectorAll('.sidebar-link[data-path]').forEach(a => {
-    const p      = a.dataset.path
-    const active = path === p || (p !== '/namespaces' && path.startsWith(p + '/'))
-    a.classList.toggle('active', active)
-  })
-
-  // Highlight namespace pills
-  document.querySelectorAll('.sidebar-ns-link[data-ns]').forEach(a => {
-    const nsEnc = encodeURIComponent(a.dataset.ns)
-    const inNs  = path === `/namespaces/${nsEnc}` || path.startsWith(`/namespaces/${nsEnc}/`)
-    a.classList.toggle('active', inNs)
-  })
-
-  // Contextual sub-nav when inside a namespace
-  const nsMatch = path.match(/^\/namespaces\/([^/]+)(?:\/.*)?$/)
-  renderSubNav(nsMatch ? decodeURIComponent(nsMatch[1]) : null, path)
-}
-
-function renderSubNav(ns, path) {
-  const el = document.getElementById('sidebar-subnav')
-  if (!el) return
-
-  if (!ns) {
-    el.innerHTML = ''
-    return
-  }
-
-  const nsEnc = encodeURIComponent(ns)
-  const tabs = [
-    { label: 'Catalog',   p: `/namespaces/${nsEnc}` },
-    { label: 'Work Runs', p: `/namespaces/${nsEnc}/workflows` },
-    { label: 'Crons',     p: `/namespaces/${nsEnc}/crons` },
-  ]
-
-  el.innerHTML = `
-    <div class="sidebar-divider"></div>
-    <div class="sidebar-section-title">${ns}</div>
-    <div class="sidebar-section">
-      ${tabs.map(t => {
-        // Catalog matches exactly; Workflows/Crons also match child paths (e.g. workflow detail)
-        const active = t.label === 'Catalog'
-          ? path === t.p
-          : path === t.p || path.startsWith(t.p + '/')
-        return `<a href="#${t.p}" class="sidebar-link sidebar-tab${active ? ' active' : ''}">${t.label}</a>`
-      }).join('')}
-    </div>
-  `
 }

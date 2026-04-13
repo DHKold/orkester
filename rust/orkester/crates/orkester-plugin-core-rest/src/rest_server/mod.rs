@@ -52,6 +52,7 @@ impl RestServer {
         let cors_ori = cfg.cors_origins.clone();
 
         if cfg.tls_cert.is_some() || cfg.tls_key.is_some() {
+            // TODO: implement TLS support using Rust TLS
             log_warn!("[rest] TLS config detected but TLS is not yet enabled; serving HTTP only");
         }
 

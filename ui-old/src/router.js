@@ -1,10 +1,8 @@
-// ── Hash-based router ──────────────────────────────────────────────────────
+// ── Hash-based router ─────────────────────────────────────────────────────────
 //
 // Usage:
-//   route('/workspace/work-runs/:name', ({ name }) => renderWorkRunDetail(name))
+//   route('/namespaces/:ns/workflows/:id', ({ ns, id }) => render(ns, id))
 //   start()
-//
-// Patterns support :param segments and optional query strings.
 
 const routes = []
 let currentCleanup = null
@@ -16,8 +14,8 @@ export function route(pattern, handler) {
 }
 
 /**
- * Register a cleanup function called before the next navigation.
- * Use to stop polling intervals, destroy chart instances, etc.
+ * Register a cleanup function that will be called before the next navigation.
+ * Use this to stop intervals, cancel subscriptions, etc.
  */
 export function setCleanup(fn) {
   currentCleanup = fn
@@ -54,17 +52,20 @@ function dispatch() {
   const parts = path.split('/').filter(Boolean)
 
   for (const { parts: pattern, handler } of routes) {
+    // Root route: both empty
     if (pattern.length === 0 && parts.length === 0) {
-      handler({ query }); return
+      handler({ query })
+      return
     }
     const params = match(pattern, parts)
     if (params !== null) {
-      handler({ ...params, query }); return
+      handler({ ...params, query })
+      return
     }
   }
 
   document.getElementById('app').innerHTML =
-    '<div class="empty-state"><h3>404</h3><p>Page not found.</p></div>'
+    '<div class="empty-state"><h2>404</h2><p>Page not found.</p></div>'
 }
 
 /** Start the router. Call once at app init. */
