@@ -8,6 +8,7 @@ use orkester_plugin::prelude::*;
 use super::actions::*;
 use super::request::*;
 
+use crate::document::filtering::apply;
 use crate::document::loader::local_fs::LocalFsChangeEvent;
 use crate::document::loader::actions::*;
 
@@ -96,30 +97,11 @@ impl CatalogServer {
         }
     }
 
-    /// Searches for resources matching a `field=value` query.
-    /// Supported fields: `kind`, `name`, `namespace`.
+    /// Search resources using a composable [`Query`] expression.
     #[handle(ACTION_CATALOG_SEARCH_RESOURCES)]
     fn search_resources(&mut self, request: ResourceSearchRequest) -> Result<Vec<Value>, CatalogError> {
-        let query = request.query;
         let storage = self.storage.lock().unwrap();
-        let result = storage
-            .values()
-            .filter(|resource| {
-                if let Some(field_value) = query.strip_prefix("kind=") {
-                    resource.get("kind").and_then(|v| v.as_str()) == Some(field_value)
-                } else if let Some(field_value) = query.strip_prefix("name=") {
-                    resource.get("name").and_then(|v| v.as_str()) == Some(field_value)
-                } else if let Some(field_value) = query.strip_prefix("namespace=") {
-                    resource
-                        .get("metadata")
-                        .and_then(|m| m.get("namespace"))
-                        .and_then(|v| v.as_str()) == Some(field_value)
-                } else {
-                    true // if query format is unrecognized, return all resources
-                }
-            })
-            .cloned()
-            .collect();
+        let result  = storage.values().filter(|doc| apply(&request.query, doc)).cloned().collect();
         Ok(result)
     }
 

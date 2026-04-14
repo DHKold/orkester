@@ -1,6 +1,8 @@
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
 
+use crate::document::filtering::Query;
+
 #[derive(Deserialize)]
 pub struct ResourceCreationRequest {
     pub id: String,
@@ -25,7 +27,7 @@ pub struct ResourceDeletionRequest {
 
 #[derive(Deserialize)]
 pub struct ResourceSearchRequest {
-    pub query: String,
+    pub query: Query,
 }
 
 #[derive(Deserialize)]

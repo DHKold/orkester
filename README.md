@@ -1,6 +1,13 @@
 # Orkester
 
-Orkester is a Workflow Plateform with a pluggin system made in Rust.
+Orkester is a Workflow Platform with a plugin system made in Rust.
+
+## Documentation
+
+| Topic | File |
+|---|---|
+| Catalog Server — actions, resource IDs, loader events | [doc/catalog-server.md](doc/catalog-server.md) |
+| Document Filtering — query language, operators, examples | [doc/document-filtering.md](doc/document-filtering.md) |
 
 ## Features
 

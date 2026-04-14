@@ -960,6 +960,7 @@ dependencies = [
  "log",
  "orkester-macro",
  "orkester-plugin",
+ "regex",
  "serde",
  "serde_json",
  "serde_yaml",
