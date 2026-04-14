@@ -316,41 +316,6 @@ function renderLoadGauge(active, max) {
 
 ---
 
-### Task 015 — Settings page
-**File**: `src/pages/settings.js`
-
-**Requirements**:
-- Two sections via sub-nav tabs:
-  1. **User Preferences** — load/save a `core/UserSettings:1.0` document via `searchDocuments({ kind: 'core/UserSettings:1.0', namespace: ns })` / `createDocument` / `updateDocument`. Display as a simple form with a JSON textarea (or CodeMirror editor if already loaded) for the `spec` object.
-  2. **App Configuration** — same pattern for `core/AppConfig:1.0`
-- If no document exists yet, show an "Initialize" button that calls `createDocument()` with an empty spec (`{ kind: 'core/UserSettings:1.0', name: 'default', version: '1.0', metadata: { namespace: ns }, spec: {} }`)
-- Breadcrumb: Settings
-
----
-
-### Task 016 — Help page
-**File**: `src/pages/help.js`
-
-**Requirements**:
-- Call `searchDocuments(...)` to list all `core/HelpTopic:1.0` documents in the current and global namespaces
-- Structure of `core/HelpTopic:1.0`:
-  ```
-  {
-    kind: "core/HelpTopic:1.0",
-    name, version,
-    metadata: { namespace, description },
-    spec: { title, content, listable }
-  }
-  ```
-- If no help topics exist, show a friendly empty state
-- The main page shows a list of help topics where `spec.listable === true` as cards with `spec.title` and `metadata.description`
-- Clicking a card navigates to `#/help/${name}` and shows the full `spec.content` rendered (Markdown → HTML, use a library like [marked](https://github.com/markedjs/marked)).
-- Ensure a topic can link to other topics via Markdown links to `#/help/${name}`
-- Breadcrumb: Help > `spec.title`
-- Create a few sample `core/HelpTopic:1.0` documents in the backend (folder `dev/catalog/help`) for testing (e.g. "Getting Started", "FAQ", "API Reference")
-
----
-
 ## Implementation notes
 
 - **Namespace scoping**: always read `getActiveNamespace()` at render-time (not at module load). All list API calls accept a `ns` parameter.

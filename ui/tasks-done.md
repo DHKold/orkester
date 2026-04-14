@@ -83,3 +83,37 @@ function destroyEditor(view) { if (view) view.destroy() }
 
 ---
 
+### Task 015 — Settings page
+**File**: `src/pages/settings.js`
+
+**Requirements**:
+- Two sections via sub-nav tabs:
+  1. **User Settings** — Settings are store in the catalog as `core/UserSettings:1.0` (global, no namespace), with the name in the form `<user_id>-settings`. The spec is a list of properties with `key`, `value`, and `type` (`string`, `number`, `boolean`, ...). The page renders a form based on the spec, allowing users to edit and save their preferences. On save, upsert the document via `createDocument`.
+  2. **Application Settings** — Settings are stored in the catalog as `core/AppSettings:1.0` (global, no namespace). The spec is a list of config entries with `key`, `value`, and `type`. The page renders a form based on the spec, allowing users to edit and save the configuration. On save, upsert the document via `createDocument`.
+- User ID can be obtained from `getActiveUser().id` from `../../state.js` (mocked for now)
+- Authorization is out of scope for this task — assume all users can read/write the settings.
+- Breadcrumb: Settings
+- Create the `core/UserSettings:1.0` and `core/AppSettings:1.0` documents in the backend (folder `dev/catalog/core`) with some sample properties for testing.
+
+---
+
+### Task 016 — Help page
+**File**: `src/pages/help.js`
+
+**Requirements**:
+- Call `searchDocuments(...)` to list all `core/HelpTopic:1.0` documents in the current and global namespaces
+- Structure of `core/HelpTopic:1.0`:
+  ```
+  {
+    kind: "core/HelpTopic:1.0",
+    name, version,
+    metadata: { namespace, description },
+    spec: { title, content, listable }
+  }
+  ```
+- If no help topics exist, show a friendly empty state
+- The main page shows a list of help topics where `spec.listable === true` as cards with `spec.title` and `metadata.description`
+- Clicking a card navigates to `#/help/${name}` and shows the full `spec.content` rendered (Markdown → HTML, use a library like [marked](https://github.com/markedjs/marked)).
+- Ensure a topic can link to other topics via Markdown links to `#/help/${name}`
+- Breadcrumb: Help > `spec.title`
+- Create a few sample `core/HelpTopic:1.0` documents in the backend (folder `dev/catalog/help`) for testing (e.g. "Getting Started", "FAQ", "API Reference")

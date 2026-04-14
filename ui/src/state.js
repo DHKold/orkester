@@ -17,6 +17,10 @@ export const MOCK_USER = {
   },
 }
 
+export function getActiveUser() {
+  return MOCK_USER
+}
+
 // ── Active namespace ───────────────────────────────────────────────────────
 let _activeNamespace = localStorage.getItem(NS_KEY) || null
 
