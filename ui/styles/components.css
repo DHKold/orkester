@@ -852,3 +852,86 @@ code.kind-chip {
 }
 .help-prose hr { border: none; border-top: 1px solid var(--border-1); margin: 1.5rem 0; }
 
+/* ── Metrics page ─────────────────────────────────────────────────────────── */
+
+/* Snapshot grid — current values */
+.metrics-snap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+.metrics-snap-card {
+  padding: 0.85rem 1rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.metrics-snap-value {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.metrics-snap-key {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* History grid — sparkline cards */
+.metrics-history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+.metrics-history-card {
+  padding: 0.75rem 1rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.metrics-history-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+.metrics-history-key {
+  font-size: 0.78rem;
+  color: var(--text-3);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.metrics-history-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.metrics-chart-wrap {
+  height: 60px;
+  position: relative;
+}
+.metrics-chart-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Trend indicators */
+.trend-up  { font-size: 0.7rem; color: var(--status-succeeded); }
+.trend-dn  { font-size: 0.7rem; color: var(--status-failed); }
+.trend-eq  { font-size: 0.7rem; color: var(--text-3); }
+

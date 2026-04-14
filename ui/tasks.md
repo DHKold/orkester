@@ -139,15 +139,13 @@ The following infrastructure is already in place — do **not** re-implement:
 
 **Requirements**:
 - Widget grid using CSS Grid (`display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))`)
-- Initial widgets (hardcoded):
-  1. **Recent Work Runs** — table of last 5 WorkRuns from `listWorkRuns(ns)` with name, status badge, created time
-  2. **Active Runners** — count cards for WorkRunners in state `active` vs total from `listWorkRunners(ns)`
-  3. **Cron Overview** — count of enabled/disabled crons from `listCrons(ns)`
-  4. **System Health** — uptime + version from `getHealth()`
+- Initial widgets:
+  1. **System Health** — uptime + version from `getHealth()`
+  2. **Loaded Plugins** — list plugin names from `getHostPlugins()`
+  3. **Global Components** — list global components from `getHostComponents()`
 - Widget layout (order + visibility) persisted in `localStorage` under key `orkester-dashboard-layout`
 - "Customize" button opens a panel to reorder/toggle widgets
 - Each widget has a title bar and loads its data independently (individual try/catch, shows error state per widget)
-- Import: `getActiveNamespace` from `../../state.js`
 
 ---
 
@@ -297,22 +295,6 @@ function renderLoadGauge(active, max) {
   - **Triggered Work Runs**: call `listWorkRuns(ns)`, filter where `spec.trigger.kind === 'cron'` and trigger matches cron name, render as table
 - Actions: Edit (opens same modal as Task 012 with pre-filled values), Toggle enabled, Delete
 - Breadcrumb: Workspace → Crons → `name`
-
----
-
-### Task 014 — Metrics page
-**File**: `src/pages/metrics.js`
-
-**Requirements**:
-- Call `getMetricsSnapshot()` and `getMetricsHistory()` from `../../api.js`
-- **Current values grid**: cards showing metric name → current value (number formatted with `toLocaleString`)
-- **History section**: for each metric with ≥ 2 history points, render a chart card:
-  - Card title: metric name (abbreviated: last segment after `/` or `.`)
-  - Trend indicator: ▲ (last > prev), ▼ (last < prev), — (equal) with colour
-  - Chart.js line chart (100 × 48 px sparkline canvas): `new Chart(canvas, { type:'line', data: {...}, options: { responsive:false, plugins:{legend:{display:false}}, scales:{x:{display:false},y:{display:false}} } })`
-- History cards in a responsive grid (3–4 cols)
-- Auto-refresh every 30 s; destroy and recreate Chart instances on each refresh to avoid leaks (use `setCleanup`)
-- Breadcrumb: Metrics
 
 ---
 

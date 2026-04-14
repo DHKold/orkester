@@ -83,6 +83,22 @@ function destroyEditor(view) { if (view) view.destroy() }
 
 ---
 
+### Task 014 — Metrics page
+**File**: `src/pages/metrics.js`
+
+**Requirements**:
+- Call `getMetricsSnapshot()` and `getMetricsHistory()` from `../../api.js`
+- **Current values grid**: cards showing metric name → current value (number formatted with `toLocaleString`)
+- **History section**: for each metric with ≥ 2 history points, render a chart card:
+  - Card title: metric name (abbreviated: last segment after `/` or `.`)
+  - Trend indicator: ▲ (last > prev), ▼ (last < prev), — (equal) with colour
+  - Chart.js line chart (100 × 48 px sparkline canvas): `new Chart(canvas, { type:'line', data: {...}, options: { responsive:false, plugins:{legend:{display:false}}, scales:{x:{display:false},y:{display:false}} } })`
+- History cards in a responsive grid (3–4 cols)
+- Auto-refresh every 30 s; destroy and recreate Chart instances on each refresh to avoid leaks (use `setCleanup`)
+- Breadcrumb: Metrics
+
+---
+
 ### Task 015 — Settings page
 **File**: `src/pages/settings.js`
 
