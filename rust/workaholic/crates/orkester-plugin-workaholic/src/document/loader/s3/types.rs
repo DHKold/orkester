@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use workaholic::Document;
 
+use super::credentials::CredentialsProvider;
+
 // ─── Loader config ────────────────────────────────────────────────────────────
 
 /// Top-level config for the S3 loader (extension → parser mapping).
@@ -46,6 +48,8 @@ fn default_poll()   -> u64    { 30 }
 /// A single watched S3 bucket/prefix, with cached object state.
 pub struct S3Entry {
     pub config:          S3LoaderEntryConfig,
+    /// Credential provider for this entry. Handles static keys, IRSA, and unsigned.
+    pub(super) credentials: CredentialsProvider,
     /// key → (etag, documents). Etag is used for change detection.
     pub loaded_objects:  HashMap<String, S3LoadedObject>,
 }

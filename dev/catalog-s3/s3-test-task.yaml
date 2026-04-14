@@ -1,0 +1,18 @@
+kind: workaholic/Task:1.0
+name: s3-hello
+version: 1.0.0
+metadata:
+  namespace: testing
+  description: "Loaded from S3 — smoke test for the S3DocumentLoader"
+  tags: ["s3-test"]
+spec:
+  runner:
+    kind: workaholic/ShellTaskRunner:1.0
+  inputs:
+    - name: message
+      type: string
+      required: false
+      default:
+        value: "hello from S3"
+  template:
+    command: echo "{{message}}"

@@ -12,6 +12,7 @@ use crate::document::loader::actions::*;
 use super::scanner::scan_entry;
 use super::types::{S3ChangeEvent, S3Entry, S3ScanMetrics};
 use super::types::{S3LoaderEntryConfig};
+use super::credentials::CredentialsProvider;
 use super::watcher::{build_metrics_pub, spawn_entry_watcher};
 
 pub struct S3Loader {
@@ -31,8 +32,9 @@ impl S3Loader {
     }
 
     pub fn add_entry(&mut self, cfg: S3LoaderEntryConfig) -> String {
-        let id = format!("s3://{}/{}", cfg.bucket, cfg.prefix);
-        self.entries.push(Arc::new(Mutex::new(S3Entry { config: cfg, loaded_objects: HashMap::new() })));
+        let id          = format!("s3://{}/{}", cfg.bucket, cfg.prefix);
+        let credentials = CredentialsProvider::from_config(&cfg);
+        self.entries.push(Arc::new(Mutex::new(S3Entry { config: cfg, loaded_objects: HashMap::new(), credentials })));
         id
     }
 

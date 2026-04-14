@@ -24,6 +24,27 @@ servers:
       - kind: workaholic/DocumentLoader/Start
         config: {}
 
+  # ── S3 catalog loader (smoke test — leave commented out unless testing S3) ──
+  # To test: run the setup commands from the README, then uncomment this block.
+  # - name: s3-catalog-loader
+  #   kind: workaholic/S3Loader:1.0
+  #   config:
+  #     extensions:
+  #       yaml: workaholic/YamlDocumentParser:1.0
+  #   start:
+  #     - kind: workaholic/DocumentLoader/CreateEntry
+  #       config:
+  #         bucket: test-workaholic
+  #         prefix: catalog/
+  #         region: eu-west-1
+  #         access_key_id: "REPLACE_WITH_YOUR_ACCESS_KEY"
+  #         secret_access_key: "REPLACE_WITH_YOUR_SECRET_KEY"
+  #         recursive: true
+  #         watch: true
+  #         poll_interval_secs: 15
+  #     - kind: workaholic/DocumentLoader/Start
+  #       config: {}
+
   # ── Workflow execution engine ───────────────────────────────────────────────
   - name: workflow-server
     kind: workaholic/WorkflowServer:1.0

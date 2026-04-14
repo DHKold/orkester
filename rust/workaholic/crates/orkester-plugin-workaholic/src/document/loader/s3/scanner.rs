@@ -42,8 +42,14 @@ fn events_for_deleted(entry: &S3Entry, loaded: &S3LoadedObject) -> Vec<S3ChangeE
 // ─── Scanner ──────────────────────────────────────────────────────────────────
 
 /// Scan the S3 entry and return change events (new, modified, deleted objects).
+///
+/// Credentials are resolved once per scan from the entry's [`CredentialsProvider`]
+/// and reused for all object fetches in this pass.
 pub fn scan_entry(entry: &mut S3Entry, ext_parsers: &HashMap<String, Box<dyn DocumentParser>>) -> Vec<S3ChangeEvent> {
-    let objects = match list_objects(&entry.config) {
+    let creds = entry.credentials.resolve();
+    let creds_ref = creds.as_ref();
+
+    let objects = match list_objects(&entry.config, creds_ref) {
         Ok(v)  => v,
         Err(e) => { log_error!("[s3] list_objects failed: {e}"); return vec![]; }
     };
@@ -57,7 +63,7 @@ pub fn scan_entry(entry: &mut S3Entry, ext_parsers: &HashMap<String, Box<dyn Doc
 
         if cached_etag.as_deref() == Some(&etag) { continue; } // unchanged
 
-        let bytes = match get_object(&entry.config, &key) {
+        let bytes = match get_object(&entry.config, &key, creds_ref) {
             Ok(b)  => b,
             Err(e) => { log_warn!("[s3] get_object({key}) failed: {e}"); continue; }
         };

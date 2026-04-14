@@ -23,9 +23,17 @@ fn derive_signing_key(secret: &str, date: &str, region: &str) -> Vec<u8> {
     hmac256(&k3, b"aws4_request")
 }
 
-fn canonical_request(method: &str, path: &str, query: &str, host: &str, datetime: &str) -> String {
-    let canon_headers = format!("host:{host}\nx-amz-date:{datetime}\n");
-    format!("{method}\n{path}\n{query}\n{canon_headers}\nhost;x-amz-date\n{EMPTY_HASH}")
+fn canonical_request(method: &str, path: &str, query: &str, host: &str, datetime: &str, session_token: Option<&str>) -> String {
+    // Headers must be sorted lexicographically: host < x-amz-date < x-amz-security-token.
+    let mut canon_headers = format!("host:{host}\nx-amz-date:{datetime}\n");
+    let signed_headers;
+    if let Some(token) = session_token {
+        canon_headers.push_str(&format!("x-amz-security-token:{token}\n"));
+        signed_headers = "host;x-amz-date;x-amz-security-token";
+    } else {
+        signed_headers = "host;x-amz-date";
+    }
+    format!("{method}\n{path}\n{query}\n{canon_headers}\n{signed_headers}\n{EMPTY_HASH}")
 }
 
 fn string_to_sign(datetime: &str, date: &str, region: &str, canon_req: &str) -> String {
@@ -35,21 +43,30 @@ fn string_to_sign(datetime: &str, date: &str, region: &str, canon_req: &str) -> 
 }
 
 /// Compute the `Authorization` header value for an S3 GET request.
+///
+/// When `session_token` is `Some`, it is included in the canonical headers and
+/// `SignedHeaders`, as required by STS-issued temporary credentials.
 pub fn authorization_header(
-    method:     &str,
-    path:       &str,
-    query:      &str,
-    host:       &str,
-    datetime:   &str,
-    date:       &str,
-    region:     &str,
-    access_key: &str,
-    secret_key: &str,
+    method:        &str,
+    path:          &str,
+    query:         &str,
+    host:          &str,
+    datetime:      &str,
+    date:          &str,
+    region:        &str,
+    access_key:    &str,
+    secret_key:    &str,
+    session_token: Option<&str>,
 ) -> String {
+    let signed_headers = if session_token.is_some() {
+        "host;x-amz-date;x-amz-security-token"
+    } else {
+        "host;x-amz-date"
+    };
     let signing_key = derive_signing_key(secret_key, date, region);
-    let canon_req   = canonical_request(method, path, query, host, datetime);
+    let canon_req   = canonical_request(method, path, query, host, datetime, session_token);
     let sts         = string_to_sign(datetime, date, region, &canon_req);
     let sig         = hex::encode(hmac256(&signing_key, sts.as_bytes()));
     let scope       = format!("{date}/{region}/s3/aws4_request");
-    format!("AWS4-HMAC-SHA256 Credential={access_key}/{scope},SignedHeaders=host;x-amz-date,Signature={sig}")
+    format!("AWS4-HMAC-SHA256 Credential={access_key}/{scope},SignedHeaders={signed_headers},Signature={sig}")
 }

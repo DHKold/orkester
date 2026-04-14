@@ -1,8 +1,11 @@
 //! S3 HTTP client: list objects and fetch object content.
 
+use std::io::Read;
+
 use chrono::Utc;
 
 use super::auth::authorization_header;
+use super::credentials::AwsCredentials;
 use super::types::S3LoaderEntryConfig;
 
 pub type S3Result<T> = std::result::Result<T, String>;
@@ -24,43 +27,71 @@ fn host(cfg: &S3LoaderEntryConfig) -> String {
 
 // ─── Authenticated GET ─────────────────────────────────────────────────────────
 
-fn s3_get(cfg: &S3LoaderEntryConfig, path: &str, query: &str) -> S3Result<String> {
+/// Perform an authenticated S3 GET request and return the response body as a string.
+///
+/// If `creds` is `None`, the request is sent unsigned (suitable for
+/// LocalStack without auth, or public buckets).
+fn s3_get(cfg: &S3LoaderEntryConfig, path: &str, query: &str, creds: Option<&AwsCredentials>) -> S3Result<String> {
     let now      = Utc::now();
     let datetime = now.format("%Y%m%dT%H%M%SZ").to_string();
     let date     = now.format("%Y%m%d").to_string();
-    let url      = if query.is_empty() { format!("{}/{}{}", endpoint(cfg), cfg.bucket, path) }
-                   else                { format!("{}/{}{path}?{query}", endpoint(cfg), cfg.bucket) };
+    let url = if query.is_empty() {
+        format!("{}/{}{}", endpoint(cfg), cfg.bucket, path)
+    } else {
+        format!("{}/{}{path}?{query}", endpoint(cfg), cfg.bucket)
+    };
     let req = ureq::get(&url).set("x-amz-date", &datetime);
-    let req = if let (Some(ak), Some(sk)) = (&cfg.access_key_id, &cfg.secret_access_key) {
-        let auth = authorization_header("GET", &format!("/{}{path}", cfg.bucket), query, &host(cfg), &datetime, &date, &cfg.region, ak, sk);
-        req.set("Authorization", &auth)
-    } else { req };
+    let req = if let Some(c) = creds {
+        let auth = authorization_header(
+            "GET", &format!("/{}{path}", cfg.bucket), query, &host(cfg),
+            &datetime, &date, &cfg.region, &c.access_key_id, &c.secret_access_key,
+            c.session_token.as_deref(),
+        );
+        let req = req.set("Authorization", &auth);
+        if let Some(token) = &c.session_token {
+            req.set("x-amz-security-token", token)
+        } else {
+            req
+        }
+    } else {
+        req
+    };
     req.call().map_err(|e| e.to_string())?.into_string().map_err(|e| e.to_string())
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /// List objects under the entry's prefix. Returns `(key, etag)` pairs.
-pub fn list_objects(cfg: &S3LoaderEntryConfig) -> S3Result<Vec<(String, String)>> {
-    let prefix  = if cfg.recursive { cfg.prefix.clone() } else { cfg.prefix.clone() };
-    let delim   = if cfg.recursive { "" } else { "&delimiter=%2F" };
-    let query   = format!("list-type=2&prefix={}{delim}", urlenc(&prefix));
-    let xml     = s3_get(cfg, "", &query)?;
+pub(super) fn list_objects(cfg: &S3LoaderEntryConfig, creds: Option<&AwsCredentials>) -> S3Result<Vec<(String, String)>> {
+    let delim = if cfg.recursive { "" } else { "&delimiter=%2F" };
+    let query = format!("list-type=2&prefix={}{delim}", urlenc(&cfg.prefix));
+    let xml   = s3_get(cfg, "", &query, creds)?;
     Ok(parse_list_xml(&xml))
 }
 
 /// Fetch raw bytes of one S3 object by key.
-pub fn get_object(cfg: &S3LoaderEntryConfig, key: &str) -> S3Result<Vec<u8>> {
-    let path = format!("/{key}");
+pub(super) fn get_object(cfg: &S3LoaderEntryConfig, key: &str, creds: Option<&AwsCredentials>) -> S3Result<Vec<u8>> {
+    let path     = format!("/{key}");
     let now      = Utc::now();
     let datetime = now.format("%Y%m%dT%H%M%SZ").to_string();
     let date     = now.format("%Y%m%d").to_string();
     let url      = format!("{}/{}{}", endpoint(cfg), cfg.bucket, path);
     let req = ureq::get(&url).set("x-amz-date", &datetime);
-    let req = if let (Some(ak), Some(sk)) = (&cfg.access_key_id, &cfg.secret_access_key) {
-        let auth = authorization_header("GET", &format!("/{}{path}", cfg.bucket), "", &host(cfg), &datetime, &date, &cfg.region, ak, sk);
-        req.set("Authorization", &auth)
-    } else { req };
+    let req = if let Some(c) = creds {
+        let auth = authorization_header(
+            "GET", &format!("/{}{path}", cfg.bucket), "", &host(cfg),
+            &datetime, &date, &cfg.region, &c.access_key_id, &c.secret_access_key,
+            c.session_token.as_deref(),
+        );
+        let req = req.set("Authorization", &auth);
+        if let Some(token) = &c.session_token {
+            req.set("x-amz-security-token", token)
+        } else {
+            req
+        }
+    } else {
+        req
+    };
     let mut bytes = Vec::new();
     req.call().map_err(|e| e.to_string())?.into_reader().read_to_end(&mut bytes).map_err(|e| e.to_string())?;
     Ok(bytes)
