@@ -64,7 +64,7 @@ export function renderTable(opts) {
     const sortClass = isSorted ? `sort-${sortDir}` : ''
     const noSort    = col.sortable === false ? 'no-sort' : ''
     return `<th class="${sortClass} ${noSort}" data-sort="${col.sortable !== false ? col.key : ''}" style="${col.width ? `width:${col.width}` : ''}">
-      ${esc(col.label)}<span class="sort-ind"></span>
+      ${col.labelHtml ?? esc(col.label)}<span class="sort-ind"></span>
     </th>`
   }).join('')}</tr></thead>`
 
@@ -141,7 +141,8 @@ export function bindTable(containerId, handlers) {
   // Row click
   if (onRowClick) {
     wrap.querySelectorAll('tr[data-row-idx]').forEach(tr => {
-      tr.addEventListener('click', () => {
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('input[type=checkbox]')) return  // let checkbox handle itself
         const idx = parseInt(tr.dataset.rowIdx, 10)
         if (rows[idx]) onRowClick(rows[idx])
       })

@@ -152,13 +152,22 @@ function renderNamespaceDropdown() {
   const dropdown = document.getElementById('sidebar-ns-dropdown')
   if (!dropdown) return
   const active = getActiveNamespace()
-  dropdown.innerHTML = cachedNamespaces.map(ns => `
+
+  const globalOpt = `
+    <div class="sidebar-ns-option${active === null ? ' selected' : ''}"
+         role="option" data-ns="" aria-selected="${active === null}">
+      <span class="sidebar-ns-option-dot" style="background:var(--text-3)"></span>
+      <em>Global (all namespaces)</em>
+    </div>
+  `
+
+  dropdown.innerHTML = globalOpt + (cachedNamespaces.map(ns => `
     <div class="sidebar-ns-option${ns.name === active ? ' selected' : ''}"
          role="option" data-ns="${ns.name}" aria-selected="${ns.name === active}">
       <span class="sidebar-ns-option-dot"></span>
       ${ns.name}
     </div>
-  `).join('') || '<div class="sidebar-ns-option" style="opacity:0.5">No namespaces found</div>'
+  `).join('') || '<div class="sidebar-ns-option" style="opacity:0.5;padding-left:2rem">No namespaces found</div>')
 
   dropdown.querySelectorAll('.sidebar-ns-option[data-ns]').forEach(el => {
     el.addEventListener('click', (e) => {
@@ -176,7 +185,7 @@ function renderNamespaceDropdown() {
 
 function renderNamespaceLabel() {
   const label = document.getElementById('sidebar-ns-label')
-  if (label) label.textContent = getActiveNamespace() || '— select —'
+  if (label) label.textContent = getActiveNamespace() || 'Global'
 }
 
 // ── Nav rendering ──────────────────────────────────────────────────────────

@@ -613,3 +613,89 @@ code.kind-chip {
   line-height: 1.6;
 }
 
+/* ── Bulk action bar ─────────────────────────────────────────────────────── */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: color-mix(in srgb, var(--color-brand) 8%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--color-brand) 25%, transparent);
+  border-radius: var(--radius-md);
+  margin-bottom: 0.75rem;
+}
+.bulk-bar.hidden { display: none; }
+.bulk-bar .bulk-count { flex: 1; font-size: 0.875rem; font-weight: 500; color: var(--text-1); }
+
+/* ── New/edit document form ──────────────────────────────────────────────── */
+.new-doc-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+.new-doc-label { font-size: 0.875rem; font-weight: 500; color: var(--text-2); }
+.new-doc-input {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-0);
+  color: var(--text-1);
+  font-size: 0.875rem;
+  box-sizing: border-box;
+}
+.new-doc-input:focus {
+  outline: 2px solid var(--color-brand);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+.new-doc-hint {
+  margin-top: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--text-3);
+}
+.req { color: var(--status-failed); }
+
+/* Form section divider */
+.form-section-header {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border-1);
+  margin-bottom: 0.75rem;
+}
+
+/* Extra metadata rows */
+.extra-meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  align-items: center;
+}
+
+/* Status info note */
+.new-doc-status-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  background: color-mix(in srgb, var(--color-brand) 6%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--color-brand) 20%, transparent);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.new-doc-status-note code {
+  vertical-align: middle;
+  background: color-mix(in srgb, var(--color-brand) 10%, var(--surface-2));
+  border-radius: 3px;
+  padding: 0.05em 0.3em;
+}
+

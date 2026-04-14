@@ -3,7 +3,7 @@
 // Shows all versions of a (kind, ns, name) document grouped together.
 // Spec is editable inline via CodeMirror 6; Status and Raw are read-only.
 
-import { searchDocuments, updateDocument, deleteDocument } from '../../api.js'
+import { searchDocuments, deleteDocument }                 from '../../api.js'
 import { setApp, setBreadcrumb, esc, fmtDate }             from '../../utils.js'
 import { navigate, setCleanup }                            from '../../router.js'
 import { toastSuccess, toastError }                        from '../../components/toast.js'
@@ -15,8 +15,6 @@ import { json }                                           from '@codemirror/lang
 let docs          = []   // all version docs for current (kind, ns, name), latest-first
 let activeVersion = ''
 let activeTab     = 'spec'
-let editMode      = false
-let specEditor    = null  // CodeMirror for spec editing
 let rawEditor     = null  // CodeMirror for raw read-only view
 
 // ── Entry point ────────────────────────────────────────────────────────────
@@ -28,7 +26,6 @@ export async function renderCatalogDetail({ query = {} } = {}) {
   destroyEditors()
   docs          = []
   activeTab     = 'spec'
-  editMode      = false
 
   setBreadcrumb([
     { label: 'Catalog', href: '#/catalog' },
@@ -109,7 +106,7 @@ function renderPage(kind, ns, name) {
         <code class="kind-chip">${esc(kind)}</code>
       </div>
       <div class="page-title-actions">
-        <button class="btn btn-secondary btn-sm" id="btn-new-version">+ New version</button>
+        <button class="btn btn-secondary btn-sm" id="btn-edit-doc">Edit / New Version</button>
         <button class="btn btn-danger btn-sm"    id="btn-delete-version">Delete version</button>
       </div>
     </div>
@@ -180,19 +177,7 @@ function renderVersionSelector() {
 // ── Tab panels ─────────────────────────────────────────────────────────────
 
 function renderSpecPanel(doc) {
-  if (editMode) {
-    return `
-      <div class="spec-edit-toolbar">
-        <button class="btn btn-primary   btn-sm" id="btn-spec-save">Save</button>
-        <button class="btn btn-secondary btn-sm" id="btn-spec-cancel">Cancel</button>
-      </div>
-      <div id="spec-editor-wrap" class="cm-wrap"></div>`
-  }
-  return `
-    <div style="display:flex;justify-content:flex-end;margin-bottom:0.5rem">
-      <button class="btn btn-secondary btn-sm" id="btn-spec-edit">Edit</button>
-    </div>
-    <pre class="code-block">${esc(JSON.stringify(doc.spec ?? {}, null, 2))}</pre>`
+  return `<pre class="code-block">${esc(JSON.stringify(doc.spec ?? {}, null, 2))}</pre>`
 }
 
 function renderStatusPanel(doc) {
@@ -205,19 +190,8 @@ function renderStatusPanel(doc) {
 
 // ── CodeMirror helpers ─────────────────────────────────────────────────────
 
-function mountSpecEditor(doc) {
-  destroyEditor('spec')
-  const wrap = document.getElementById('spec-editor-wrap')
-  if (!wrap) return
-  specEditor = new EditorView({
-    doc:        JSON.stringify(doc.spec ?? {}, null, 2),
-    extensions: [json(), lineNumbers(), highlightActiveLine(), syntaxHighlighting(defaultHighlightStyle)],
-    parent:     wrap,
-  })
-}
-
 function mountRawEditor(doc) {
-  destroyEditor('raw')
+  if (rawEditor) { rawEditor.destroy(); rawEditor = null }
   const wrap = document.getElementById('raw-editor-wrap')
   if (!wrap) return
   rawEditor = new EditorView({
@@ -227,14 +201,8 @@ function mountRawEditor(doc) {
   })
 }
 
-function destroyEditor(which) {
-  if (which === 'spec' && specEditor) { specEditor.destroy(); specEditor = null }
-  if (which === 'raw'  && rawEditor)  { rawEditor.destroy();  rawEditor  = null }
-}
-
 function destroyEditors() {
-  destroyEditor('spec')
-  destroyEditor('raw')
+  if (rawEditor) { rawEditor.destroy(); rawEditor = null }
 }
 
 // ── Event wiring ───────────────────────────────────────────────────────────
@@ -243,13 +211,11 @@ function bindPageEvents(kind, ns, name) {
   // Version selector
   document.getElementById('version-select')?.addEventListener('change', e => {
     activeVersion = e.target.value
-    editMode      = false
     destroyEditors()
     const doc = activeDoc()
     document.getElementById('tab-spec').innerHTML   = renderSpecPanel(doc)
     document.getElementById('tab-status').innerHTML = renderStatusPanel(doc)
     if (activeTab === 'raw') { mountRawEditor(doc) }
-    bindTabContent(kind, ns, name)
   })
 
   // Tab switching
@@ -266,9 +232,9 @@ function bindPageEvents(kind, ns, name) {
     if (activeTab === 'raw' && !rawEditor) mountRawEditor(activeDoc())
   })
 
-  // New version (stubbed — Task 006b)
-  document.getElementById('btn-new-version')?.addEventListener('click', () => {
-    navigate(`#/catalog/new?${new URLSearchParams({ kind, ns, name })}`)
+  // Edit / New Version — navigates to the unified edit form, pre-filled from the active version
+  document.getElementById('btn-edit-doc')?.addEventListener('click', () => {
+    navigate(`#/catalog/new?${new URLSearchParams({ kind, ns, name, version: activeVersion, baseVersion: activeVersion, edit: '1' })}`)
   })
 
   // Delete version
@@ -281,7 +247,6 @@ function bindPageEvents(kind, ns, name) {
       docs = docs.filter(d => d.version !== doc.version)
       if (docs.length > 0) {
         activeVersion = docs[0].version
-        editMode      = false
         destroyEditors()
         renderPage(kind, ns, name)
       } else {
@@ -292,53 +257,4 @@ function bindPageEvents(kind, ns, name) {
     }
   })
 
-  bindTabContent(kind, ns, name)
-}
-
-function bindTabContent(kind, ns, name) {
-  // Enter edit mode
-  document.getElementById('btn-spec-edit')?.addEventListener('click', () => {
-    editMode = true
-    document.getElementById('tab-spec').innerHTML = renderSpecPanel(activeDoc())
-    mountSpecEditor(activeDoc())
-    bindEditButtons(kind, ns, name)
-  })
-
-  bindEditButtons(kind, ns, name)
-}
-
-function bindEditButtons(kind, ns, name) {
-  // Save
-  document.getElementById('btn-spec-save')?.addEventListener('click', async () => {
-    if (!specEditor) return
-    let newSpec
-    try {
-      newSpec = JSON.parse(specEditor.state.doc.toString())
-    } catch {
-      toastError('Invalid JSON — fix syntax before saving.')
-      return
-    }
-    const doc     = activeDoc()
-    const updated = { ...doc, spec: newSpec }
-    try {
-      const saved = await updateDocument(docId(doc), updated)
-      const idx   = docs.findIndex(d => d.version === activeVersion)
-      if (idx >= 0) docs[idx] = saved ?? updated
-      editMode = false
-      destroyEditor('spec')
-      document.getElementById('tab-spec').innerHTML = renderSpecPanel(activeDoc())
-      bindTabContent(kind, ns, name)
-      toastSuccess('Saved.')
-    } catch (e) {
-      toastError(`Save failed: ${e.message}`)
-    }
-  })
-
-  // Cancel
-  document.getElementById('btn-spec-cancel')?.addEventListener('click', () => {
-    editMode = false
-    destroyEditor('spec')
-    document.getElementById('tab-spec').innerHTML = renderSpecPanel(activeDoc())
-    bindTabContent(kind, ns, name)
-  })
 }

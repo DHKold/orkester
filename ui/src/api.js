@@ -41,12 +41,12 @@ export const getMetricsHistory  = ()   => req('/metrics/history')
 export const searchDocuments  = (query)        => req('/catalog/documents/search', { method: 'POST', ...json({ query }) })
 // GET /v1/catalog/documents/:id → document
 export const getDocument      = (id)           => req(`/catalog/documents/${enc(id)}`)
-// POST /v1/catalog/documents → document
-export const createDocument   = (body)         => req('/catalog/documents',           { method: 'POST',   ...json(body) })
-// PUT /v1/catalog/documents/:id → document
-export const updateDocument   = (id, body)     => req(`/catalog/documents/${enc(id)}`, { method: 'PUT',    ...json(body) })
+// POST /v1/catalog/documents → document  (backend expects { id, resource })
+export const createDocument   = (id, resource) => req('/catalog/documents',        { method: 'POST',   ...json({ id, resource }) })
+// PUT /v1/catalog/documents/:id → document  (id in path, backend merges it; body needs { resource })
+export const updateDocument   = (id, resource) => req(`/catalog/documents/${enc(id)}`,  { method: 'PUT',    ...json({ resource }) })
 // DELETE /v1/catalog/documents/:id → null
-export const deleteDocument   = (id)           => req(`/catalog/documents/${enc(id)}`, { method: 'DELETE' })
+export const deleteDocument   = (id)           => req(`/catalog/documents/${enc(id)}`,  { method: 'DELETE' })
 
 // ── Workflow: WorkRuns ─────────────────────────────────────────────────────
 // POST /v1/workflow/trigger { workRef, inputs, workRunnerRef? } → { status }
