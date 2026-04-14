@@ -35,36 +35,18 @@ export const getMetricsSnapshot = ()   => req('/metrics/snapshot')
 // GET /v1/metrics/history  → { metrics: { name: [{timestamp_ms, value}] } }
 export const getMetricsHistory  = ()   => req('/metrics/history')
 
-// ── Catalog: built-in convenience endpoints ────────────────────────────────
-// GET /v1/namespaces → { namespaces[] }
-export const listNamespaces    = ()             => req('/namespaces')
-// GET /v1/namespaces/:ns/works → { works[] }
-export const listWorks         = (ns)           => req(`/namespaces/${enc(ns)}/works`)
-// GET /v1/namespaces/:ns/works/:name/:version → work doc
-export const getWork           = (ns, n, v)     => req(`/namespaces/${enc(ns)}/works/${enc(n)}/${enc(v)}`)
-// GET /v1/namespaces/:ns/tasks → { tasks[] }
-export const listTasks         = (ns)           => req(`/namespaces/${enc(ns)}/tasks`)
-// GET /v1/namespaces/:ns/tasks/:name/:version → task doc
-export const getTask           = (ns, n, v)     => req(`/namespaces/${enc(ns)}/tasks/${enc(n)}/${enc(v)}`)
-
 // ── Catalog: generic resource API ─────────────────────────────────────────
 // These endpoints expose the full CatalogServer document store.
-// Query params: kind, namespace, name (all optional, used as filters).
-// GET /v1/catalog/resources?kind=X&namespace=X&name=X → { resources[] }
-export const searchResources  = (params = {}) => {
-  const qs = new URLSearchParams(Object.fromEntries(
-    Object.entries(params).filter(([, v]) => v != null && v !== '')
-  )).toString()
-  return req(`/catalog/resources${qs ? '?' + qs : ''}`)
-}
-// GET /v1/catalog/resources/:id → resource doc
-export const getResource      = (id)          => req(`/catalog/resources/${enc(id)}`)
-// POST /v1/catalog/resources → resource doc
-export const createResource   = (body)        => req('/catalog/resources',          { method: 'POST',   ...json(body) })
-// PUT /v1/catalog/resources/:id → resource doc
-export const updateResource   = (id, body)   => req(`/catalog/resources/${enc(id)}`, { method: 'PUT',    ...json(body) })
-// DELETE /v1/catalog/resources/:id → null
-export const deleteResource   = (id)          => req(`/catalog/resources/${enc(id)}`, { method: 'DELETE' })
+// POST /v1/catalog/documents/search { query: Query } → [ document, … ]
+export const searchDocuments  = (query)        => req('/catalog/documents/search', { method: 'POST', ...json({ query }) })
+// GET /v1/catalog/documents/:id → document
+export const getDocument      = (id)           => req(`/catalog/documents/${enc(id)}`)
+// POST /v1/catalog/documents → document
+export const createDocument   = (body)         => req('/catalog/documents',           { method: 'POST',   ...json(body) })
+// PUT /v1/catalog/documents/:id → document
+export const updateDocument   = (id, body)     => req(`/catalog/documents/${enc(id)}`, { method: 'PUT',    ...json(body) })
+// DELETE /v1/catalog/documents/:id → null
+export const deleteDocument   = (id)           => req(`/catalog/documents/${enc(id)}`, { method: 'DELETE' })
 
 // ── Workflow: WorkRuns ─────────────────────────────────────────────────────
 // POST /v1/workflow/trigger { workRef, inputs, workRunnerRef? } → { status }

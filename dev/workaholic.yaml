@@ -127,17 +127,6 @@ servers:
           method: POST
           action: metrics/Record
 
-        # Catalog : Namespaces / Works / Tasks (used by the UI)
-        - path:   /v1/namespaces
-          method: GET
-          action: workaholic/CatalogServer/ListNamespaces
-        - path:   /v1/namespaces/{ns}/works
-          method: GET
-          action: workaholic/CatalogServer/ListWorks
-        - path:   /v1/namespaces/{ns}/tasks
-          method: GET
-          action: workaholic/CatalogServer/ListTasks
-
         # Loader : Metrics
         - path:   /v1/loader/metrics
           method: GET
@@ -166,20 +155,20 @@ servers:
           action: workaholic/DocumentLoader/SearchEntries
 
         # Catalog : Resources
-        - path:   /v1/catalog/resources
+        - path:   /v1/catalog/documents
           method: POST
           action: workaholic/CatalogServer/CreateResource
-        - path:   /v1/catalog/resources/{id}
+        - path:   /v1/catalog/documents/{id}
           method: GET
           action: workaholic/CatalogServer/RetrieveResource
-        - path:   /v1/catalog/resources/{id}
+        - path:   /v1/catalog/documents/{id}
           method: PUT
           action: workaholic/CatalogServer/UpdateResource
-        - path:   /v1/catalog/resources/{id}
+        - path:   /v1/catalog/documents/{id}
           method: DELETE
           action: workaholic/CatalogServer/DeleteResource
-        - path:   /v1/catalog/resources
-          method: GET
+        - path:   /v1/catalog/documents/search
+          method: POST
           action: workaholic/CatalogServer/SearchResources
 
         # Workflow : Manual trigger

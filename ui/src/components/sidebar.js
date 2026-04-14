@@ -7,7 +7,7 @@
 //   - Resizable when expanded (drag edge, persisted to localStorage)
 //   - Main nav links with active state and Workspace group expansion
 
-import { listNamespaces }                          from '../api.js'
+import { searchDocuments }                          from '../api.js'
 import { MOCK_USER, getActiveNamespace, setActiveNamespace,
          isSidebarCollapsed, setSidebarCollapsed } from '../state.js'
 
@@ -103,8 +103,8 @@ export async function initSidebar() {
 
   // Load namespaces from API (non-blocking)
   try {
-    const data = await listNamespaces()
-    cachedNamespaces = data?.namespaces ?? []
+    const data = await searchDocuments({ all: [{ when: { eq: { lhs: { field: 'kind' }, rhs: { value: 'workaholic/Namespace:1.0' } } } }] })
+    cachedNamespaces = data ?? []
   } catch (_) {
     cachedNamespaces = []
   }

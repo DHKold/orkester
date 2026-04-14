@@ -137,37 +137,7 @@ impl CatalogServer {
         Ok(())
     }
 
-    /// List all Namespace documents in the catalog.
-    #[handle(ACTION_CATALOG_LIST_NAMESPACES)]
-    fn list_namespaces(&mut self, _: serde_json::Value) -> Result<ListNamespacesResponse, CatalogError> {
-        let storage    = self.storage.lock().unwrap();
-        let namespaces = storage
-            .values()
-            .filter(|r| r.get("kind").and_then(|v| v.as_str()) == Some(workaholic::NAMESPACE_KIND))
-            .cloned()
-            .collect();
-        Ok(ListNamespacesResponse { namespaces })
-    }
-
-    /// List all Work documents that belong to the requested namespace.
-    #[handle(ACTION_CATALOG_LIST_WORKS)]
-    fn list_works(&mut self, req: ListItemsRequest) -> Result<ListWorksResponse, CatalogError> {
-        let storage = self.storage.lock().unwrap();
-        let works = storage
-            .values()
-            .filter(|r| {
-                r.get("kind").and_then(|v| v.as_str()) == Some(workaholic::WORK_KIND)
-                    && r.get("metadata")
-                        .and_then(|m| m.get("namespace"))
-                        .and_then(|v| v.as_str())
-                        == Some(req.ns.as_str())
-            })
-            .cloned()
-            .collect();
-        Ok(ListWorksResponse { works })
-    }
-
-    /// List all Task documents that belong to the requested namespace.
+    /// Deprecated: List all Task documents that belong to the requested namespace. Use `SearchResources` with a `Query` instead.
     #[handle(ACTION_CATALOG_LIST_TASKS)]
     fn list_tasks(&mut self, req: ListItemsRequest) -> Result<ListTasksResponse, CatalogError> {
         let storage = self.storage.lock().unwrap();

@@ -32,9 +32,6 @@ For example: `workaholic/Task:1.0/testing/cargo-build/1.0.0`
 | `workaholic/CatalogServer/UpdateResource` | `{ id, resource }` | updated resource or `NotFound` |
 | `workaholic/CatalogServer/DeleteResource` | `{ id }` | `true` or `NotFound` |
 | `workaholic/CatalogServer/SearchResources` | `{ query: Query }` | `[ resource, … ]` |
-| `workaholic/CatalogServer/ListNamespaces` | `{}` | `{ namespaces: [ … ] }` |
-| `workaholic/CatalogServer/ListWorks` | `{ ns }` | `{ works: [ … ] }` |
-| `workaholic/CatalogServer/ListTasks` | `{ ns }` | `{ tasks: [ … ] }` |
 
 `CreateResource` is an upsert — it overwrites any existing resource with the same ID.
 
