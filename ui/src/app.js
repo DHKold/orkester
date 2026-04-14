@@ -19,7 +19,7 @@ import { renderHelp }             from './pages/help.js'
 
 // ── Routes ─────────────────────────────────────────────────────────────────
 route('/',                                      ()             => renderDashboard())
-route('/catalog',                               ({ query })    => renderCatalog({ query }))
+route('/catalog',                               ()             => renderCatalog())
 route('/catalog/detail',                        ({ query })    => renderCatalogDetail({ query }))
 route('/workspace/runners',                     ()             => renderRunners())
 route('/workspace/runners/:name',               ({ name })     => renderRunnerDetail({ name }))

@@ -14,6 +14,17 @@
   <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
   <!-- Metrics charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- CodeMirror 6 — JSON editor (used by Catalog detail and Settings pages) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "@codemirror/view":     "https://esm.sh/@codemirror/view@6",
+      "@codemirror/state":    "https://esm.sh/@codemirror/state@6",
+      "@codemirror/language": "https://esm.sh/@codemirror/language@6",
+      "@codemirror/lang-json": "https://esm.sh/@codemirror/lang-json@6"
+    }
+  }
+  </script>
 </head>
 <body>
   <!--
