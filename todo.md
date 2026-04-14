@@ -6,9 +6,6 @@
 - [ ] Implement auto-imports of crons
 - [ ] Test a real DBT Work
 - [ ] (EXTERNAL) Provide a tool to DP to produce Workaholic YAML for products
-- [ ] Fix the UI issues:
-    - [ ] Metrics page keep poping up once loaded
-    - [ ] List of WorkRuns is not using the new fields
 
 ## In Queue
 

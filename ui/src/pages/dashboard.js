@@ -2,7 +2,7 @@
 // TODO: Implement widget grid with localStorage layout persistence.
 // See tasks.md → Task 004 for full spec.
 
-import { setApp, setBreadcrumb } from '../../utils.js'
+import { setApp, setBreadcrumb } from '../utils.js'
 
 export function renderDashboard() {
   setBreadcrumb([{ label: 'Dashboard' }])
