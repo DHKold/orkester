@@ -101,6 +101,10 @@ servers:
         - url_path: /ui
           dir: /orkester/ui
 
+      static_files:
+        - url_path: /favicon.ico
+          file: /orkester/ui/favicon.ico
+
       routes:
         # Host Server
         - path:   /v1/host/plugins

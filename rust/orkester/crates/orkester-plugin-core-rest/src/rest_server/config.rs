@@ -11,6 +11,9 @@ pub struct RestServerConfig {
     /// Directories to serve as static files.
     #[serde(default)]
     pub static_folders: Vec<StaticFolderEntry>,
+    /// Individual files to serve at a specific URL path.
+    #[serde(default)]
+    pub static_files: Vec<StaticFileEntry>,
     /// Allowed CORS origins (empty = permissive / allow all).
     #[serde(default)]
     pub cors_origins: Vec<String>,
@@ -39,6 +42,15 @@ pub struct RouteEntry {
 pub struct StaticFolderEntry {
     pub url_path: String,
     pub dir:      String,
+}
+
+/// Serves a single file at an exact URL path.
+#[derive(Debug, Clone, Deserialize)]
+pub struct StaticFileEntry {
+    /// Exact URL path to serve this file at, e.g. `/favicon.ico`.
+    pub url_path: String,
+    /// Path to the file on disk, e.g. `/orkester/ui/favicon.ico`.
+    pub file:     String,
 }
 
 fn default_bind() -> String { "127.0.0.1:8080".into() }

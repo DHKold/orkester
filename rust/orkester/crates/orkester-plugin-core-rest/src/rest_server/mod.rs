@@ -11,7 +11,7 @@ use serde_json::Value;
 use tower_http::{cors::CorsLayer, services::{ServeDir, ServeFile}};
 
 pub use config::RestServerConfig;
-use config::{RouteEntry, StaticFolderEntry};
+use config::{RouteEntry, StaticFolderEntry, StaticFileEntry};
 
 // ─── HostPtr ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +49,7 @@ impl RestServer {
         let state    = AppState { routes: Arc::clone(&routes), host: HostPtr(host_ptr), next_id, openapi };
         let bind     = cfg.bind.clone();
         let statics  = cfg.static_folders.clone();
+        let files    = cfg.static_files.clone();
         let cors_ori = cfg.cors_origins.clone();
 
         if cfg.tls_cert.is_some() || cfg.tls_key.is_some() {
@@ -62,7 +63,7 @@ impl RestServer {
                 let rt = tokio::runtime::Builder::new_multi_thread()
                     .enable_all().build().expect("[rest] tokio runtime");
                 rt.block_on(async move {
-                    let router = build_router(state, &statics, &cors_ori);
+                    let router = build_router(state, &statics, &files, &cors_ori);
                     match tokio::net::TcpListener::bind(&bind).await {
                         Ok(l) => {
                             log_info!("[rest] listening on http://{bind}");
@@ -96,10 +97,15 @@ impl RestServer {
 
 // ─── Router / middleware setup ────────────────────────────────────────────────
 
-fn build_router(state: AppState, statics: &[StaticFolderEntry], cors_origins: &[String]) -> Router {
+fn build_router(state: AppState, statics: &[StaticFolderEntry], files: &[StaticFileEntry], cors_origins: &[String]) -> Router {
     let mut router = Router::new()
         .route("/openapi.json", get(openapi_json_handler))
         .route("/openapi/ui",   get(swagger_ui_handler));
+
+    for f in files {
+        let svc = ServeFile::new(&f.file);
+        router = router.route_service(&f.url_path, svc);
+    }
 
     for folder in statics {
         let svc = ServeDir::new(&folder.dir)
